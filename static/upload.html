@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>上传视频 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .upload-card { background: #fff; width: 100%; max-width: 600px; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #00a1d6; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #666; }
+        input[type="text"], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; outline: none; transition: 0.2s; box-sizing: border-box; }
+        input[type="text"]:focus, textarea:focus, select:focus { border-color: #00a1d6; }
+        
+        .tags-container { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #fff; min-height: 42px; cursor: text; }
+        .tags-container:focus-within { border-color: #00a1d6; }
+        .tag-chip { background: #e7f5ff; color: #00a1d6; padding: 4px 10px; border-radius: 16px; font-size: 13px; display: flex; align-items: center; gap: 6px; user-select: none; }
+        .tag-chip .remove { cursor: pointer; font-weight: bold; opacity: 0.6; }
+        .tag-input { border: none !important; outline: none !important; padding: 4px !important; flex: 1; min-width: 60px; background: transparent; }
+
+        .file-drop-area { border: 2px dashed #ddd; padding: 40px; text-align: center; border-radius: 6px; cursor: pointer; transition: 0.2s; background: #fafafa; }
+        .file-drop-area:hover { border-color: #00a1d6; background: #f0f8ff; }
+        .btn { background: #00a1d6; color: #fff; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; cursor: pointer; width: 100%; margin-top: 20px; transition: 0.2s; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .progress-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 10px; display: none; }
+        .progress-fill { height: 100%; background: #00a1d6; width: 0%; transition: width 0.2s; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="upload-card">
+    <h1>投稿视频</h1>
+    
+    <form id="uploadForm" onsubmit="handleUpload(event)">
+        <div class="form-group">
+            <label>视频标题</label>
+            <input type="text" id="title" required placeholder="给视频起个好名字...">
+        </div>
+        
+        <div style="display:flex; gap:20px;">
+            <div class="form-group" style="flex:1;">
+                <label>所属分区</label>
+                <select id="category" required>
+                    <option value="" disabled selected>加载中...</option>
+                </select>
+            </div>
+            <div class="form-group" style="width:120px;">
+                <label>可见性</label>
+                <select id="visibility">
+                    <option value="public">公开</option>
+                    <option value="private">仅自己可见</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>视频标签 (Tags)</label>
+            <div class="tags-container" onclick="document.getElementById('tagInput').focus()">
+                <input type="text" id="tagInput" class="tag-input" placeholder="输入标签，按空格生成">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>简介描述</label>
+            <textarea id="description" rows="4" placeholder="介绍一下你的视频..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>视频文件</label>
+            <div class="file-drop-area" id="dropZone">
+                <p id="fileName" style="margin:0; color:#999;">点击或拖拽文件至此</p>
+                <input type="file" id="fileInput" accept="video/*" style="display:none;" required>
+            </div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn">立即投稿</button>
+    </form>
+</div>
+
+<script>
+    let tags = [];
+    const colors = ['#e7f5ff', '#fff0f6', '#ebfbee', '#fff9db', '#f3f0ff'];
+    const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            alert("请先登录！");
+            location.href = "/static/login.html";
+            return;
+        }
+
+        try {
+            const res = await fetch("/categories");
+            if (res.ok) {
+                const categories = await res.json();
+                const select = document.getElementById("category");
+                select.innerHTML = '<option value="" disabled selected>选择分类...</option>';
+                categories.forEach(cat => {
+                    const opt = document.createElement("option");
+                    opt.value = cat.id;
+                    opt.text = cat.name;
+                    select.appendChild(opt);
+                });
+            }
+        } catch (e) { console.error(e); }
+
+        initTagInput();
+        initDropZone();
+    });
+
+    function initTagInput() {
+        const input = document.getElementById("tagInput");
+        const container = document.querySelector(".tags-container");
+
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                const val = input.value.trim();
+                if (val && !tags.includes(val)) {
+                    tags.push(val);
+                    renderTags();
+                }
+                input.value = "";
+            } else if (e.key === "Backspace" && input.value === "" && tags.length > 0) {
+                tags.pop();
+                renderTags();
+            }
+        });
+    }
+
+    function renderTags() {
+        const container = document.querySelector(".tags-container");
+        const input = document.getElementById("tagInput");
+        
+        Array.from(container.children).forEach(child => {
+            if (child !== input) container.removeChild(child);
+        });
+
+        tags.forEach((tag, index) => {
+            const chip = document.createElement("div");
+            chip.className = "tag-chip";
+            chip.innerHTML = tag + ' <span class="remove" onclick="removeTag(' + index + ')">×</span>';
+            const colorIdx = index % colors.length;
+            chip.style.backgroundColor = colors[colorIdx];
+            chip.style.color = textColors[colorIdx];
+            container.insertBefore(chip, input);
+        });
+    }
+    
+    window.removeTag = function(index) {
+        tags.splice(index, 1);
+        renderTags();
+    }
+
+    function initDropZone() {
+        const dropZone = document.getElementById("dropZone");
+        const fileInput = document.getElementById("fileInput");
+        
+        dropZone.onclick = () => fileInput.click();
+        
+        fileInput.onchange = () => {
+            if(fileInput.files[0]) {
+                document.getElementById("fileName").innerText = fileInput.files[0].name;
+                document.getElementById("fileName").style.color = "#333";
+            }
+        };
+
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "#00a1d6"; };
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files[0]) {
+                fileInput.files = e.dataTransfer.files;
+                document.getElementById("fileName").innerText = fileInput.files[0].name;
+            }
+        };
+    }
+
+    async function handleUpload(e) {
+        e.preventDefault();
+        
+        const file = document.getElementById("fileInput").files[0];
+        if (!file) return alert("请选择文件");
+        
+        const btn = document.getElementById("submitBtn");
+        btn.disabled = true;
+        btn.innerText = "上传中...";
+        document.getElementById("progressBar").style.display = "block";
+        
+        let percent = 0;
+        const interval = setInterval(() => {
+            if(percent < 90) {
+                percent += 5;
+                document.getElementById("progressFill").style.width = percent + "%";
+            }
+        }, 200);
+
+        const formData = new FormData();
+        formData.append("title", document.getElementById("title").value);
+        formData.append("description", document.getElementById("description").value);
+        formData.append("category_id", document.getElementById("category").value);
+        formData.append("visibility", document.getElementById("visibility").value); // 新增
+        formData.append("tags", tags.join(","));
+        formData.append("file", file);
+
+        try {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/videos/upload", {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: formData
+            });
+
+            clearInterval(interval);
+            
+            if (res.ok) {
+                document.getElementById("progressFill").style.width = "100%";
+                btn.innerText = "上传成功!";
+                setTimeout(() => location.href = "/static/dashboard.html", 1000); // 成功后跳转到创作中心看状态
+            } else {
+                const err = await res.json();
+                alert("上传失败: " + (err.detail || "未知错误"));
+                btn.disabled = false;
+                btn.innerText = "立即投稿";
+            }
+        } catch(e) {
+            console.error(e);
+            alert("网络错误");
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>

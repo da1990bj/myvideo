@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+sqlmodel
+pydantic
+psycopg2-binary
+celery
+redis
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+ffmpeg-python
+python-dotenv

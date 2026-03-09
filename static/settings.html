@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>账号设置 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 40px auto; display: flex; gap: 20px; }
+        .sidebar { width: 200px; background: #fff; padding: 20px 0; border-radius: 8px; }
+        .menu-item { display: block; padding: 12px 24px; color: #333; text-decoration: none; cursor: pointer; }
+        .menu-item:hover, .menu-item.active { background: #e7f5ff; color: #00a1d6; border-right: 3px solid #00a1d6; }
+        .content { flex: 1; background: #fff; padding: 40px; border-radius: 8px; min-height: 500px; }
+        h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; max-width: 400px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; }
+        input[type="text"], input[type="password"], textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .avatar-preview { width: 100px; height: 100px; border-radius: 50%; border: 2px solid #eee; cursor: pointer; object-fit: cover; }
+        .btn { background: #00a1d6; color: #fff; border: none; padding: 10px 24px; border-radius: 4px; cursor: pointer; }
+        .user-list-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #f0f0f0; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .mini-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <div class="sidebar">
+        <div class="menu-item active" onclick="switchTab('profile', this)">个人资料</div>
+        <div class="menu-item" onclick="switchTab('security', this)">账号安全</div>
+        <div class="menu-item" onclick="switchTab('following', this)">我的关注</div>
+        <div class="menu-item" onclick="switchTab('blacklist', this)">黑名单</div>
+    </div>
+    
+    <div class="content" id="tab-profile">
+        <h2>个人资料</h2>
+        <div class="form-group" style="text-align:center;">
+            <img id="avatar" src="" class="avatar-preview" onclick="document.getElementById('fileInput').click()">
+            <p style="color:#999; font-size:12px;">点击修改头像</p>
+            <input type="file" id="fileInput" style="display:none;" accept="image/*" onchange="uploadAvatar()">
+        </div>
+        <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="username" disabled style="background:#f9f9f9; color:#999;">
+        </div>
+        <div class="form-group">
+            <label>个性签名</label>
+            <textarea id="bio" rows="3"></textarea>
+        </div>
+        <button class="btn" onclick="saveProfile()">保存修改</button>
+    </div>
+
+    <div class="content" id="tab-security" style="display:none;">
+        <h2>账号安全</h2>
+        <div class="form-group">
+            <label>旧密码</label>
+            <input type="password" id="oldPassword">
+        </div>
+        <div class="form-group">
+            <label>新密码</label>
+            <input type="password" id="newPassword">
+        </div>
+        <button class="btn" onclick="changePassword()">修改密码</button>
+    </div>
+
+    <div class="content" id="tab-following" style="display:none;">
+        <h2>我的关注</h2>
+        <div id="following-list">加载中...</div>
+    </div>
+
+    <div class="content" id="tab-blacklist" style="display:none;">
+        <h2>黑名单管理</h2>
+        <div id="blacklist-list">暂无黑名单用户</div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem("access_token");
+    if (!token) location.href = "/static/login.html";
+
+    // 初始化
+    fetch("/users/me", { headers: { "Authorization": "Bearer " + token } })
+        .then(res => res.json())
+        .then(user => {
+            document.getElementById("username").value = user.username;
+            document.getElementById("bio").value = user.bio || "";
+            document.getElementById("avatar").src = user.avatar_path || "https://ui-avatars.com/api/?name=" + user.username;
+        });
+
+    function switchTab(name, el) {
+        document.querySelectorAll('.content').forEach(c => c.style.display = 'none');
+        document.getElementById('tab-' + name).style.display = 'block';
+        
+        document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+        el.classList.add('active');
+        
+        if (name === 'following') loadFollowing();
+        if (name === 'blacklist') loadBlacklist();
+    }
+
+    async function uploadAvatar() {
+        const file = document.getElementById("fileInput").files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+            const res = await fetch("/users/avatar", { method: "POST", headers: { "Authorization": "Bearer " + token }, body: formData });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("avatar").src = data.url;
+                alert("头像上传成功");
+            }
+        } catch(e) { alert("上传失败"); }
+    }
+
+    async function saveProfile() {
+        const bio = document.getElementById("bio").value;
+        try {
+            const res = await fetch("/users/me", {
+                method: "PUT",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ bio })
+            });
+            if (res.ok) alert("保存成功");
+        } catch(e) { alert("保存失败"); }
+    }
+
+    async function changePassword() {
+        const old_password = document.getElementById("oldPassword").value;
+        const new_password = document.getElementById("newPassword").value;
+        if (!old_password || !new_password) return alert("请填写密码");
+        
+        try {
+            const res = await fetch("/users/me/password", {
+                method: "PUT",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ old_password, new_password })
+            });
+            if (res.ok) {
+                alert("密码修改成功，请重新登录");
+                localStorage.removeItem("access_token");
+                location.href = "/static/login.html";
+            } else {
+                alert("修改失败：" + (await res.json()).detail);
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function loadFollowing() {
+        const res = await fetch("/users/me/following", { headers: { "Authorization": "Bearer " + token } });
+        if (res.ok) renderUserList(await res.json(), "following-list", "取关", unfollowUser);
+    }
+    
+    async function loadBlacklist() {
+        const res = await fetch("/users/me/blocks", { headers: { "Authorization": "Bearer " + token } });
+        if (res.ok) renderUserList(await res.json(), "blacklist-list", "解除", unblockUser);
+    }
+
+    function renderUserList(users, containerId, btnText, action) {
+        const container = document.getElementById(containerId);
+        if (users.length === 0) return container.innerHTML = "<p style='color:#999'>列表为空</p>";
+        container.innerHTML = "";
+        users.forEach(u => {
+            const div = document.createElement("div");
+            div.className = "user-list-item";
+            const avatar = u.avatar_path || "https://ui-avatars.com/api/?name=" + u.username;
+            div.innerHTML = `<div class="user-info">
+                <img src="${avatar}" class="mini-avatar">
+                <div><a href="/static/profile.html?id=${u.id}" target="_blank" style="color:#333; text-decoration:none; font-weight:bold;">${u.username}</a></div>
+            </div>
+            <button class="btn" style="padding:6px 12px; font-size:12px; background:#eee; color:#333;">${btnText}</button>`;
+            div.querySelector("button").onclick = () => action(u.id);
+            container.appendChild(div);
+        });
+    }
+
+    async function unfollowUser(id) {
+        if(confirm("确定取关？")) {
+            await fetch(`/users/${id}/follow`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
+            loadFollowing();
+        }
+    }
+    async function unblockUser(id) {
+        await fetch(`/users/${id}/block`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
+        loadBlacklist();
+    }
+</script>
+</body>
+</html>

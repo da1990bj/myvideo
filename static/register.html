@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>注册 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f4f5f7; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .auth-card { background: #fff; width: 400px; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+        .logo { font-size: 28px; font-weight: bold; color: #00a1d6; margin-bottom: 30px; display: block; text-decoration: none; }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #555; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 16px; outline: none; transition: 0.2s; }
+        input:focus { border-color: #00a1d6; }
+        .btn { width: 100%; background: #00a1d6; color: #fff; border: none; padding: 12px; border-radius: 4px; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        .btn:hover { background: #00b5e5; }
+        .footer { margin-top: 20px; font-size: 14px; color: #666; }
+        .footer a { color: #00a1d6; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<div class="auth-card">
+    <a href="/static/index.html" class="logo">MyVideo</a>
+    
+    <form onsubmit="handleRegister(event)">
+        <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="reg-username" required placeholder="设置用户名">
+        </div>
+        <div class="form-group">
+            <label>邮箱</label>
+            <input type="email" id="reg-email" required placeholder="绑定邮箱">
+        </div>
+        <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="reg-password" required placeholder="设置密码">
+        </div>
+        <button type="submit" class="btn">注册</button>
+    </form>
+    
+    <div class="footer">
+        已有账号？<a href="/static/login.html">直接登录</a>
+    </div>
+</div>
+
+<script>
+    async function handleRegister(e) {
+        e.preventDefault();
+        const username = document.getElementById("reg-username").value;
+        const email = document.getElementById("reg-email").value;
+        const password = document.getElementById("reg-password").value;
+
+        try {
+            const response = await fetch("/users/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, email, password })
+            });
+
+            if (response.ok) {
+                alert("注册成功！请登录。");
+                window.location.href = "/static/login.html";
+            } else {
+                const data = await response.json();
+                alert("注册失败: " + data.detail);
+            }
+        } catch (error) { alert("网络错误"); }
+    }
+</script>
+
+</body>
+</html>

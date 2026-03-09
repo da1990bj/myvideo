@@ -1,0 +1,1060 @@
+2026/03/08 06:35:42 [notice] 1#1: using the "epoll" event method
+2026/03/08 06:35:42 [notice] 1#1: nginx/1.29.5
+2026/03/08 06:35:42 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 06:35:42 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 06:35:42 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 06:35:42 [notice] 1#1: start worker processes
+2026/03/08 06:35:42 [notice] 1#1: start worker process 30
+2026/03/08 06:35:42 [notice] 1#1: start worker process 31
+2026/03/08 06:35:42 [notice] 1#1: start worker process 32
+2026/03/08 06:35:42 [notice] 1#1: start worker process 33
+2026/03/08 06:35:42 [notice] 1#1: start worker process 34
+2026/03/08 06:35:42 [notice] 1#1: start worker process 35
+2026/03/08 06:35:42 [notice] 1#1: start worker process 36
+2026/03/08 06:35:42 [notice] 1#1: start worker process 37
+2026/03/08 06:35:42 [notice] 1#1: start worker process 38
+2026/03/08 06:35:42 [notice] 1#1: start worker process 39
+2026/03/08 06:35:42 [notice] 1#1: start worker process 40
+2026/03/08 06:35:42 [notice] 1#1: start worker process 41
+2026/03/08 06:35:42 [notice] 1#1: start worker process 42
+2026/03/08 06:35:42 [notice] 1#1: start worker process 43
+2026/03/08 06:35:42 [notice] 1#1: start worker process 44
+2026/03/08 06:35:42 [notice] 1#1: start worker process 45
+2026/03/08 07:47:19 [error] 31#31: *5 recv() failed (104: Connection reset by peer) while reading response header from upstream, client: 172.19.0.1, server: localhost, request: "POST /users/register HTTP/1.1", upstream: "http://172.17.0.1:8000/users/register", host: "localhost", referrer: "http://localhost/static/register.html"
+2026/03/08 08:45:21 [error] 38#38: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 08:45:26 [error] 38#38: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 08:45:32 [error] 38#38: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 08:45:41 [error] 38#38: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /users/register HTTP/1.1", upstream: "http://172.17.0.1:8000/users/register", host: "localhost", referrer: "http://localhost/static/register.html"
+2026/03/08 08:46:32 [error] 38#38: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 08:47:03 [error] 38#38: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET / HTTP/1.1", upstream: "http://172.17.0.1:8000/", host: "localhost"
+2026/03/08 08:53:58 [error] 40#40: *28 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /users/register HTTP/1.1", upstream: "http://172.17.0.1:8000/users/register", host: "localhost", referrer: "http://localhost/static/register.html"
+2026/03/08 09:36:21 [notice] 1#1: signal 3 (SIGQUIT) received, shutting down
+2026/03/08 09:36:21 [notice] 30#30: gracefully shutting down
+2026/03/08 09:36:21 [notice] 32#32: gracefully shutting down
+2026/03/08 09:36:21 [notice] 35#35: gracefully shutting down
+2026/03/08 09:36:21 [notice] 36#36: gracefully shutting down
+2026/03/08 09:36:21 [notice] 41#41: gracefully shutting down
+2026/03/08 09:36:21 [notice] 40#40: gracefully shutting down
+2026/03/08 09:36:21 [notice] 32#32: exiting
+2026/03/08 09:36:21 [notice] 34#34: gracefully shutting down
+2026/03/08 09:36:21 [notice] 35#35: exiting
+2026/03/08 09:36:21 [notice] 36#36: exiting
+2026/03/08 09:36:21 [notice] 41#41: exiting
+2026/03/08 09:36:21 [notice] 40#40: exiting
+2026/03/08 09:36:21 [notice] 34#34: exiting
+2026/03/08 09:36:21 [notice] 33#33: gracefully shutting down
+2026/03/08 09:36:21 [notice] 33#33: exiting
+2026/03/08 09:36:21 [notice] 43#43: gracefully shutting down
+2026/03/08 09:36:21 [notice] 32#32: exit
+2026/03/08 09:36:21 [notice] 36#36: exit
+2026/03/08 09:36:21 [notice] 35#35: exit
+2026/03/08 09:36:21 [notice] 43#43: exiting
+2026/03/08 09:36:21 [notice] 41#41: exit
+2026/03/08 09:36:21 [notice] 40#40: exit
+2026/03/08 09:36:21 [notice] 34#34: exit
+2026/03/08 09:36:21 [notice] 33#33: exit
+2026/03/08 09:36:21 [notice] 43#43: exit
+2026/03/08 09:36:21 [notice] 38#38: gracefully shutting down
+2026/03/08 09:36:21 [notice] 38#38: exiting
+2026/03/08 09:36:21 [notice] 38#38: exit
+2026/03/08 09:36:21 [notice] 39#39: gracefully shutting down
+2026/03/08 09:36:21 [notice] 39#39: exiting
+2026/03/08 09:36:21 [notice] 42#42: gracefully shutting down
+2026/03/08 09:36:21 [notice] 42#42: exiting
+2026/03/08 09:36:21 [notice] 42#42: exit
+2026/03/08 09:36:21 [notice] 30#30: exiting
+2026/03/08 09:36:21 [notice] 30#30: exit
+2026/03/08 09:36:21 [notice] 39#39: exit
+2026/03/08 09:36:21 [notice] 44#44: gracefully shutting down
+2026/03/08 09:36:21 [notice] 45#45: gracefully shutting down
+2026/03/08 09:36:21 [notice] 44#44: exiting
+2026/03/08 09:36:21 [notice] 45#45: exiting
+2026/03/08 09:36:21 [notice] 45#45: exit
+2026/03/08 09:36:21 [notice] 44#44: exit
+2026/03/08 09:36:21 [notice] 37#37: gracefully shutting down
+2026/03/08 09:36:21 [notice] 37#37: exiting
+2026/03/08 09:36:21 [notice] 37#37: exit
+2026/03/08 09:36:21 [notice] 31#31: gracefully shutting down
+2026/03/08 09:36:21 [notice] 31#31: exiting
+2026/03/08 09:36:21 [notice] 31#31: exit
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 36
+2026/03/08 09:36:21 [notice] 1#1: worker process 36 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 39 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 40 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 30 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 43 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 44 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 40
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 34
+2026/03/08 09:36:21 [notice] 1#1: worker process 34 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 32
+2026/03/08 09:36:21 [notice] 1#1: worker process 32 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 42
+2026/03/08 09:36:21 [notice] 1#1: worker process 33 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 38 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 42 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 38
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 45
+2026/03/08 09:36:21 [notice] 1#1: worker process 45 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 41 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 41
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 37
+2026/03/08 09:36:21 [notice] 1#1: worker process 35 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: worker process 37 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 35
+2026/03/08 09:36:21 [notice] 1#1: signal 17 (SIGCHLD) received from 31
+2026/03/08 09:36:21 [notice] 1#1: worker process 31 exited with code 0
+2026/03/08 09:36:21 [notice] 1#1: exit
+2026/03/08 09:37:03 [notice] 1#1: using the "epoll" event method
+2026/03/08 09:37:03 [notice] 1#1: nginx/1.29.5
+2026/03/08 09:37:03 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 09:37:03 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 09:37:03 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 09:37:03 [notice] 1#1: start worker processes
+2026/03/08 09:37:03 [notice] 1#1: start worker process 23
+2026/03/08 09:37:03 [notice] 1#1: start worker process 24
+2026/03/08 09:37:03 [notice] 1#1: start worker process 25
+2026/03/08 09:37:03 [notice] 1#1: start worker process 26
+2026/03/08 09:37:03 [notice] 1#1: start worker process 27
+2026/03/08 09:37:03 [notice] 1#1: start worker process 28
+2026/03/08 09:37:03 [notice] 1#1: start worker process 29
+2026/03/08 09:37:03 [notice] 1#1: start worker process 30
+2026/03/08 09:37:03 [notice] 1#1: start worker process 31
+2026/03/08 09:37:03 [notice] 1#1: start worker process 32
+2026/03/08 09:37:03 [notice] 1#1: start worker process 33
+2026/03/08 09:37:03 [notice] 1#1: start worker process 34
+2026/03/08 09:37:03 [notice] 1#1: start worker process 35
+2026/03/08 09:37:03 [notice] 1#1: start worker process 36
+2026/03/08 09:37:03 [notice] 1#1: start worker process 37
+2026/03/08 09:37:03 [notice] 1#1: start worker process 38
+2026/03/08 09:42:06 [error] 23#23: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET / HTTP/1.1", upstream: "http://172.17.0.1:8000/", host: "localhost"
+2026/03/08 09:42:06 [error] 23#23: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", upstream: "http://172.17.0.1:8000/favicon.ico", host: "localhost", referrer: "http://localhost/"
+2026/03/08 09:46:51 [warn] 25#25: *5 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000001, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 10:54:25 [error] 36#36: *31 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:02:13 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET / HTTP/1.1", upstream: "http://172.17.0.1:8000/", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:02:16 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET / HTTP/1.1", upstream: "http://172.17.0.1:8000/", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:02:27 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 11:02:29 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:15 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 11:03:17 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:21 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:26 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:31 [error] 23#23: *59 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:03:31 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:03:34 [error] 23#23: *59 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:39 [error] 23#23: *59 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:44 [error] 23#23: *59 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:03:44 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:03:45 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:03:45 [error] 23#23: *59 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 11:03:50 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:03:59 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:04:04 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 11:04:10 [error] 37#37: *53 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /users/register HTTP/1.1", upstream: "http://172.17.0.1:8000/users/register", host: "localhost", referrer: "http://localhost/static/register.html"
+2026/03/08 15:05:42 [error] 23#23: *76 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:07:36 [error] 23#23: *76 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:09:48 [error] 23#23: *86 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:11:29 [error] 23#23: *86 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:18:35 [error] 23#23: *145 open() "/usr/share/nginx/html/static/index" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/index HTTP/1.1", host: "localhost"
+2026/03/08 15:28:36 [warn] 24#24: *177 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000002, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:15 [warn] 24#24: *203 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000003, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:15 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", upstream: "http://172.17.0.1:8000/videos/upload", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:17 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:31:17 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:21 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:31:21 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:22 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:31:22 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:23 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:31:23 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:31:24 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:31:26 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:31:26 [error] 24#24: *203 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:34:14 [warn] 24#24: *218 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000004, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 15:34:20 [error] 24#24: *218 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:39:18 [error] 24#24: *233 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:41:27 [error] 25#25: *239 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:41:27 [error] 25#25: *239 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 15:41:33 [error] 25#25: *239 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:41:33 [error] 25#25: *239 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 15:44:47 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:44:47 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 15:44:48 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:44:48 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 15:44:49 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:44:49 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 15:45:30 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:45:30 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:45:31 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:45:31 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:45:33 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:45:35 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:45:40 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:45:40 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:45:42 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:45:42 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:45:42 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:45:43 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:45:50 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:45:51 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:46:00 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:46:29 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:46:29 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:46:31 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:46:31 [error] 27#27: *245 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:46:31 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:46:32 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:46:34 [error] 25#25: *244 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:46:47 [error] 25#25: *274 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:46:53 [error] 25#25: *274 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:54:34 [error] 25#25: *277 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 15:57:25 [error] 27#27: *280 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:57:26 [error] 27#27: *280 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:57:26 [error] 27#27: *280 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:57:26 [error] 25#25: *279 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 15:57:27 [error] 25#25: *279 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 15:57:30 [error] 25#25: *279 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 16:03:02 [error] 25#25: *288 open() "/usr/share/nginx/html/static/profile.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/profile.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 16:05:41 [warn] 25#25: *306 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000005, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:09:52 [warn] 27#27: *326 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000006, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:10:01 [error] 25#25: *325 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=115c9ae3-8894-480e-9d94-3b10c88467d0"
+2026/03/08 16:10:01 [error] 27#27: *326 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=115c9ae3-8894-480e-9d94-3b10c88467d0"
+2026/03/08 16:10:58 [error] 27#27: *326 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=115c9ae3-8894-480e-9d94-3b10c88467d0"
+2026/03/08 16:10:58 [error] 25#25: *325 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=115c9ae3-8894-480e-9d94-3b10c88467d0"
+2026/03/08 16:12:18 [warn] 25#25: *341 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000007, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:12:31 [error] 25#25: *341 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=c469a4c0-f8e6-4a3e-8756-00fc6e729220"
+2026/03/08 16:12:31 [error] 25#25: *340 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=c469a4c0-f8e6-4a3e-8756-00fc6e729220"
+2026/03/08 16:12:35 [error] 25#25: *340 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=c469a4c0-f8e6-4a3e-8756-00fc6e729220"
+2026/03/08 16:12:35 [error] 25#25: *358 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=c469a4c0-f8e6-4a3e-8756-00fc6e729220"
+2026/03/08 16:13:34 [error] 25#25: *341 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=c469a4c0-f8e6-4a3e-8756-00fc6e729220"
+2026/03/08 16:13:34 [error] 25#25: *358 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=c469a4c0-f8e6-4a3e-8756-00fc6e729220"
+2026/03/08 16:15:45 [warn] 25#25: *362 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000008, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:15:55 [error] 25#25: *362 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=a8b19cbe-d298-45b6-b607-9260b5abaf06"
+2026/03/08 16:15:55 [error] 27#27: *363 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=a8b19cbe-d298-45b6-b607-9260b5abaf06"
+2026/03/08 16:18:06 [warn] 27#27: *363 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000009, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:19:30 [warn] 27#27: *385 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000010, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:23:04 [warn] 27#27: *420 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000011, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:35:20 [warn] 26#26: *538 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000012, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 16:40:14 [error] 28#28: *680 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:40:21 [error] 28#28: *680 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:40:22 [error] 28#28: *680 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:40:23 [error] 28#28: *680 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:40:30 [error] 28#28: *680 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:40:50 [error] 26#26: *681 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:43:10 [error] 26#26: *698 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:43:11 [error] 26#26: *698 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:44:37 [error] 26#26: *697 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:44:38 [error] 26#26: *697 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:44:39 [error] 26#26: *697 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:44:39 [error] 26#26: *697 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:44:40 [error] 26#26: *697 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:44:41 [error] 26#26: *697 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:50 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:51 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:51 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:52 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:53 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:56 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:57 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:57 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:58 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:58 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:58 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:59 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:45:59 [error] 26#26: *717 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:46:44 [error] 26#26: *717 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:46:45 [error] 26#26: *717 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:46:45 [error] 26#26: *717 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:46:53 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:47:04 [error] 26#26: *716 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:48:36 [error] 26#26: *787 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:48:37 [error] 26#26: *787 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:48:41 [error] 26#26: *787 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=11f813bf-f0b5-47f9-a914-1e741f7a1812"
+2026/03/08 16:48:41 [error] 28#28: *786 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=11f813bf-f0b5-47f9-a914-1e741f7a1812"
+2026/03/08 16:49:08 [error] 28#28: *786 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:50:40 [error] 28#28: *799 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:50:40 [error] 28#28: *799 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:50:41 [error] 28#28: *799 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:50:42 [error] 28#28: *799 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:50:47 [error] 28#28: *799 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:50:48 [error] 28#28: *799 open() "/usr/share/nginx/html/static/default_thumb.jpg" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/default_thumb.jpg HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 16:53:31 [error] 28#28: *813 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=11f813bf-f0b5-47f9-a914-1e741f7a1812"
+2026/03/08 16:53:31 [error] 28#28: *814 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=11f813bf-f0b5-47f9-a914-1e741f7a1812"
+2026/03/08 16:55:23 [warn] 28#28: *814 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000013, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 17:03:21 [warn] 29#29: *924 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000014, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 17:08:23 [error] 28#28: *925 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:08:23 [error] 28#28: *1051 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:10:36 [error] 28#28: *1078 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:10:36 [error] 28#28: *1077 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:11:24 [error] 28#28: *1078 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:11:24 [error] 28#28: *1077 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:11:38 [error] 28#28: *1077 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:11:38 [error] 28#28: *1078 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=dc7824ad-798f-42f1-a90f-7ad23e07888a"
+2026/03/08 17:12:48 [warn] 29#29: *1112 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000015, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 17:15:22 [warn] 29#29: *1137 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000016, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 17:15:35 [error] 29#29: *1136 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=192b24a6-3a99-4192-8112-39179585cc50"
+2026/03/08 17:15:35 [error] 29#29: *1137 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=192b24a6-3a99-4192-8112-39179585cc50"
+2026/03/08 17:45:32 [warn] 29#29: *1207 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000017, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 17:50:14 [warn] 29#29: *1255 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000018, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 17:53:18 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:53:18 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 17:54:08 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:08 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 17:54:09 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:09 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 17:54:10 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:10 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:12 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:12 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:54:12 [error] 29#29: *1255 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:54:12 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:54:13 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:14 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 17:54:18 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:54:20 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 17:55:16 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 17:55:19 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:19 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:20 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:20 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:20 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:21 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:21 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:21 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:22 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:22 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:22 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:26 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:26 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:26 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:26 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:26 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:26 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:27 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:27 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:27 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:27 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:27 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:27 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:32 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:32 [error] 30#30: *1332 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:32 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 17:55:33 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:35 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 17:55:37 [error] 29#29: *1314 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 17:57:17 [warn] 29#29: *1314 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000019, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 18:05:29 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:05:39 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:05:49 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:05:59 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:06:09 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:06:17 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:06:17 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:06:17 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:06:17 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:06:19 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:06:20 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 18:06:50 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 18:06:53 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:06:53 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:06:55 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:06:55 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:06:55 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:06:56 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:06:56 [error] 30#30: *1419 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:06:56 [error] 30#30: *1499 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:09:47 [warn] 30#30: *1532 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000020, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 18:33:27 [error] 32#32: *1918 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:33:27 [error] 32#32: *1918 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:33:27 [error] 31#31: *1917 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:33:27 [error] 32#32: *1922 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:33:31 [error] 32#32: *1922 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:33:31 [error] 32#32: *1922 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:33:31 [error] 32#32: *1918 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 18:33:33 [error] 32#32: *1918 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:33:36 [error] 32#32: *1918 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 18:38:42 [warn] 31#31: *1977 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000021, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 18:41:59 [error] 32#32: *2108 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:41:59 [error] 32#32: *2108 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:41:59 [error] 33#33: *2111 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/58f57ec3-4d95-40a3-a044-e9b795af3601/videos/public HTTP/1.1", upstream: "http://172.17.0.1:8000/users/58f57ec3-4d95-40a3-a044-e9b795af3601/videos/public", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:41:59 [error] 32#32: *2107 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/58f57ec3-4d95-40a3-a044-e9b795af3601/profile HTTP/1.1", upstream: "http://172.17.0.1:8000/users/58f57ec3-4d95-40a3-a044-e9b795af3601/profile", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:42:00 [error] 32#32: *2107 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:42:00 [error] 32#32: *2107 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/58f57ec3-4d95-40a3-a044-e9b795af3601/profile HTTP/1.1", upstream: "http://172.17.0.1:8000/users/58f57ec3-4d95-40a3-a044-e9b795af3601/profile", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:42:00 [error] 33#33: *2111 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/58f57ec3-4d95-40a3-a044-e9b795af3601/videos/public HTTP/1.1", upstream: "http://172.17.0.1:8000/users/58f57ec3-4d95-40a3-a044-e9b795af3601/videos/public", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:42:01 [error] 33#33: *2111 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:42:01 [error] 33#33: *2111 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/58f57ec3-4d95-40a3-a044-e9b795af3601/profile HTTP/1.1", upstream: "http://172.17.0.1:8000/users/58f57ec3-4d95-40a3-a044-e9b795af3601/profile", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:42:01 [error] 32#32: *2107 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/58f57ec3-4d95-40a3-a044-e9b795af3601/videos/public HTTP/1.1", upstream: "http://172.17.0.1:8000/users/58f57ec3-4d95-40a3-a044-e9b795af3601/videos/public", host: "localhost", referrer: "http://localhost/static/profile.html?id=58f57ec3-4d95-40a3-a044-e9b795af3601"
+2026/03/08 18:54:23 [warn] 33#33: *2389 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000022, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 18:55:58 [warn] 33#33: *2514 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000023, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 18:57:54 [warn] 33#33: *2646 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000024, client: 172.19.0.1, server: localhost, request: "POST /videos/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/upload.html"
+2026/03/08 18:58:36 [error] 33#33: *2648 open() "/usr/share/nginx/html/static/null" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/null HTTP/1.1", host: "localhost", referrer: "http://localhost/static/video.html?id=f349b02b-1f4c-4808-bf29-816b86ac8e15"
+2026/03/08 18:58:52 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:58:53 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/following HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/following", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 18:58:53 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/blocks HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/blocks", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 18:58:55 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:58:58 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:01 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:04 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:07 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:10 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:13 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:16 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:19 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:20 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:59:20 [error] 33#33: *2648 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:21 [error] 33#33: *2651 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:22 [error] 33#33: *2651 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:59:22 [error] 33#33: *2651 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 18:59:22 [error] 33#33: *2651 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 18:59:24 [error] 33#33: *2651 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 18:59:27 [error] 33#33: *2651 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 19:01:04 [error] 33#33: *2704 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 19:01:06 [error] 33#33: *2704 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 19:01:07 [error] 33#33: *2704 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "POST /token HTTP/1.1", upstream: "http://172.17.0.1:8000/token", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 19:18:38 [warn] 36#36: *3170 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000025, client: 172.19.0.1, server: localhost, request: "POST /videos/e7a95c13-3200-4b4a-9e9d-390bda1e7de5/thumbnail/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:38:08 [error] 35#35: *3990 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:38:18 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:38:18 [error] 35#35: *3990 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:38:28 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:38:28 [error] 35#35: *3990 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:45:38 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:45:48 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:45:58 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:46:08 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:46:18 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:46:28 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:46:38 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:52:05 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=1 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:07 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=2 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=2", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:08 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=3 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=3", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:08 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:52:08 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=4 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=4", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:09 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=5 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=5", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:09 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=6 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=6", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:10 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest&category_id=5 HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest&category_id=5", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:52:11 [error] 35#35: *4281 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:55:47 [warn] 35#35: *4281 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000026, client: 172.19.0.1, server: localhost, request: "POST /videos/31b92106-35f2-4eed-9fa8-3d6d9e6c1e85/thumbnail/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 19:57:15 [error] 37#37: *4421 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 19:57:18 [error] 34#34: *2898 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:16:28 [notice] 1#1: signal 3 (SIGQUIT) received, shutting down
+2026/03/08 20:16:28 [notice] 23#23: gracefully shutting down
+2026/03/08 20:16:28 [notice] 24#24: gracefully shutting down
+2026/03/08 20:16:28 [notice] 29#29: gracefully shutting down
+2026/03/08 20:16:28 [notice] 28#28: gracefully shutting down
+2026/03/08 20:16:28 [notice] 30#30: gracefully shutting down
+2026/03/08 20:16:28 [notice] 31#31: gracefully shutting down
+2026/03/08 20:16:28 [notice] 23#23: exiting
+2026/03/08 20:16:28 [notice] 33#33: gracefully shutting down
+2026/03/08 20:16:28 [notice] 34#34: gracefully shutting down
+2026/03/08 20:16:28 [notice] 24#24: exiting
+2026/03/08 20:16:28 [notice] 36#36: gracefully shutting down
+2026/03/08 20:16:28 [notice] 29#29: exiting
+2026/03/08 20:16:28 [notice] 28#28: exiting
+2026/03/08 20:16:28 [notice] 30#30: exiting
+2026/03/08 20:16:28 [notice] 31#31: exiting
+2026/03/08 20:16:28 [notice] 34#34: exiting
+2026/03/08 20:16:28 [notice] 33#33: exiting
+2026/03/08 20:16:28 [notice] 32#32: gracefully shutting down
+2026/03/08 20:16:28 [notice] 36#36: exiting
+2026/03/08 20:16:28 [notice] 25#25: gracefully shutting down
+2026/03/08 20:16:28 [notice] 35#35: gracefully shutting down
+2026/03/08 20:16:28 [notice] 27#27: gracefully shutting down
+2026/03/08 20:16:28 [notice] 26#26: gracefully shutting down
+2026/03/08 20:16:28 [notice] 32#32: exiting
+2026/03/08 20:16:28 [notice] 25#25: exiting
+2026/03/08 20:16:28 [notice] 37#37: gracefully shutting down
+2026/03/08 20:16:28 [notice] 35#35: exiting
+2026/03/08 20:16:28 [notice] 27#27: exiting
+2026/03/08 20:16:28 [notice] 26#26: exiting
+2026/03/08 20:16:28 [notice] 37#37: exiting
+2026/03/08 20:16:28 [notice] 33#33: exit
+2026/03/08 20:16:28 [notice] 23#23: exit
+2026/03/08 20:16:28 [notice] 38#38: gracefully shutting down
+2026/03/08 20:16:28 [notice] 28#28: exit
+2026/03/08 20:16:28 [notice] 36#36: exit
+2026/03/08 20:16:28 [notice] 32#32: exit
+2026/03/08 20:16:28 [notice] 27#27: exit
+2026/03/08 20:16:28 [notice] 35#35: exit
+2026/03/08 20:16:28 [notice] 26#26: exit
+2026/03/08 20:16:28 [notice] 29#29: exit
+2026/03/08 20:16:28 [notice] 31#31: exit
+2026/03/08 20:16:28 [notice] 38#38: exiting
+2026/03/08 20:16:28 [notice] 24#24: exit
+2026/03/08 20:16:28 [notice] 37#37: exit
+2026/03/08 20:16:28 [notice] 25#25: exit
+2026/03/08 20:16:28 [notice] 38#38: exit
+2026/03/08 20:16:28 [notice] 30#30: exit
+2026/03/08 20:16:28 [notice] 34#34: exit
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 28
+2026/03/08 20:16:28 [notice] 1#1: worker process 28 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 29
+2026/03/08 20:16:28 [notice] 1#1: worker process 29 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 31
+2026/03/08 20:16:28 [notice] 1#1: worker process 30 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 25 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 31 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 35 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 25
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 36
+2026/03/08 20:16:28 [notice] 1#1: worker process 33 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 36 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 26 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 26
+2026/03/08 20:16:28 [notice] 1#1: worker process 37 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 32
+2026/03/08 20:16:28 [notice] 1#1: worker process 27 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 32 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 38 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: worker process 34 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 38
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 23
+2026/03/08 20:16:28 [notice] 1#1: worker process 23 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: signal 17 (SIGCHLD) received from 24
+2026/03/08 20:16:28 [notice] 1#1: worker process 24 exited with code 0
+2026/03/08 20:16:28 [notice] 1#1: exit
+2026/03/08 20:17:25 [notice] 1#1: using the "epoll" event method
+2026/03/08 20:17:25 [notice] 1#1: nginx/1.29.5
+2026/03/08 20:17:25 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 20:17:25 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 20:17:25 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 20:17:25 [notice] 1#1: start worker processes
+2026/03/08 20:17:25 [notice] 1#1: start worker process 22
+2026/03/08 20:17:25 [notice] 1#1: start worker process 23
+2026/03/08 20:17:25 [notice] 1#1: start worker process 24
+2026/03/08 20:17:25 [notice] 1#1: start worker process 25
+2026/03/08 20:17:25 [notice] 1#1: start worker process 26
+2026/03/08 20:17:25 [notice] 1#1: start worker process 27
+2026/03/08 20:17:25 [notice] 1#1: start worker process 28
+2026/03/08 20:17:25 [notice] 1#1: start worker process 29
+2026/03/08 20:17:25 [notice] 1#1: start worker process 30
+2026/03/08 20:17:25 [notice] 1#1: start worker process 31
+2026/03/08 20:17:25 [notice] 1#1: start worker process 32
+2026/03/08 20:17:25 [notice] 1#1: start worker process 33
+2026/03/08 20:17:25 [notice] 1#1: start worker process 34
+2026/03/08 20:17:25 [notice] 1#1: start worker process 35
+2026/03/08 20:17:25 [notice] 1#1: start worker process 36
+2026/03/08 20:17:25 [notice] 1#1: start worker process 37
+2026/03/08 20:17:40 [notice] 1#1: signal 3 (SIGQUIT) received, shutting down
+2026/03/08 20:17:40 [notice] 23#23: gracefully shutting down
+2026/03/08 20:17:40 [notice] 22#22: gracefully shutting down
+2026/03/08 20:17:40 [notice] 24#24: gracefully shutting down
+2026/03/08 20:17:40 [notice] 26#26: gracefully shutting down
+2026/03/08 20:17:40 [notice] 25#25: gracefully shutting down
+2026/03/08 20:17:40 [notice] 28#28: gracefully shutting down
+2026/03/08 20:17:40 [notice] 31#31: gracefully shutting down
+2026/03/08 20:17:40 [notice] 24#24: exiting
+2026/03/08 20:17:40 [notice] 27#27: gracefully shutting down
+2026/03/08 20:17:40 [notice] 30#30: gracefully shutting down
+2026/03/08 20:17:40 [notice] 34#34: gracefully shutting down
+2026/03/08 20:17:40 [notice] 35#35: gracefully shutting down
+2026/03/08 20:17:40 [notice] 26#26: exiting
+2026/03/08 20:17:40 [notice] 29#29: gracefully shutting down
+2026/03/08 20:17:40 [notice] 32#32: gracefully shutting down
+2026/03/08 20:17:40 [notice] 25#25: exiting
+2026/03/08 20:17:40 [notice] 33#33: gracefully shutting down
+2026/03/08 20:17:40 [notice] 28#28: exiting
+2026/03/08 20:17:40 [notice] 31#31: exiting
+2026/03/08 20:17:40 [notice] 22#22: exiting
+2026/03/08 20:17:40 [notice] 23#23: exiting
+2026/03/08 20:17:40 [notice] 27#27: exiting
+2026/03/08 20:17:40 [notice] 30#30: exiting
+2026/03/08 20:17:40 [notice] 34#34: exiting
+2026/03/08 20:17:40 [notice] 35#35: exiting
+2026/03/08 20:17:40 [notice] 33#33: exiting
+2026/03/08 20:17:40 [notice] 29#29: exiting
+2026/03/08 20:17:40 [notice] 32#32: exiting
+2026/03/08 20:17:40 [notice] 28#28: exit
+2026/03/08 20:17:40 [notice] 27#27: exit
+2026/03/08 20:17:40 [notice] 24#24: exit
+2026/03/08 20:17:40 [notice] 31#31: exit
+2026/03/08 20:17:40 [notice] 25#25: exit
+2026/03/08 20:17:40 [notice] 30#30: exit
+2026/03/08 20:17:40 [notice] 26#26: exit
+2026/03/08 20:17:40 [notice] 34#34: exit
+2026/03/08 20:17:40 [notice] 32#32: exit
+2026/03/08 20:17:40 [notice] 23#23: exit
+2026/03/08 20:17:40 [notice] 35#35: exit
+2026/03/08 20:17:40 [notice] 29#29: exit
+2026/03/08 20:17:40 [notice] 22#22: exit
+2026/03/08 20:17:40 [notice] 33#33: exit
+2026/03/08 20:17:40 [notice] 36#36: gracefully shutting down
+2026/03/08 20:17:40 [notice] 37#37: gracefully shutting down
+2026/03/08 20:17:40 [notice] 36#36: exiting
+2026/03/08 20:17:40 [notice] 37#37: exiting
+2026/03/08 20:17:40 [notice] 36#36: exit
+2026/03/08 20:17:40 [notice] 37#37: exit
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 28
+2026/03/08 20:17:40 [notice] 1#1: worker process 28 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 27
+2026/03/08 20:17:40 [notice] 1#1: worker process 27 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 36
+2026/03/08 20:17:40 [notice] 1#1: worker process 22 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: worker process 36 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 35
+2026/03/08 20:17:40 [notice] 1#1: worker process 26 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: worker process 35 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 30
+2026/03/08 20:17:40 [notice] 1#1: worker process 23 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: worker process 30 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 24
+2026/03/08 20:17:40 [notice] 1#1: worker process 24 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 31
+2026/03/08 20:17:40 [notice] 1#1: worker process 31 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: worker process 32 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 32
+2026/03/08 20:17:40 [notice] 1#1: worker process 34 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 25
+2026/03/08 20:17:40 [notice] 1#1: worker process 25 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 37
+2026/03/08 20:17:40 [notice] 1#1: worker process 37 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 29
+2026/03/08 20:17:40 [notice] 1#1: worker process 29 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 20:17:40 [notice] 1#1: signal 17 (SIGCHLD) received from 33
+2026/03/08 20:17:40 [notice] 1#1: worker process 33 exited with code 0
+2026/03/08 20:17:40 [notice] 1#1: exit
+2026/03/08 20:17:50 [notice] 1#1: using the "epoll" event method
+2026/03/08 20:17:50 [notice] 1#1: nginx/1.29.5
+2026/03/08 20:17:50 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 20:17:50 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 20:17:50 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 20:17:50 [notice] 1#1: start worker processes
+2026/03/08 20:17:50 [notice] 1#1: start worker process 22
+2026/03/08 20:17:50 [notice] 1#1: start worker process 23
+2026/03/08 20:17:50 [notice] 1#1: start worker process 24
+2026/03/08 20:17:50 [notice] 1#1: start worker process 25
+2026/03/08 20:17:50 [notice] 1#1: start worker process 26
+2026/03/08 20:17:50 [notice] 1#1: start worker process 27
+2026/03/08 20:17:50 [notice] 1#1: start worker process 28
+2026/03/08 20:17:50 [notice] 1#1: start worker process 29
+2026/03/08 20:17:50 [notice] 1#1: start worker process 30
+2026/03/08 20:17:50 [notice] 1#1: start worker process 31
+2026/03/08 20:17:50 [notice] 1#1: start worker process 32
+2026/03/08 20:17:50 [notice] 1#1: start worker process 33
+2026/03/08 20:17:50 [notice] 1#1: start worker process 34
+2026/03/08 20:17:50 [notice] 1#1: start worker process 35
+2026/03/08 20:17:50 [notice] 1#1: start worker process 36
+2026/03/08 20:17:50 [notice] 1#1: start worker process 37
+2026/03/08 20:29:37 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:29:38 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:29:47 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:29:48 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:29:57 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:29:58 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:07 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:08 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:17 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:18 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:27 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:28 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:38 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:47 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:48 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:30:58 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:08 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:09 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:10 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 20:31:10 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:10 [error] 27#27: *183 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:10 [error] 27#27: *183 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:11 [error] 27#27: *183 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 20:31:11 [error] 27#27: *183 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 20:31:11 [error] 26#26: *143 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 20:31:18 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:28 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:38 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:48 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:31:58 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:32:08 [error] 22#22: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:51:16 [warn] 22#22: *456 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000001, client: 172.19.0.1, server: localhost, request: "POST /videos/31b92106-35f2-4eed-9fa8-3d6d9e6c1e85/thumbnail/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 20:53:34 [warn] 22#22: *507 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000002, client: 172.19.0.1, server: localhost, request: "POST /videos/31b92106-35f2-4eed-9fa8-3d6d9e6c1e85/thumbnail/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 21:00:59 [warn] 22#22: *735 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000003, client: 172.19.0.1, server: localhost, request: "POST /videos/31b92106-35f2-4eed-9fa8-3d6d9e6c1e85/thumbnail/upload HTTP/1.1", host: "localhost", referrer: "http://localhost/static/dashboard.html"
+2026/03/08 21:11:41 [notice] 1#1: signal 3 (SIGQUIT) received, shutting down
+2026/03/08 21:11:41 [notice] 26#26: gracefully shutting down
+2026/03/08 21:11:41 [notice] 24#24: gracefully shutting down
+2026/03/08 21:11:41 [notice] 25#25: gracefully shutting down
+2026/03/08 21:11:41 [notice] 27#27: gracefully shutting down
+2026/03/08 21:11:41 [notice] 32#32: gracefully shutting down
+2026/03/08 21:11:41 [notice] 26#26: exiting
+2026/03/08 21:11:41 [notice] 23#23: gracefully shutting down
+2026/03/08 21:11:41 [notice] 34#34: gracefully shutting down
+2026/03/08 21:11:41 [notice] 25#25: exiting
+2026/03/08 21:11:41 [notice] 37#37: gracefully shutting down
+2026/03/08 21:11:41 [notice] 27#27: exiting
+2026/03/08 21:11:41 [notice] 31#31: gracefully shutting down
+2026/03/08 21:11:41 [notice] 30#30: gracefully shutting down
+2026/03/08 21:11:41 [notice] 32#32: exiting
+2026/03/08 21:11:41 [notice] 23#23: exiting
+2026/03/08 21:11:41 [notice] 34#34: exiting
+2026/03/08 21:11:41 [notice] 22#22: gracefully shutting down
+2026/03/08 21:11:41 [notice] 33#33: gracefully shutting down
+2026/03/08 21:11:41 [notice] 37#37: exiting
+2026/03/08 21:11:41 [notice] 31#31: exiting
+2026/03/08 21:11:41 [notice] 29#29: gracefully shutting down
+2026/03/08 21:11:41 [notice] 28#28: gracefully shutting down
+2026/03/08 21:11:41 [notice] 30#30: exiting
+2026/03/08 21:11:41 [notice] 24#24: exiting
+2026/03/08 21:11:41 [notice] 33#33: exiting
+2026/03/08 21:11:41 [notice] 22#22: exiting
+2026/03/08 21:11:41 [notice] 29#29: exiting
+2026/03/08 21:11:41 [notice] 28#28: exiting
+2026/03/08 21:11:41 [notice] 35#35: gracefully shutting down
+2026/03/08 21:11:41 [notice] 35#35: exiting
+2026/03/08 21:11:41 [notice] 25#25: exit
+2026/03/08 21:11:41 [notice] 27#27: exit
+2026/03/08 21:11:41 [notice] 37#37: exit
+2026/03/08 21:11:41 [notice] 32#32: exit
+2026/03/08 21:11:41 [notice] 34#34: exit
+2026/03/08 21:11:41 [notice] 26#26: exit
+2026/03/08 21:11:41 [notice] 33#33: exit
+2026/03/08 21:11:41 [notice] 23#23: exit
+2026/03/08 21:11:41 [notice] 24#24: exit
+2026/03/08 21:11:41 [notice] 31#31: exit
+2026/03/08 21:11:41 [notice] 30#30: exit
+2026/03/08 21:11:41 [notice] 22#22: exit
+2026/03/08 21:11:41 [notice] 35#35: exit
+2026/03/08 21:11:41 [notice] 29#29: exit
+2026/03/08 21:11:41 [notice] 28#28: exit
+2026/03/08 21:11:41 [notice] 36#36: gracefully shutting down
+2026/03/08 21:11:41 [notice] 36#36: exiting
+2026/03/08 21:11:41 [notice] 36#36: exit
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 35
+2026/03/08 21:11:41 [notice] 1#1: worker process 35 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 37
+2026/03/08 21:11:41 [notice] 1#1: worker process 33 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 34 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 27 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 25 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 37 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 27
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 31
+2026/03/08 21:11:41 [notice] 1#1: worker process 24 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 31 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 24
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 28
+2026/03/08 21:11:41 [notice] 1#1: worker process 28 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 32 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 23
+2026/03/08 21:11:41 [notice] 1#1: worker process 23 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 36 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 26
+2026/03/08 21:11:41 [notice] 1#1: worker process 26 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 30
+2026/03/08 21:11:41 [notice] 1#1: worker process 29 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: worker process 30 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: signal 17 (SIGCHLD) received from 22
+2026/03/08 21:11:41 [notice] 1#1: worker process 22 exited with code 0
+2026/03/08 21:11:41 [notice] 1#1: exit
+2026/03/08 21:11:42 [notice] 1#1: using the "epoll" event method
+2026/03/08 21:11:42 [notice] 1#1: nginx/1.29.5
+2026/03/08 21:11:42 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 21:11:42 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 21:11:42 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 21:11:42 [notice] 1#1: start worker processes
+2026/03/08 21:11:42 [notice] 1#1: start worker process 22
+2026/03/08 21:11:42 [notice] 1#1: start worker process 23
+2026/03/08 21:11:42 [notice] 1#1: start worker process 24
+2026/03/08 21:11:42 [notice] 1#1: start worker process 25
+2026/03/08 21:11:42 [notice] 1#1: start worker process 26
+2026/03/08 21:11:42 [notice] 1#1: start worker process 27
+2026/03/08 21:11:42 [notice] 1#1: start worker process 28
+2026/03/08 21:11:42 [notice] 1#1: start worker process 29
+2026/03/08 21:11:42 [notice] 1#1: start worker process 30
+2026/03/08 21:11:42 [notice] 1#1: start worker process 31
+2026/03/08 21:11:42 [notice] 1#1: start worker process 32
+2026/03/08 21:11:42 [notice] 1#1: start worker process 33
+2026/03/08 21:11:42 [notice] 1#1: start worker process 34
+2026/03/08 21:11:42 [notice] 1#1: start worker process 35
+2026/03/08 21:11:42 [notice] 1#1: start worker process 36
+2026/03/08 21:11:42 [notice] 1#1: start worker process 37
+2026/03/08 21:11:57 [error] 22#22: *1 open() "/data/myvideo/static/dashboard.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/dashboard.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:11:58 [error] 22#22: *1 open() "/data/myvideo/static/dashboard.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/dashboard.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:11:59 [error] 22#22: *1 open() "/data/myvideo/static/dashboard.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/dashboard.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:11:59 [error] 22#22: *1 open() "/data/myvideo/static/dashboard.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/dashboard.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:12:06 [error] 22#22: *1 open() "/data/myvideo/static/index.html" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/index.html HTTP/1.1", host: "localhost", referrer: "http://localhost/static/login.html"
+2026/03/08 21:13:59 [notice] 1#1: signal 3 (SIGQUIT) received, shutting down
+2026/03/08 21:13:59 [notice] 22#22: gracefully shutting down
+2026/03/08 21:13:59 [notice] 22#22: exiting
+2026/03/08 21:13:59 [notice] 24#24: gracefully shutting down
+2026/03/08 21:13:59 [notice] 23#23: gracefully shutting down
+2026/03/08 21:13:59 [notice] 27#27: gracefully shutting down
+2026/03/08 21:13:59 [notice] 25#25: gracefully shutting down
+2026/03/08 21:13:59 [notice] 26#26: gracefully shutting down
+2026/03/08 21:13:59 [notice] 28#28: gracefully shutting down
+2026/03/08 21:13:59 [notice] 31#31: gracefully shutting down
+2026/03/08 21:13:59 [notice] 29#29: gracefully shutting down
+2026/03/08 21:13:59 [notice] 32#32: gracefully shutting down
+2026/03/08 21:13:59 [notice] 24#24: exiting
+2026/03/08 21:13:59 [notice] 34#34: gracefully shutting down
+2026/03/08 21:13:59 [notice] 23#23: exiting
+2026/03/08 21:13:59 [notice] 27#27: exiting
+2026/03/08 21:13:59 [notice] 25#25: exiting
+2026/03/08 21:13:59 [notice] 26#26: exiting
+2026/03/08 21:13:59 [notice] 34#34: exiting
+2026/03/08 21:13:59 [notice] 35#35: gracefully shutting down
+2026/03/08 21:13:59 [notice] 28#28: exiting
+2026/03/08 21:13:59 [notice] 31#31: exiting
+2026/03/08 21:13:59 [notice] 29#29: exiting
+2026/03/08 21:13:59 [notice] 32#32: exiting
+2026/03/08 21:13:59 [notice] 35#35: exiting
+2026/03/08 21:13:59 [notice] 30#30: gracefully shutting down
+2026/03/08 21:13:59 [notice] 33#33: gracefully shutting down
+2026/03/08 21:13:59 [notice] 30#30: exiting
+2026/03/08 21:13:59 [notice] 33#33: exiting
+2026/03/08 21:13:59 [notice] 37#37: gracefully shutting down
+2026/03/08 21:13:59 [notice] 37#37: exiting
+2026/03/08 21:13:59 [notice] 22#22: exit
+2026/03/08 21:13:59 [notice] 36#36: gracefully shutting down
+2026/03/08 21:13:59 [notice] 27#27: exit
+2026/03/08 21:13:59 [notice] 36#36: exiting
+2026/03/08 21:13:59 [notice] 23#23: exit
+2026/03/08 21:13:59 [notice] 24#24: exit
+2026/03/08 21:13:59 [notice] 26#26: exit
+2026/03/08 21:13:59 [notice] 34#34: exit
+2026/03/08 21:13:59 [notice] 29#29: exit
+2026/03/08 21:13:59 [notice] 32#32: exit
+2026/03/08 21:13:59 [notice] 33#33: exit
+2026/03/08 21:13:59 [notice] 35#35: exit
+2026/03/08 21:13:59 [notice] 28#28: exit
+2026/03/08 21:13:59 [notice] 25#25: exit
+2026/03/08 21:13:59 [notice] 31#31: exit
+2026/03/08 21:13:59 [notice] 30#30: exit
+2026/03/08 21:13:59 [notice] 36#36: exit
+2026/03/08 21:13:59 [notice] 37#37: exit
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 33
+2026/03/08 21:13:59 [notice] 1#1: worker process 33 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 26
+2026/03/08 21:13:59 [notice] 1#1: worker process 26 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 34
+2026/03/08 21:13:59 [notice] 1#1: worker process 34 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 24
+2026/03/08 21:13:59 [notice] 1#1: worker process 23 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: worker process 24 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 30
+2026/03/08 21:13:59 [notice] 1#1: worker process 30 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 35
+2026/03/08 21:13:59 [notice] 1#1: worker process 29 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: worker process 35 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 29
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 32
+2026/03/08 21:13:59 [notice] 1#1: worker process 25 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: worker process 32 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 25
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 28
+2026/03/08 21:13:59 [notice] 1#1: worker process 22 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: worker process 28 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: worker process 36 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 36
+2026/03/08 21:13:59 [notice] 1#1: worker process 37 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:13:59 [notice] 1#1: signal 17 (SIGCHLD) received from 31
+2026/03/08 21:13:59 [notice] 1#1: worker process 31 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: worker process 27 exited with code 0
+2026/03/08 21:13:59 [notice] 1#1: exit
+2026/03/08 21:13:59 [notice] 1#1: using the "epoll" event method
+2026/03/08 21:13:59 [notice] 1#1: nginx/1.29.5
+2026/03/08 21:13:59 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 21:13:59 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 21:13:59 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 21:13:59 [notice] 1#1: start worker processes
+2026/03/08 21:13:59 [notice] 1#1: start worker process 22
+2026/03/08 21:13:59 [notice] 1#1: start worker process 23
+2026/03/08 21:13:59 [notice] 1#1: start worker process 24
+2026/03/08 21:13:59 [notice] 1#1: start worker process 25
+2026/03/08 21:13:59 [notice] 1#1: start worker process 26
+2026/03/08 21:13:59 [notice] 1#1: start worker process 27
+2026/03/08 21:13:59 [notice] 1#1: start worker process 28
+2026/03/08 21:13:59 [notice] 1#1: start worker process 29
+2026/03/08 21:13:59 [notice] 1#1: start worker process 30
+2026/03/08 21:13:59 [notice] 1#1: start worker process 31
+2026/03/08 21:13:59 [notice] 1#1: start worker process 32
+2026/03/08 21:13:59 [notice] 1#1: start worker process 33
+2026/03/08 21:13:59 [notice] 1#1: start worker process 34
+2026/03/08 21:13:59 [notice] 1#1: start worker process 35
+2026/03/08 21:13:59 [notice] 1#1: start worker process 36
+2026/03/08 21:13:59 [notice] 1#1: start worker process 37
+2026/03/08 21:18:48 [notice] 1#1: signal 3 (SIGQUIT) received, shutting down
+2026/03/08 21:18:48 [notice] 22#22: gracefully shutting down
+2026/03/08 21:18:48 [notice] 23#23: gracefully shutting down
+2026/03/08 21:18:48 [notice] 24#24: gracefully shutting down
+2026/03/08 21:18:48 [notice] 22#22: exiting
+2026/03/08 21:18:48 [notice] 23#23: exiting
+2026/03/08 21:18:48 [notice] 30#30: gracefully shutting down
+2026/03/08 21:18:48 [notice] 30#30: exiting
+2026/03/08 21:18:48 [notice] 32#32: gracefully shutting down
+2026/03/08 21:18:48 [notice] 35#35: gracefully shutting down
+2026/03/08 21:18:48 [notice] 37#37: gracefully shutting down
+2026/03/08 21:18:48 [notice] 32#32: exiting
+2026/03/08 21:18:48 [notice] 35#35: exiting
+2026/03/08 21:18:48 [notice] 28#28: gracefully shutting down
+2026/03/08 21:18:48 [notice] 37#37: exiting
+2026/03/08 21:18:48 [notice] 24#24: exiting
+2026/03/08 21:18:48 [notice] 28#28: exiting
+2026/03/08 21:18:48 [notice] 25#25: gracefully shutting down
+2026/03/08 21:18:48 [notice] 26#26: gracefully shutting down
+2026/03/08 21:18:48 [notice] 27#27: gracefully shutting down
+2026/03/08 21:18:48 [notice] 25#25: exiting
+2026/03/08 21:18:48 [notice] 26#26: exiting
+2026/03/08 21:18:48 [notice] 29#29: gracefully shutting down
+2026/03/08 21:18:48 [notice] 31#31: gracefully shutting down
+2026/03/08 21:18:48 [notice] 27#27: exiting
+2026/03/08 21:18:48 [notice] 33#33: gracefully shutting down
+2026/03/08 21:18:48 [notice] 34#34: gracefully shutting down
+2026/03/08 21:18:48 [notice] 31#31: exiting
+2026/03/08 21:18:48 [notice] 29#29: exiting
+2026/03/08 21:18:48 [notice] 33#33: exiting
+2026/03/08 21:18:48 [notice] 34#34: exiting
+2026/03/08 21:18:48 [notice] 30#30: exit
+2026/03/08 21:18:48 [notice] 23#23: exit
+2026/03/08 21:18:48 [notice] 28#28: exit
+2026/03/08 21:18:48 [notice] 25#25: exit
+2026/03/08 21:18:48 [notice] 29#29: exit
+2026/03/08 21:18:48 [notice] 34#34: exit
+2026/03/08 21:18:48 [notice] 26#26: exit
+2026/03/08 21:18:48 [notice] 27#27: exit
+2026/03/08 21:18:48 [notice] 31#31: exit
+2026/03/08 21:18:48 [notice] 33#33: exit
+2026/03/08 21:18:48 [notice] 24#24: exit
+2026/03/08 21:18:48 [notice] 22#22: exit
+2026/03/08 21:18:48 [notice] 35#35: exit
+2026/03/08 21:18:48 [notice] 32#32: exit
+2026/03/08 21:18:48 [notice] 37#37: exit
+2026/03/08 21:18:48 [notice] 36#36: gracefully shutting down
+2026/03/08 21:18:48 [notice] 36#36: exiting
+2026/03/08 21:18:48 [notice] 36#36: exit
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 34
+2026/03/08 21:18:48 [notice] 1#1: worker process 23 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: worker process 34 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: worker process 37 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 23
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 29
+2026/03/08 21:18:48 [notice] 1#1: worker process 29 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 24
+2026/03/08 21:18:48 [notice] 1#1: worker process 24 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: worker process 33 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 33
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 28
+2026/03/08 21:18:48 [notice] 1#1: worker process 26 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: worker process 28 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 26
+2026/03/08 21:18:48 [notice] 1#1: worker process 31 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 27
+2026/03/08 21:18:48 [notice] 1#1: worker process 27 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 30
+2026/03/08 21:18:48 [notice] 1#1: worker process 30 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 35
+2026/03/08 21:18:48 [notice] 1#1: worker process 35 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: worker process 25 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: worker process 36 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 25
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 22
+2026/03/08 21:18:48 [notice] 1#1: worker process 22 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: signal 29 (SIGIO) received
+2026/03/08 21:18:48 [notice] 1#1: signal 17 (SIGCHLD) received from 32
+2026/03/08 21:18:48 [notice] 1#1: worker process 32 exited with code 0
+2026/03/08 21:18:48 [notice] 1#1: exit
+2026/03/08 21:18:48 [notice] 1#1: using the "epoll" event method
+2026/03/08 21:18:48 [notice] 1#1: nginx/1.29.5
+2026/03/08 21:18:48 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/03/08 21:18:48 [notice] 1#1: OS: Linux 6.17.0-14-generic
+2026/03/08 21:18:48 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/08 21:18:48 [notice] 1#1: start worker processes
+2026/03/08 21:18:48 [notice] 1#1: start worker process 22
+2026/03/08 21:18:48 [notice] 1#1: start worker process 23
+2026/03/08 21:18:48 [notice] 1#1: start worker process 24
+2026/03/08 21:18:48 [notice] 1#1: start worker process 25
+2026/03/08 21:18:48 [notice] 1#1: start worker process 26
+2026/03/08 21:18:48 [notice] 1#1: start worker process 27
+2026/03/08 21:18:48 [notice] 1#1: start worker process 28
+2026/03/08 21:18:48 [notice] 1#1: start worker process 29
+2026/03/08 21:18:48 [notice] 1#1: start worker process 30
+2026/03/08 21:18:48 [notice] 1#1: start worker process 31
+2026/03/08 21:18:48 [notice] 1#1: start worker process 32
+2026/03/08 21:18:48 [notice] 1#1: start worker process 33
+2026/03/08 21:18:48 [notice] 1#1: start worker process 34
+2026/03/08 21:18:48 [notice] 1#1: start worker process 35
+2026/03/08 21:18:48 [notice] 1#1: start worker process 36
+2026/03/08 21:18:48 [notice] 1#1: start worker process 37
+2026/03/08 21:49:37 [error] 24#24: *500 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:37 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:37 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:37 [error] 25#25: *514 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:39 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:39 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:39 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:39 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:39 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:39 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:40 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:40 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:40 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:40 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:40 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:40 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:41 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:41 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:41 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:42 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:42 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:42 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:43 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1", upstream: "http://172.17.0.1:8000/.well-known/appspecific/com.chrome.devtools.json", host: "localhost"
+2026/03/08 21:49:43 [error] 23#23: *512 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /videos?size=20&sort_by=latest HTTP/1.1", upstream: "http://172.17.0.1:8000/videos?size=20&sort_by=latest", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 21:49:43 [error] 22#22: *413 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /categories HTTP/1.1", upstream: "http://172.17.0.1:8000/categories", host: "localhost", referrer: "http://localhost/static/index.html"
+2026/03/08 22:04:34 [warn] 23#23: *912 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000001, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:09:02 [warn] 25#25: *1077 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000002, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:10:16 [warn] 23#23: *1093 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000003, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:14:02 [warn] 25#25: *1121 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000004, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:14:03 [error] 25#25: *1121 open() "/usr/share/nginx/html/static/undefined" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/undefined HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:14:06 [warn] 25#25: *1121 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000005, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:14:07 [error] 25#25: *1121 open() "/usr/share/nginx/html/static/undefined" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/undefined HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:14:15 [warn] 25#25: *1121 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000006, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:14:17 [error] 25#25: *1121 open() "/usr/share/nginx/html/static/undefined" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/undefined HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:15:06 [warn] 25#25: *1203 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000007, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:15:08 [error] 25#25: *1203 open() "/usr/share/nginx/html/static/undefined" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/undefined HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:15:17 [warn] 25#25: *1121 a client request body is buffered to a temporary file /var/cache/nginx/client_temp/0000000008, client: 172.19.0.1, server: localhost, request: "POST /users/avatar HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/08 22:15:18 [error] 25#25: *1121 open() "/usr/share/nginx/html/static/undefined" failed (2: No such file or directory), client: 172.19.0.1, server: localhost, request: "GET /static/undefined HTTP/1.1", host: "localhost", referrer: "http://localhost/static/settings.html"
+2026/03/09 04:49:59 [error] 26#26: *1318 connect() failed (111: Connection refused) while connecting to upstream, client: 172.19.0.1, server: localhost, request: "GET /users/me/videos HTTP/1.1", upstream: "http://172.17.0.1:8000/users/me/videos", host: "localhost", referrer: "http://localhost/static/dashboard.html"

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MyVideo - 首页</title>
+    <style>
+        /* CSS 样式保持不变 */
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f5f7; color: #333; }
+        header { background: #fff; height: 64px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+        .logo { font-size: 24px; font-weight: bold; color: #00a1d6; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .nav-center { flex: 1; max-width: 600px; margin: 0 40px; }
+        .search-box { width: 100%; padding: 8px 16px; border-radius: 20px; border: 1px solid #e7e7e7; background: #f4f4f4; outline: none; transition: 0.2s; }
+        .search-box:focus { background: #fff; border-color: #00a1d6; }
+        .nav-right { display: flex; gap: 20px; align-items: center; }
+        .upload-btn { background: #fb7299; color: #fff; padding: 6px 20px; border-radius: 4px; text-decoration: none; font-size: 14px; transition: 0.2s; }
+        .upload-btn:hover { background: #ff85ad; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: #ccc; cursor: pointer; object-fit: cover; }
+        .login-btn { color: #00a1d6; text-decoration: none; font-size: 14px; cursor: pointer; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .category-bar { display: flex; gap: 12px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+        .category-item { padding: 6px 14px; border-radius: 16px; background: #fff; color: #666; font-size: 14px; cursor: pointer; transition: 0.2s; white-space: nowrap; user-select: none; border: 1px solid transparent; }
+        .category-item:hover { color: #00a1d6; background: #e5f4fa; }
+        .category-item.active { background: #00a1d6; color: #fff; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+        .video-card { background: #fff; border-radius: 6px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
+        .video-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .thumb-wrapper { position: relative; padding-top: 56.25%; background: #f0f0f0; }
+        .thumb-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .duration-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+        .info-wrapper { padding: 10px 12px; }
+        .video-title { font-size: 15px; font-weight: 500; color: #18191c; margin: 0 0 6px; line-height: 1.4; height: 42px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-meta { font-size: 12px; color: #9499a0; display: flex; align-items: center; justify-content: space-between; }
+        .author-name { display: flex; align-items: center; gap: 4px; }
+        .loading { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+
+<div class="container">
+    <div class="category-bar" id="category-bar">
+        <div class="category-item active" onclick="filterCategory(null, this)">全部</div>
+    </div>
+
+    <div class="video-grid" id="video-grid"></div>
+    
+    <div id="loading" class="loading">正在加载精彩内容...</div>
+</div>
+
+<!-- 直接内联 JS，确保逻辑必执行 -->
+<script>
+    // 全局变量
+    let currentCategory = null;
+
+    // 页面入口
+    document.addEventListener("DOMContentLoaded", async () => {
+        // 1. 加载分类
+        loadCategories();
+        // 2. 加载视频
+        loadVideos();
+        // 注意：导航栏逻辑已移交 nav.js 处理
+    });
+
+    // 移除 checkUserStatus 和 renderNav，它们现在由 nav.js 接管
+    
+    // 加载分类
+    async function loadCategories() {
+        try {
+            const res = await fetch("/categories");
+            if (res.ok) {
+                const categories = await res.json();
+                const bar = document.getElementById("category-bar");
+                categories.forEach(cat => {
+                    const el = document.createElement("div");
+                    el.className = "category-item";
+                    el.innerText = cat.name;
+                    el.onclick = () => filterCategory(cat.id, el);
+                    bar.appendChild(el);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function filterCategory(id, el) {
+        currentCategory = id;
+        document.querySelectorAll(".category-item").forEach(i => i.classList.remove("active"));
+        el.classList.add("active");
+        loadVideos();
+    }
+
+    function handleSearch(e) {
+        if (e.key === "Enter") {
+            loadVideos(e.target.value);
+        }
+    }
+
+    async function loadVideos(keyword = "") {
+        const grid = document.getElementById("video-grid");
+        const loading = document.getElementById("loading");
+        
+        grid.innerHTML = "";
+        loading.style.display = "block";
+
+        let url = `/videos?size=20&sort_by=latest`;
+        if (currentCategory) url += `&category_id=${currentCategory}`;
+        if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
+
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const videos = await res.json();
+                loading.style.display = "none";
+                
+                if (videos.length === 0) {
+                    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:#999;">没有找到相关视频</div>`;
+                    return;
+                }
+
+                videos.forEach(v => {
+                    const card = document.createElement("div");
+                    card.className = "video-card";
+                    card.onclick = () => location.href = `/static/video.html?id=${v.id}`;
+                    
+                    const thumb = v.thumbnail_path || "https://via.placeholder.com/320x180?text=Processing";
+                    const duration = v.duration ? formatDuration(v.duration) : "00:00";
+                    const date = new Date(v.created_at).toLocaleDateString();
+
+                    card.innerHTML = `
+                        <div class="thumb-wrapper">
+                            <img src="${thumb}" class="thumb-img" loading="lazy">
+                            <div class="duration-badge">${duration}</div>
+                        </div>
+                        <div class="info-wrapper">
+                            <h3 class="video-title">${v.title}</h3>
+                            <div class="video-meta">
+                                <span class="author-name">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                    ${v.owner ? v.owner.username : '用户'}
+                                </span>
+                                <span>${v.views}次播放 · ${date}</span>
+                            </div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            loading.innerText = "加载失败，请检查网络";
+        }
+    }
+
+    function formatDuration(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>个人主页 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        .header-banner { height: 200px; background: #00a1d6; display: flex; align-items: flex-end; padding-bottom: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; display: flex; gap: 20px; }
+        
+        .profile-card { margin-top: -40px; background: #fff; padding: 20px; border-radius: 8px; width: 300px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .avatar { width: 80px; height: 80px; border-radius: 50%; border: 4px solid #fff; margin-bottom: 10px; object-fit: cover; }
+        .username { font-size: 20px; font-weight: bold; margin: 0; }
+        .bio { color: #666; font-size: 14px; margin: 10px 0; }
+        
+        .stats { display: flex; justify-content: space-around; margin: 20px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; padding: 10px 0; }
+        .stat-item div:first-child { font-weight: bold; font-size: 18px; }
+        .stat-item div:last-child { font-size: 12px; color: #999; }
+        
+        .follow-btn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; background: #00a1d6; color: #fff; }
+        .follow-btn.following { background: #eee; color: #666; }
+        
+        .content-area { flex: 1; margin-top: 20px; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .video-card { background: #fff; border-radius: 6px; overflow: hidden; cursor: pointer; }
+        .thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+        .title { padding: 10px; font-size: 14px; margin: 0; font-weight: 500; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="header-banner"></div>
+
+<div class="container">
+    <div class="profile-card">
+        <img id="avatar" src="" class="avatar">
+        <h2 id="username" class="username">加载中...</h2>
+        <p id="bio" class="bio"></p>
+        
+        <div class="stats">
+            <div class="stat-item"><div id="follow-count">0</div><div>关注</div></div>
+            <div class="stat-item"><div id="fans-count">0</div><div>粉丝</div></div>
+            <div class="stat-item"><div id="video-count">0</div><div>投稿</div></div>
+        </div>
+        
+        <button id="follow-btn" class="follow-btn" onclick="toggleFollow()">+ 关注</button>
+    </div>
+    
+    <div class="content-area">
+        <h3 style="margin-top:0;">投稿视频</h3>
+        <div id="video-list" class="video-grid"></div>
+    </div>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('id');
+    const token = localStorage.getItem("access_token");
+    let isFollowing = false;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!userId) return alert("用户不存在");
+        loadProfile();
+        loadPublicVideos();
+    });
+
+    async function loadPublicVideos() {
+        try {
+            const res = await fetch(`/users/${userId}/videos/public`);
+            if (res.ok) {
+                const videos = await res.json();
+                const container = document.getElementById("video-list");
+                if (videos.length === 0) return container.innerHTML = "<p style='color:#999; grid-column:1/-1; text-align:center;'>暂无公开视频</p>";
+                
+                videos.forEach(v => {
+                    const div = document.createElement("div");
+                    div.className = "video-card";
+                    div.onclick = () => location.href = `/static/video.html?id=${v.id}`;
+                    div.innerHTML = `
+                        <img src="${v.thumbnail_path}" class="thumb">
+                        <div class="title">${v.title}</div>
+                        <div style="padding:0 10px 10px; font-size:12px; color:#999;">${v.views}播放</div>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadProfile() {
+        const headers = token ? { "Authorization": "Bearer " + token } : {};
+        try {
+            const res = await fetch(`/users/${userId}/profile`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("username").innerText = data.username;
+                document.getElementById("bio").innerText = data.bio || "这个人很懒...";
+                document.getElementById("avatar").src = data.avatar_path || "https://ui-avatars.com/api/?name=" + data.username;
+                
+                document.getElementById("fans-count").innerText = data.followers_count;
+                document.getElementById("follow-count").innerText = data.following_count;
+                document.getElementById("video-count").innerText = data.video_count;
+                
+                isFollowing = data.is_following;
+                renderFollowBtn();
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function renderFollowBtn() {
+        const btn = document.getElementById("follow-btn");
+        if (isFollowing) {
+            btn.innerText = "已关注";
+            btn.className = "follow-btn following";
+        } else {
+            btn.innerText = "+ 关注";
+            btn.className = "follow-btn";
+        }
+    }
+
+    async function toggleFollow() {
+        if (!token) return location.href = "/static/login.html";
+        
+        const method = isFollowing ? "DELETE" : "POST";
+        try {
+            const res = await fetch(`/users/${userId}/follow`, {
+                method: method,
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                isFollowing = !isFollowing;
+                renderFollowBtn();
+                // 刷新粉丝数
+                const count = document.getElementById("fans-count");
+                count.innerText = parseInt(count.innerText) + (isFollowing ? 1 : -1);
+            }
+        } catch(e) { alert("操作失败"); }
+    }
+</script>
+
+</body>
+</html>

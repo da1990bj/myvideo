@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>视频详情 - MyVideo</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        /* 导航栏由 nav.js 生成 */
+        .container { max-width: 1400px; margin: 20px auto; padding: 20px; display: grid; grid-template-columns: 1fr 320px; gap: 30px; }
+        .main-content { grid-column: 1 / 2; }
+        .player-wrapper { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); position: relative; }
+        video { width: 100%; height: 100%; }
+        
+        .video-header { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e7e7e7; }
+        .video-title { font-size: 20px; font-weight: 500; color: #212121; margin: 0 0 10px; line-height: 1.4; }
+        .video-meta { font-size: 13px; color: #999; display: flex; align-items: center; gap: 20px; }
+        
+        .author-card { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .follow-btn { background: #00a1d6; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .follow-btn:hover { background: #00b5e5; }
+        .follow-btn.following { background: #e7e7e7; color: #999; }
+        
+        .quality-selector { position: absolute; bottom: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.7); color: #fff; padding: 5px; border-radius: 4px; font-size: 12px; }
+        
+        .sidebar { grid-column: 2 / 3; }
+        .rec-item { display: flex; gap: 10px; margin-bottom: 16px; cursor: pointer; }
+        .rec-thumb { width: 140px; height: 80px; object-fit: cover; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <div class="main-content">
+        <div class="player-wrapper">
+            <video id="player" controls autoplay poster=""></video>
+            <select id="quality" class="quality-selector" style="display:none;">
+                <option value="-1">Auto</option>
+            </select>
+        </div>
+        
+        <div class="video-header">
+            <h1 class="video-title" id="title">加载中...</h1>
+            <div class="video-meta">
+                <span id="views">0播放</span>
+                <span id="date"></span>
+            </div>
+        </div>
+        
+        <!-- 作者卡片 -->
+        <div class="author-card">
+            <img id="author-avatar" src="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; cursor:pointer;">
+            <div style="flex:1;">
+                <div id="author-name" style="font-weight:bold; font-size:16px; color:#fb7299; cursor:pointer;"></div>
+                <div id="author-bio" style="font-size:12px; color:#999;"></div>
+            </div>
+            <button id="follow-btn" class="follow-btn" onclick="toggleFollow()">+ 关注</button>
+        </div>
+        
+        <div style="line-height:1.6; color:#333; white-space:pre-wrap;" id="description"></div>
+    </div>
+    
+    <div class="sidebar">
+        <h3>相关推荐</h3>
+        <div id="rec-list"></div>
+    </div>
+</div>
+
+<script>
+    let currentAuthorId = null;
+    let isFollowing = false;
+    let currentLoggedInUserId = null; // 添加当前登录用户ID变量
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoId = urlParams.get('id');
+        if (!videoId) return location.href = "/static/index.html";
+
+        await loadVideoDetails(videoId);
+        await loadRecommendations();
+    });
+
+    async function loadVideoDetails(id) {
+        try {
+            const res = await fetch(`/videos/${id}`);
+            if (res.ok) {
+                const video = await res.json();
+                
+                document.title = video.title + " - MyVideo";
+                document.getElementById("title").innerText = video.title;
+                document.getElementById("views").innerText = video.views + "播放";
+                document.getElementById("date").innerText = new Date(video.created_at).toLocaleDateString();
+                document.getElementById("description").innerText = video.description || "暂无简介";
+                
+                // 填充作者信息
+                if (video.owner) {
+                    currentAuthorId = video.owner.id;
+                    document.getElementById("author-name").innerText = video.owner.username;
+                    document.getElementById("author-avatar").src = video.owner.avatar_path || "https://ui-avatars.com/api/?name=" + video.owner.username;
+                    document.getElementById("author-bio").innerText = video.owner.bio || "这个人很懒...";
+                    
+                    // 点击跳转
+                    const goProfile = () => location.href = `/static/profile.html?id=${currentAuthorId}`;
+                    document.getElementById("author-name").onclick = goProfile;
+                    document.getElementById("author-avatar").onclick = goProfile;
+                    
+                    // checkFollowStatus(); // 暂时移除，在获取token后统一调用
+                }
+
+                // 播放器逻辑 (保持不变)
+                const player = document.getElementById("player");
+                player.poster = video.thumbnail_path;
+                if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
+                    const hls = new Hls();
+                    hls.loadSource(video.processed_file_path);
+                    hls.attachMedia(player);
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        player.play();
+                        // 初始化清晰度选择
+                        const select = document.getElementById("quality");
+                        if (hls.levels.length > 1) {
+                            select.style.display = "block";
+                            hls.levels.forEach((lvl, idx) => {
+                                const opt = document.createElement("option");
+                                opt.value = idx;
+                                opt.text = lvl.height + "p";
+                                select.appendChild(opt);
+                            });
+                            select.onchange = () => hls.currentLevel = parseInt(select.value);
+                        }
+                    });
+                } else {
+                    player.src = video.processed_file_path;
+                }
+                
+                // 统计
+                let counted = false;
+                player.onplay = () => { if(!counted) { fetch(`/videos/${id}/view`, {method:"POST"}); counted=true; } };
+                player.onended = () => fetch(`/videos/${id}/complete`, {method:"POST"});
+                
+                // 获取当前登录用户ID，以便判断是否是自己的视频
+                const currentToken = localStorage.getItem("access_token"); // 在函数内部重新获取 token
+                if (currentToken) {
+                    const userRes = await fetch(`/users/me`, { headers: { "Authorization": "Bearer " + currentToken } });
+                    if (userRes.ok) {
+                        const userData = await userRes.json();
+                        currentLoggedInUserId = userData.id;
+                    }
+                }
+                checkFollowStatus(); // 统一在获取到登录用户ID后调用
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function checkFollowStatus() {
+        // 如果是自己的视频，则不显示关注按钮
+        if (currentLoggedInUserId && currentAuthorId === currentLoggedInUserId) {
+            isFollowing = false; // 逻辑上不是关注，而是管理
+            updateFollowBtn(true); // 传入一个参数，指示是自己的视频
+            return;
+        }
+
+        const token = localStorage.getItem("access_token");
+        if (!token || !currentAuthorId) {
+             updateFollowBtn(); // 没有登录或没有作者ID，也更新按钮状态
+             return;
+        }
+        
+        // 这里偷个懒，直接请求 profile 接口来获取关注状态
+        const res = await fetch(`/users/${currentAuthorId}/profile`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            isFollowing = data.is_following;
+            updateFollowBtn();
+        } else {
+            // 如果获取失败，也更新一下按钮状态，可能是未登录或者其他错误
+            isFollowing = false;
+            updateFollowBtn();
+        }
+    }
+
+    function updateFollowBtn(isOwnVideo = false) {
+        const btn = document.getElementById("follow-btn");
+        if (isOwnVideo) {
+            btn.innerText = "编辑资料"; // 自己的视频显示编辑资料
+            btn.className = "follow-btn"; // 移除关注样式
+            btn.onclick = () => location.href = `/static/settings.html`; // 点击跳转到设置页
+        } else if (isFollowing) {
+            btn.innerText = "已关注";
+            btn.className = "follow-btn following";
+            btn.onclick = () => toggleFollow(); // 绑定回 toggleFollow
+        } else {
+            btn.innerText = "+ 关注";
+            btn.className = "follow-btn";
+            btn.onclick = () => toggleFollow(); // 绑定回 toggleFollow
+        }
+    }
+
+    async function toggleFollow() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+        // 如果是自己的视频，不执行关注逻辑
+        if (currentLoggedInUserId && currentAuthorId === currentLoggedInUserId) {
+            location.href = `/static/settings.html`; // 或者其他编辑页面
+            return;
+        }
+        
+        const method = isFollowing ? "DELETE" : "POST";
+        const res = await fetch(`/users/${currentAuthorId}/follow`, {
+            method: method,
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (res.ok) {
+            isFollowing = !isFollowing;
+            updateFollowBtn();
+        }
+    }
+
+    async function loadRecommendations() {
+        const res = await fetch(`/videos?size=5&sort_by=popular`);
+        if (res.ok) {
+            const videos = await res.json();
+            const list = document.getElementById("rec-list");
+            videos.forEach(v => {
+                const div = document.createElement("div");
+                div.className = "rec-item";
+                div.onclick = () => location.href = `/static/video.html?id=${v.id}`;
+                div.innerHTML = `
+                    <img src="${v.thumbnail_path}" class="rec-thumb">
+                    <div style="font-size:14px;">
+                        <div style="margin-bottom:4px; height:40px; overflow:hidden;">${v.title}</div>
+                        <div style="color:#999; font-size:12px;">${v.views}播放</div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+    }
+</script>
+</body>
+</html>
