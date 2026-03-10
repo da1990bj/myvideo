@@ -5,3 +5,4 @@ app.pid
 *.log
 __pycache__/
 *.pyc
+celery.pid

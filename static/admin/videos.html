@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 视频</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; }
+        .btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-success { color: #00a1d6; border-color: #00a1d6; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div style="padding: 20px;">
+        <h1>视频管理</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>封面</th>
+                    <th>标题</th>
+                    <th>作者</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadVideos);
+
+        async function loadVideos() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/videos?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const videos = await res.json();
+                const tbody = document.getElementById("list");
+                tbody.innerHTML = "";
+                videos.forEach(v => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><img src="${v.thumbnail_path}" style="height:40px; border-radius:4px;"></td>
+                        <td><a href="/static/video.html?id=${v.id}" target="_blank">${v.title}</a></td>
+                        <td>${v.owner ? v.owner.username : '-'}</td>
+                        <td>${v.status}</td>
+                        <td>
+                            ${v.status !== 'banned' ?
+                                `<button class="btn btn-danger" onclick="updateStatus('${v.id}', 'banned')">下架</button>` :
+                                `<button class="btn btn-success" onclick="updateStatus('${v.id}', 'completed')">上架</button>`}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function updateStatus(id, status) {
+            if (!confirm("确定要更改状态吗？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/videos/${id}/status?status=${status}&visibility=public`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadVideos();
+        }
+    </script>
+</body>
+</html>

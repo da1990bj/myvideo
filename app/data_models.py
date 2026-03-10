@@ -13,6 +13,7 @@ class User(SQLModel, table=True):
     avatar_path: Optional[str] = None
     bio: Optional[str] = None
     is_active: bool = Field(default=True)
+    is_admin: bool = Field(default=False) # 新增管理员字段
     created_at: datetime = Field(default_factory=datetime.utcnow)
     videos: List["Video"] = Relationship(back_populates="owner")
 
@@ -128,6 +129,7 @@ class UserRead(SQLModel):
     username: str
     email: str
     is_active: bool
+    is_admin: bool = False
     created_at: datetime
     avatar_path: Optional[str]
     bio: Optional[str] = None

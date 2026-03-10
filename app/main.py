@@ -76,6 +76,11 @@ async def get_current_user_optional(token: Annotated[Optional[str], Depends(oaut
         return user
     except JWTError: return None
 
+async def get_current_admin(current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user
+
 
 
 
@@ -259,6 +264,95 @@ def delete_comment(
     if comment.user_id != current_user.id: raise HTTPException(status_code=403)
     session.delete(comment)
     session.commit()
+    return {"ok": True}
+
+# --- Admin APIs ---
+
+@app.get("/admin/stats")
+def get_admin_stats(
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    users = len(session.exec(select(User)).all())
+    videos = len(session.exec(select(Video)).all())
+    comments = len(session.exec(select(Comment)).all())
+    return {"users": users, "videos": videos, "comments": comments}
+
+@app.get("/admin/users", response_model=List[UserRead])
+def get_all_users(
+    page: int = 1, size: int = 20,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    return session.exec(select(User).order_by(desc(User.created_at)).offset((page-1)*size).limit(size)).all()
+
+@app.post("/admin/users/{user_id}/status")
+def update_user_status(
+    user_id: str,
+    is_active: bool,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    user = session.get(User, user_id)
+    if not user: raise HTTPException(status_code=404)
+    user.is_active = is_active
+    session.add(user)
+    session.commit()
+    return {"ok": True}
+
+@app.get("/admin/videos", response_model=List[VideoRead])
+def get_all_videos(
+    page: int = 1, size: int = 20,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    return session.exec(select(Video).order_by(desc(Video.created_at)).offset((page-1)*size).limit(size)).all()
+
+@app.post("/admin/videos/{video_id}/status")
+def update_video_status(
+    video_id: str,
+    status: str,
+    visibility: str,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+    video.status = status
+    video.visibility = visibility
+    session.add(video)
+    session.commit()
+    return {"ok": True}
+
+@app.get("/admin/comments")
+def get_all_comments(
+    page: int = 1, size: int = 20,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    comments = session.exec(select(Comment).order_by(desc(Comment.created_at)).offset((page-1)*size).limit(size)).all()
+    result = []
+    for c in comments:
+        user = session.get(User, c.user_id)
+        result.append({
+            "id": c.id,
+            "content": c.content,
+            "created_at": c.created_at,
+            "user": {"username": user.username if user else "Unknown"},
+            "video_id": c.video_id
+        })
+    return result
+
+@app.delete("/admin/comments/{comment_id}")
+def delete_any_comment(
+    comment_id: int,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    comment = session.get(Comment, comment_id)
+    if comment:
+        session.delete(comment)
+        session.commit()
     return {"ok": True}
 
 # --- Notification APIs ---

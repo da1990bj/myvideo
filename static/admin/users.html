@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 用户</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; }
+        .btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-success { color: #00a1d6; border-color: #00a1d6; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div style="padding: 20px;">
+        <h1>用户管理</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>用户名</th>
+                    <th>邮箱</th>
+                    <th>注册时间</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadUsers);
+
+        async function loadUsers() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/users?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const users = await res.json();
+                const tbody = document.getElementById("list");
+                tbody.innerHTML = "";
+                users.forEach(u => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${u.username} ${u.is_admin ? '<span style="color:red">[管理员]</span>' : ''}</td>
+                        <td>${u.email}</td>
+                        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                        <td>${u.is_active ? '正常' : '封禁'}</td>
+                        <td>
+                            ${u.is_active ?
+                                `<button class="btn btn-danger" onclick="toggleBan('${u.id}', false)">封禁</button>` :
+                                `<button class="btn btn-success" onclick="toggleBan('${u.id}', true)">解封</button>`}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function toggleBan(id, active) {
+            if (!confirm("确定要执行此操作吗？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/users/${id}/status?is_active=${active}`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadUsers();
+        }
+    </script>
+</body>
+</html>

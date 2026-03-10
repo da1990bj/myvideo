@@ -1,3 +1,9 @@
+v1.4
+- Add Admin Panel (Dashboard, Video/User/Comment Management)
+- Add Admin Role and Permissions
+- Add Admin Navigation Entry
+- Script to promote user to Admin
+
 v1.3
 - Add Notification Center (Follow, Comment, Like alerts)
 - Add "Bell" icon with unread badge in navigation

@@ -41,9 +41,16 @@ async function checkNavUser() {
         if (res.ok) {
             const user = await res.json();
             const avatar = user.avatar_path || "https://ui-avatars.com/api/?name=" + user.username;
+
+            let adminLink = "";
+            if (user.is_admin) {
+                adminLink = '<a href="/static/admin/index.html" class="nav-link" style="margin-left:12px; color:#f04c49;">后台管理</a>';
+            }
+
             area.innerHTML =
                 '<a href="/static/dashboard.html" class="nav-link">创作中心</a>' +
                 '<a href="/static/history.html" class="nav-link" style="margin-left:12px;">历史</a>' +
+                adminLink +
                 '<div style="display:inline-block; position:relative; margin-left:16px; cursor:pointer; vertical-align:middle;" onclick="location.href=\'/static/notifications.html\'" title="消息通知">' +
                     '<svg width="24" height="24" viewBox="0 0 24 24" fill="#666"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>' +
                     '<div id="nav-badge" style="display:none; position:absolute; top:-6px; right:-6px; background:#fb7299; color:#fff; font-size:10px; padding:0 4px; border-radius:10px; height:16px; line-height:16px; min-width:16px; text-align:center;">0</div>' +
