@@ -190,15 +190,27 @@
                 statusHtml = "<span class='status-badge' style='color:red; background:#ffe6e6;'>处理失败</span>";
             } else if (v.status === "pending") {
                 statusHtml = "<span class='status-badge'>等待处理</span>";
+            } else if (v.status === "banned") {
+                statusHtml = `<span class='status-badge' style='color:white; background:#f04c49;' title='原因: ${v.ban_reason || "未知"}'>已下架</span><div style="font-size:12px; color:#f04c49; margin-top:4px;">${v.ban_reason || ""}</div>`;
+            } else if (v.status === "appealing") {
+                statusHtml = "<span class='status-badge' style='color:#f08c00; background:#fff9db;'>申诉中</span>";
             } else {
                 statusHtml = "<span class='status-badge " + statusClass + "'>已发布</span>";
             }
-            
+
             // 安全处理 tags
             const tagArray = Array.isArray(v.tags) ? v.tags : [];
             const tagsStr = tagArray.join(",").replace(/"/g, "&quot;");
             const titleSafe = v.title.replace(/"/g, "&quot;");
-            
+
+            let buttons = `<button class='action-btn' onclick='openEdit("${v.id}", "${titleSafe}", "${v.visibility}", "${(v.category ? v.category.id : "")}", "${tagsStr}", "${(v.thumbnail_path || "")}")'>编辑</button>`;
+
+            if (v.status === "banned") {
+                buttons += `<button class='action-btn' style='color:#f08c00;' onclick='appealVideo("${v.id}")'>申诉</button>`;
+            }
+
+            buttons += `<button class='action-btn delete' onclick='deleteVideo("${v.id}")'>删除</button>`;
+
             html += "<tr>" +
                 "<td><div class='video-cell'>" +
                 "<img src='" + (v.thumbnail_path || "/static/default_thumb.jpg") + "' class='thumb'>" +
@@ -210,11 +222,29 @@
                 "<div style='font-size:12px; color:#999;'>完播率: " + rate + "</div></td>" +
                 "<td>" + statusHtml + "</td>" +
                 "<td>" + new Date(v.created_at).toLocaleDateString() + "</td>" +
-                "<td><button class='action-btn' onclick='openEdit(\"" + v.id + "\", \"" + titleSafe + "\", \"" + v.visibility + "\", \"" + (v.category ? v.category.id : "") + "\", \"" + tagsStr + "\", \"" + (v.thumbnail_path || "") + "\")'>编辑</button>" +
-                "<button class='action-btn delete' onclick='deleteVideo(\"" + v.id + "\")'>删除</button></td>" +
+                "<td>" + buttons + "</td>" +
                 "</tr>";
         });
         tbody.innerHTML = html;
+    }
+
+    async function appealVideo(id) {
+        const reason = prompt("请输入申诉理由：");
+        if (!reason) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${id}/appeal`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) {
+                alert("申诉已提交");
+                loadMyVideos();
+            } else {
+                alert("提交失败");
+            }
+        } catch(e) { alert("网络错误"); }
     }
 
     function openEdit(id, title, visibility, categoryId, tagsStr, thumbPath) {
@@ -238,6 +268,22 @@
             if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 const val = input.value.trim();
+
+                // 限制检查
+                if (currentTags.length >= 5) {
+                    alert("最多只能添加 5 个标签");
+                    return;
+                }
+                if (val.length > 20) {
+                    alert("单个标签不能超过 20 个字符");
+                    return;
+                }
+                // 正则检查: 中文、字母、数字、下划线、空格、横杠、点、加号、井号
+                if (!/^[\w\u4e00-\u9fa5\s\-\.\+\#]+$/.test(val)) {
+                    alert("标签包含非法字符 (仅允许中文、字母、数字、下划线、空格、横杠、点、加号、井号)");
+                    return;
+                }
+
                 if (val && !currentTags.includes(val)) {
                     currentTags.push(val);
                     renderTags();
@@ -253,7 +299,7 @@
     function renderTags() {
         const container = document.querySelector(".tags-container");
         const input = document.getElementById("tagInput");
-        
+
         Array.from(container.children).forEach(child => {
             if (child !== input) container.removeChild(child);
         });
@@ -267,6 +313,16 @@
             chip.style.color = textColors[colorIdx];
             container.insertBefore(chip, input);
         });
+
+        // 数量达到上限时禁用输入
+        if (currentTags.length >= 5) {
+            input.disabled = true;
+            input.placeholder = "已达标签上限 (5/5)";
+        } else {
+            input.disabled = false;
+            input.placeholder = "输入标签，按空格生成";
+            input.focus();
+        }
     }
     
     window.removeTag = function(index) {

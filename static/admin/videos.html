@@ -22,6 +22,7 @@
                 <tr>
                     <th>封面</th>
                     <th>标题</th>
+                    <th>分类</th>
                     <th>作者</th>
                     <th>状态</th>
                     <th>操作</th>
@@ -45,15 +46,42 @@
                 tbody.innerHTML = "";
                 videos.forEach(v => {
                     const tr = document.createElement("tr");
+
+                    let statusLabel = "";
+                    let statusColor = "#666";
+
+                    if (v.status === 'completed') {
+                        statusLabel = "待审核";
+                        statusColor = "#f08c00"; // Orange
+                    } else if (v.status === 'approved') {
+                        statusLabel = "已审核";
+                        statusColor = "#2f9e44"; // Green
+                    } else if (v.status === 'banned') {
+                        statusLabel = "已下架";
+                        statusColor = "#f04c49"; // Red
+                    } else if (v.status === 'appealing') {
+                        statusLabel = "申诉中";
+                        statusColor = "#e67700"; // Dark Orange
+                    } else {
+                        statusLabel = v.status;
+                    }
+
                     tr.innerHTML = `
                         <td><img src="${v.thumbnail_path}" style="height:40px; border-radius:4px;"></td>
                         <td><a href="/static/video.html?id=${v.id}" target="_blank">${v.title}</a></td>
+                        <td>${v.category ? v.category.name : '-'}</td>
                         <td>${v.owner ? v.owner.username : '-'}</td>
-                        <td>${v.status}</td>
+                        <td style="color:${statusColor}; font-weight:bold;">${statusLabel}</td>
                         <td>
-                            ${v.status !== 'banned' ?
-                                `<button class="btn btn-danger" onclick="updateStatus('${v.id}', 'banned')">下架</button>` :
-                                `<button class="btn btn-success" onclick="updateStatus('${v.id}', 'completed')">上架</button>`}
+                            ${v.status === 'completed' ?
+                                `<button class="btn btn-success" onclick="approveVideo('${v.id}')">通过</button>` : ''
+                            }
+
+                            ${v.status === 'banned' || v.status === 'appealing' ?
+                                `<button class="btn btn-success" onclick="approveVideo('${v.id}')">恢复上架</button>` :
+                                `<button class="btn btn-danger" onclick="banVideo('${v.id}')">下架</button>`
+                            }
+                            <button class="btn" onclick="showLogs('${v.id}')">记录</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -61,14 +89,43 @@
             }
         }
 
-        async function updateStatus(id, status) {
-            if (!confirm("确定要更改状态吗？")) return;
+        async function banVideo(id) {
+            const reason = prompt("请输入下架原因：");
+            if (!reason) return;
             const token = localStorage.getItem("access_token");
-            const res = await fetch(`/admin/videos/${id}/status?status=${status}&visibility=public`, {
+            const res = await fetch(`/admin/videos/${id}/ban`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) loadVideos();
+        }
+
+        async function approveVideo(id) {
+            if(!confirm("确定通过审核并上架？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/videos/${id}/approve`, {
                 method: "POST",
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) loadVideos();
+        }
+
+        async function showLogs(id) {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/videos/${id}/audit-logs`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const logs = await res.json();
+                if (logs.length === 0) return alert("暂无记录");
+                let msg = "";
+                logs.forEach(l => {
+                    const actionMap = {"ban": "下架", "approve": "上架", "appeal": "申诉"};
+                    msg += `${new Date(l.created_at).toLocaleString()} - ${l.operator_name} [${actionMap[l.action] || l.action}]\n${l.reason || ''}\n----------------\n`;
+                });
+                alert(msg);
+            }
         }
     </script>
 </body>

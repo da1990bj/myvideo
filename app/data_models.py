@@ -25,6 +25,22 @@ class Category(SQLModel, table=True):
     slug: str = Field(unique=True)
     videos: List["Video"] = Relationship(back_populates="category")
 
+# --- New Tag Architecture ---
+class VideoTag(SQLModel, table=True):
+    __tablename__ = "video_tags"
+    video_id: UUID = Field(foreign_key="videos.id", primary_key=True)
+    tag_id: int = Field(foreign_key="tags.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Tag(SQLModel, table=True):
+    __tablename__ = "tags"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    usage_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    videos: List["Video"] = Relationship(back_populates="tags_rel", link_model=VideoTag)
+
 # Video
 class Video(SQLModel, table=True):
     __tablename__ = "videos"
@@ -32,28 +48,47 @@ class Video(SQLModel, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     title: str = Field(index=True)
     description: Optional[str] = None
-    
-    original_file_path: str 
+
+    original_file_path: str
     processed_file_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
-    
+
     status: str = Field(default="pending")
     visibility: str = Field(default="public")
-    
+    ban_reason: Optional[str] = None # 下架原因
+
     task_id: Optional[str] = None
     views: int = Field(default=0)
     complete_views: int = Field(default=0)
     progress: int = Field(default=0)
     duration: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    tags: List[str] = Field(default=[], sa_column=Column(JSON))
+
+    # tags: List[str] = Field(default=[], sa_column=Column(JSON)) # Removed
+    tags_rel: List[Tag] = Relationship(back_populates="videos", link_model=VideoTag)
 
     user_id: UUID = Field(foreign_key="users.id")
     owner: User = Relationship(back_populates="videos")
-    
+
     category_id: Optional[int] = Field(default=None, foreign_key="categories.id")
     category: Optional[Category] = Relationship(back_populates="videos")
+
+    # 兼容性属性：VideoRead 期望 tags 是 List[str]
+    @property
+    def tags(self) -> List[str]:
+        return [t.name for t in self.tags_rel]
+
+# 审核记录
+class VideoAuditLog(SQLModel, table=True):
+    __tablename__ = "video_audit_logs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id")
+    operator_id: UUID = Field(foreign_key="users.id") # 操作者(管理员或作者)
+    action: str # "ban", "approve", "appeal"
+    reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    operator: User = Relationship()
 
 # 社交关系表
 class UserFollow(SQLModel, table=True):

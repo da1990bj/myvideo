@@ -1,9 +1,9 @@
 from typing import Annotated, List, Optional
 from jose import JWTError, jwt
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlmodel import Session, select, desc
+from sqlmodel import Session, select, desc, update
 import shutil
 import os
 import random
@@ -11,6 +11,7 @@ import subprocess
 import time
 from uuid import uuid4, UUID
 from datetime import datetime
+from utils import clean_tags
 
 # --- Helpers ---
 def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, type: str, entity_id: str):
@@ -31,12 +32,12 @@ def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, t
     # Don't commit here, let caller commit
 
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification
+from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
 
-app = FastAPI(title="MyVideo Backend", version="1.7.0")
+app = FastAPI(title="MyVideo Backend", version="1.8.0")
 app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
@@ -81,10 +82,48 @@ async def get_current_admin(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
+# --- Helper to process tags ---
+def process_tags(session: Session, video: Video, tag_list: List[str]):
+    # 1. Clear existing tags (simplest approach: remove associations)
+    # For a new video, this is empty. For update, it clears.
+    # Note: This doesn't decrease usage_count for simplicity in MVP, but ideally should.
 
+    # Efficiently clear old relations
+    session.exec(select(VideoTag).where(VideoTag.video_id == video.id))
+    # Delete them
+    current_tags = session.exec(select(VideoTag).where(VideoTag.video_id == video.id)).all()
+    for tag_link in current_tags:
+        session.delete(tag_link)
+        # Decrease count
+        tag = session.get(Tag, tag_link.tag_id)
+        if tag:
+            tag.usage_count = max(0, tag.usage_count - 1)
+            session.add(tag)
 
+    # 2. Add new tags
+    for tag_name in tag_list:
+        if not tag_name: continue
+        tag_name = tag_name.strip()
 
-# ... (省略 upload, get_videos 等未修改的接口)
+        # Check if tag exists
+        tag = session.exec(select(Tag).where(Tag.name == tag_name)).first()
+        if not tag:
+            tag = Tag(name=tag_name, usage_count=0)
+            session.add(tag)
+            session.commit() # Commit to get ID
+            session.refresh(tag)
+
+        # Create relation
+        # Check if already added in this loop (though input should be deduped)
+        # Since we cleared all, just add.
+        # Check duplicates in input list
+
+        link = VideoTag(video_id=video.id, tag_id=tag.id)
+        session.add(link)
+
+        tag.usage_count += 1
+        session.add(tag)
+
 @app.post("/videos/upload", response_model=VideoRead)
 async def upload_video(
     title: str = Form(...),
@@ -101,17 +140,30 @@ async def upload_video(
     save_filename = f"{file_id}{ext}"
     save_path = f"/data/myvideo/static/videos/uploads/{save_filename}"
     with open(save_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    new_video = Video(id=file_id, title=title, description=description, category_id=category_id, tags=tag_list, user_id=current_user.id, original_file_path=save_path, status="pending")
+
+    # Clean Tags
+    raw_tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    tag_list = clean_tags(raw_tag_list)
+
+    # Create Video (without tags first)
+    new_video = Video(id=file_id, title=title, description=description, category_id=category_id, user_id=current_user.id, original_file_path=save_path, status="pending")
     session.add(new_video)
     session.commit()
     session.refresh(new_video)
+
+    # Process Tags
+    if tag_list:
+        process_tags(session, new_video, tag_list)
+        session.commit()
+        session.refresh(new_video)
+
     transcode_video_task.delay(str(new_video.id))
     return new_video
 
 @app.get("/videos", response_model=List[VideoRead])
 def get_videos(session: Session = Depends(get_session), page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100), category_id: Optional[int] = Query(None), keyword: Optional[str] = Query(None), sort_by: str = Query("latest", enum=["latest", "popular"])):
-    statement = select(Video).where(Video.status == "completed").where(Video.visibility == "public")
+    # Modify: Allow both 'completed' and 'approved'
+    statement = select(Video).where(Video.status.in_(["completed", "approved"])).where(Video.visibility == "public")
     if category_id: statement = statement.where(Video.category_id == category_id)
     if keyword: statement = statement.where(Video.title.contains(keyword))
     if sort_by == "latest": statement = statement.order_by(desc(Video.created_at))
@@ -137,13 +189,6 @@ def update_video_progress(
     video = session.get(Video, video_id)
     if not video: raise HTTPException(status_code=404)
 
-    # Convert str to UUID if needed, but sqlmodel usually handles it.
-    # The models define ID as UUID but URLs pass strings.
-    # Let's trust SQLModel/FastAPI conversion or cast explicitly if it failed before.
-    # Based on existing code, video_id in URL is str, model is UUID.
-
-    # Check existing history
-    # Note: select(UserVideoHistory) might need to join? No, it's a direct table.
     statement = select(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id).where(UserVideoHistory.video_id == video_id)
     history = session.exec(statement).first()
 
@@ -307,6 +352,96 @@ def get_all_videos(
     session: Session = Depends(get_session)
 ):
     return session.exec(select(Video).order_by(desc(Video.created_at)).offset((page-1)*size).limit(size)).all()
+
+@app.post("/admin/videos/{video_id}/ban")
+def ban_video(
+    video_id: str,
+    reason: str = Body(..., embed=True),
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+
+    video.status = "banned"
+    video.ban_reason = reason
+    session.add(video)
+
+    log = VideoAuditLog(video_id=video_id, operator_id=admin.id, action="ban", reason=reason)
+    session.add(log)
+
+    create_notification(session, admin.id, video.user_id, "system", f"您的视频《{video.title}》因违规被下架: {reason}")
+
+    session.commit()
+    return {"ok": True}
+
+@app.post("/admin/videos/{video_id}/approve")
+def approve_video(
+    video_id: str,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+
+    video.status = "approved" # Changed from completed to approved
+    video.ban_reason = None
+    session.add(video)
+
+    log = VideoAuditLog(video_id=video_id, operator_id=admin.id, action="approve")
+    session.add(log)
+
+    create_notification(session, admin.id, video.user_id, "system", f"您的视频《{video.title}》申诉/审核已通过并上架")
+
+    session.commit()
+    return {"ok": True}
+
+@app.post("/videos/{video_id}/appeal")
+def appeal_video(
+    video_id: str,
+    reason: str = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+    if video.user_id != current_user.id: raise HTTPException(status_code=403)
+    if video.status != "banned": raise HTTPException(status_code=400, detail="Only banned videos can be appealed")
+
+    video.status = "appealing"
+    session.add(video)
+
+    log = VideoAuditLog(video_id=video_id, operator_id=current_user.id, action="appeal", reason=reason)
+    session.add(log)
+
+    session.commit()
+    return {"ok": True}
+
+@app.get("/videos/{video_id}/audit-logs")
+def get_audit_logs(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+
+    if not current_user.is_admin and video.user_id != current_user.id:
+        raise HTTPException(status_code=403)
+
+    logs = session.exec(select(VideoAuditLog).where(VideoAuditLog.video_id == video_id).order_by(desc(VideoAuditLog.created_at))).all()
+
+    result = []
+    for l in logs:
+        op = session.get(User, l.operator_id)
+        result.append({
+            "action": l.action,
+            "reason": l.reason,
+            "created_at": l.created_at,
+            "operator_name": op.username if op else "Unknown",
+            "is_admin": op.is_admin if op else False
+        })
+    return result
 
 @app.post("/admin/videos/{video_id}/status")
 def update_video_status(
@@ -488,21 +623,6 @@ def get_categories(session: Session = Depends(get_session)):
     return session.exec(select(Category)).all()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # --- 创作者 API 修改 ---
 
 class VideoUpdateExt(VideoUpdate):
@@ -523,15 +643,19 @@ def update_video(
         raise HTTPException(status_code=404, detail="Permission denied")
 
     # 更新常规字段
-    video_data = video_in.dict(exclude_unset=True, exclude={"temp_thumbnail_path"})
+    video_data = video_in.dict(exclude_unset=True, exclude={"temp_thumbnail_path", "tags"})
+
+    # 清洗标签
+    if video_in.tags is not None:
+        tag_list = clean_tags(video_in.tags)
+        process_tags(session, video, tag_list)
+
     for key, value in video_data.items():
         setattr(video, key, value)
 
     # 处理封面转正
     if video_in.temp_thumbnail_path:
         print(f"DEBUG: Found temp thumb: {video_in.temp_thumbnail_path}")
-
-
 
         src_abs = video_in.temp_thumbnail_path.replace("/static", "/data/myvideo/static")
         print(f"DEBUG: Src Abs Path: {src_abs}, Exists: {os.path.exists(src_abs)}")
@@ -612,6 +736,23 @@ def unfollow_user(user_id: str, current_user: User = Depends(get_current_user), 
     if existing: session.delete(existing); session.commit()
     return {"ok": True}
 
+@app.get("/users/me/following", response_model=List[UserRead])
+def get_my_following(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    # 使用 join 提高效率，直接获取 User 对象
+    stmt = select(User).join(UserFollow, User.id == UserFollow.followed_id).where(UserFollow.follower_id == current_user.id)
+    return session.exec(stmt).all()
+
+@app.get("/users/me/blocks", response_model=List[UserRead])
+def get_my_blocks(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    stmt = select(User).join(UserBlock, User.id == UserBlock.blocked_id).where(UserBlock.blocker_id == current_user.id)
+    return session.exec(stmt).all()
+
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == form_data.username)).first()
@@ -651,7 +792,7 @@ def get_user_profile(
     if current_user and str(current_user.id) != user_id:
         is_following = session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id, UserFollow.followed_id == user_id)).first() is not None
 
-    videos_count = len(session.exec(select(Video).where(Video.user_id == user_id, Video.status == "completed", Video.visibility == "public")).all())
+    videos_count = len(session.exec(select(Video).where(Video.user_id == user_id, Video.status.in_(["completed", "approved"]), Video.visibility == "public")).all())
 
     is_self = False
     if current_user and str(current_user.id) == user_id:
@@ -677,7 +818,7 @@ def get_user_public_videos(
     user_id: str,
     session: Session = Depends(get_session)
 ):
-    return session.exec(select(Video).where(Video.user_id == user_id, Video.status == "completed", Video.visibility == "public").order_by(desc(Video.created_at))).all()
+    return session.exec(select(Video).where(Video.user_id == user_id, Video.status.in_(["completed", "approved"]), Video.visibility == "public").order_by(desc(Video.created_at))).all()
 
 @app.get("/")
 def read_root(): return {"message": "MyVideo API is running!"}

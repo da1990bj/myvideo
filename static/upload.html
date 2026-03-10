@@ -121,6 +121,22 @@
             if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 const val = input.value.trim();
+
+                // 限制检查
+                if (tags.length >= 5) {
+                    alert("最多只能添加 5 个标签");
+                    return;
+                }
+                if (val.length > 20) {
+                    alert("单个标签不能超过 20 个字符");
+                    return;
+                }
+                // 正则检查: 中文、字母、数字、下划线、空格、横杠、点、加号、井号
+                if (!/^[\w\u4e00-\u9fa5\s\-\.\+\#]+$/.test(val)) {
+                    alert("标签包含非法字符 (仅允许中文、字母、数字、下划线、空格、横杠、点、加号、井号)");
+                    return;
+                }
+
                 if (val && !tags.includes(val)) {
                     tags.push(val);
                     renderTags();
@@ -136,7 +152,7 @@
     function renderTags() {
         const container = document.querySelector(".tags-container");
         const input = document.getElementById("tagInput");
-        
+
         Array.from(container.children).forEach(child => {
             if (child !== input) container.removeChild(child);
         });
@@ -150,6 +166,16 @@
             chip.style.color = textColors[colorIdx];
             container.insertBefore(chip, input);
         });
+
+        // 数量达到上限时禁用输入
+        if (tags.length >= 5) {
+            input.disabled = true;
+            input.placeholder = "已达标签上限 (5/5)";
+        } else {
+            input.disabled = false;
+            input.placeholder = "输入标签，按空格生成";
+            input.focus();
+        }
     }
     
     window.removeTag = function(index) {
