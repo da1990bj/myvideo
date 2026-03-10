@@ -1,6 +1,6 @@
 from typing import Annotated, List, Optional
 from jose import JWTError, jwt
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query, Header
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, select, desc
@@ -9,17 +9,18 @@ import os
 import random
 import subprocess
 import time
-from uuid import UUID, uuid4
+from uuid import uuid4, UUID
+from datetime import datetime
 
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserReadProfile, VideoLike
+from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
 
 app = FastAPI(title="MyVideo Backend", version="1.7.0")
 app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 @app.on_event("startup")
 def on_startup():
@@ -31,12 +32,13 @@ def on_startup():
     os.makedirs("/data/myvideo/static/avatars", exist_ok=True)
     init_categories()
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: Session = Depends(get_session)):
+async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)], session: Session = Depends(get_session)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token: raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -46,17 +48,18 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], sessio
     if user is None: raise credentials_exception
     return user
 
-async def get_optional_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)] = None, session: Session = Depends(get_session)):
-    if token is None:
-        return None
+async def get_current_user_optional(token: Annotated[Optional[str], Depends(oauth2_scheme)], session: Session = Depends(get_session)):
+    if not token: return None
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None: return None # Token无效，但我们不抛异常
-    except JWTError:
-        return None # Token无效，但我们不抛异常
-    user = session.exec(select(User).where(User.username == username)).first()
-    return user
+        if username is None: return None
+        user = session.exec(select(User).where(User.username == username)).first()
+        return user
+    except JWTError: return None
+
+
+
 
 # ... (省略 upload, get_videos 等未修改的接口)
 @app.post("/videos/upload", response_model=VideoRead)
@@ -94,73 +97,150 @@ def get_videos(session: Session = Depends(get_session), page: int = Query(1, ge=
     return session.exec(statement.offset(offset).limit(size)).all()
 
 @app.get("/videos/{video_id}", response_model=VideoRead)
-def read_video(
-    video_id: str,
-    session: Session = Depends(get_session),
-    authorization: Optional[str] = Header(None) # 从Header手动获取Authorization
-):
-    current_user = None
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username: str = payload.get("sub")
-            if username:
-                current_user = session.exec(select(User).where(User.username == username)).first()
-        except JWTError:
-            pass # token无效, current_user保持为None
+def read_video(video_id: str, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if not video: raise HTTPException(status_code=404, detail="Video not found")
+    return video
 
-    # 统计点赞和踩的数量
-    likes_count = session.exec(
-        select(VideoLike).where(VideoLike.video_id == video_id, VideoLike.like_type == "like")
-    ).all().__len__() # 使用 len()
+# --- History ---
 
-    dislikes_count = session.exec(
-        select(VideoLike).where(VideoLike.video_id == video_id, VideoLike.like_type == "dislike")
-    ).all().__len__() # 使用 len()
+@app.post("/videos/{video_id}/progress")
+def update_video_progress(
+    video_id: str,
+    progress: float = Query(..., description="Watched duration in seconds"),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
 
-    is_liked_by_current_user = False
-    is_disliked_by_current_user = False
+    # Convert str to UUID if needed, but sqlmodel usually handles it.
+    # The models define ID as UUID but URLs pass strings.
+    # Let's trust SQLModel/FastAPI conversion or cast explicitly if it failed before.
+    # Based on existing code, video_id in URL is str, model is UUID.
 
-    if current_user:
-        user_like = session.exec(
-            select(VideoLike).where(VideoLike.video_id == video_id, VideoLike.user_id == current_user.id)
-        ).first()
-        if user_like:
-            if user_like.like_type == "like":
-                is_liked_by_current_user = True
-            elif user_like.like_type == "dislike":
-                is_disliked_by_current_user = True
-    
-    # 增加视频浏览数 (如果有需要可以加)
-    # video.views += 1
-    # session.add(video)
-    # session.commit()
-    # session.refresh(video)
+    # Check existing history
+    # Note: select(UserVideoHistory) might need to join? No, it's a direct table.
+    statement = select(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id).where(UserVideoHistory.video_id == video_id)
+    history = session.exec(statement).first()
 
-    return VideoRead(
-        id=video.id,
-        title=video.title,
-        description=video.description,
-        status=video.status,
-        visibility=video.visibility,
-        processed_file_path=video.processed_file_path,
-        thumbnail_path=video.thumbnail_path,
-        duration=video.duration,
-        views=video.views,
-        complete_views=video.complete_views,
-        progress=video.progress,
-        created_at=video.created_at,
-        tags=video.tags,
-        owner=UserRead.from_orm(video.owner), # 使用 from_orm 来填充 UserRead
-        category=video.category,
-        likes_count=likes_count,
-        dislikes_count=dislikes_count,
-        is_liked_by_current_user=is_liked_by_current_user,
-        is_disliked_by_current_user=is_disliked_by_current_user,
-    )
+    if history:
+        history.progress = progress
+        history.last_watched = datetime.utcnow()
+        if video.duration and progress > (video.duration * 0.9):
+            history.is_finished = True
+        session.add(history)
+    else:
+        is_finished = False
+        if video.duration and progress > (video.duration * 0.9):
+            is_finished = True
+        new_history = UserVideoHistory(user_id=current_user.id, video_id=video_id, progress=progress, is_finished=is_finished)
+        session.add(new_history)
+
+    session.commit()
+    return {"status": "ok"}
+
+@app.post("/videos/{video_id}/view")
+def record_view(
+    video_id: str,
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+    video.views += 1
+    session.add(video)
+    session.commit()
+    return {"views": video.views}
+
+@app.post("/videos/{video_id}/complete")
+def record_complete(
+    video_id: str,
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+    video.complete_views += 1
+    session.add(video)
+    session.commit()
+    return {"complete_views": video.complete_views}
+
+@app.get("/videos/{video_id}/progress")
+def get_video_progress(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    statement = select(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id).where(UserVideoHistory.video_id == video_id)
+    history = session.exec(statement).first()
+    if history:
+        return {"progress": history.progress, "is_finished": history.is_finished}
+    return {"progress": 0.0, "is_finished": False}
+
+@app.get("/users/me/history", response_model=List[VideoRead])
+def get_my_history(
+    page: int = 1,
+    size: int = 20,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    statement = select(Video).join(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id).order_by(desc(UserVideoHistory.last_watched))
+    offset = (page - 1) * size
+    return session.exec(statement.offset(offset).limit(size)).all()
+
+# --- Comments ---
+
+@app.post("/videos/{video_id}/comments")
+def create_comment(
+    video_id: str,
+    content: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+    comment = Comment(content=content, user_id=current_user.id, video_id=video_id)
+    session.add(comment)
+    session.commit()
+    session.refresh(comment)
+    return {"id": comment.id, "content": comment.content, "created_at": comment.created_at, "user": {"username": current_user.username, "avatar_path": current_user.avatar_path}}
+
+@app.get("/videos/{video_id}/comments")
+def get_comments(
+    video_id: str,
+    session: Session = Depends(get_session),
+    page: int = 1,
+    size: int = 20
+):
+    statement = select(Comment).where(Comment.video_id == video_id).order_by(desc(Comment.created_at))
+    offset = (page - 1) * size
+    comments = session.exec(statement.offset(offset).limit(size)).all()
+
+    result = []
+    for c in comments:
+        user = session.get(User, c.user_id)
+        result.append({
+            "id": c.id,
+            "content": c.content,
+            "created_at": c.created_at,
+            "user": {
+                "username": user.username if user else "Unknown",
+                "avatar_path": user.avatar_path if user else None
+            }
+        })
+    return result
+
+@app.delete("/comments/{comment_id}")
+def delete_comment(
+    comment_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    comment = session.get(Comment, comment_id)
+    if not comment: raise HTTPException(status_code=404)
+    if comment.user_id != current_user.id: raise HTTPException(status_code=403)
+    session.delete(comment)
+    session.commit()
+    return {"ok": True}
 
 @app.post("/videos/{video_id}/like")
 async def like_video(
@@ -229,184 +309,21 @@ async def unlike_video(
 def get_categories(session: Session = Depends(get_session)):
     return session.exec(select(Category)).all()
 
-@app.get("/users/{user_id}/profile", response_model=UserReadProfile)
-async def get_user_profile(
-    user_id: UUID, # 使用 UUID 类型
-    session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_optional_current_user),
-):
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
 
-    is_following = False
-    if current_user and current_user.id != user_id:
-        follow_entry = session.exec(
-            select(UserFollow)
-            .where(UserFollow.follower_id == current_user.id)
-            .where(UserFollow.followed_id == user_id)
-        ).first()
-        if follow_entry:
-            is_following = True
 
-    # 查询粉丝数
-    followers_count = len(session.exec(
-        select(UserFollow)
-        .where(UserFollow.followed_id == user_id)
-    ).all())
 
-    # 查询关注数
-    following_count = len(session.exec(
-        select(UserFollow)
-        .where(UserFollow.follower_id == user_id)
-    ).all())
 
-    # 查询视频投稿数
-    video_count = len(session.exec(
-        select(Video)
-        .where(Video.user_id == user_id)
-        .where(Video.visibility == "public") # 只计算公开视频
-    ).all())
 
-    return UserReadProfile(
-        id=user.id,
-        username=user.username,
-        email=user.email,
-        is_active=user.is_active,
-        created_at=user.created_at,
-        avatar_path=user.avatar_path,
-        bio=user.bio,
-        is_following=is_following,
-        followers_count=followers_count,
-        following_count=following_count,
-        video_count=video_count,
-    )
 
-@app.get("/users/me/following", response_model=List[UserRead])
-async def get_followed_users(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
-):
-    following_entries = session.exec(
-        select(UserFollow).where(UserFollow.follower_id == current_user.id)
-    ).all()
-    followed_users = []
-    for entry in following_entries:
-        user = session.get(User, entry.followed_id)
-        if user:
-            followed_users.append(UserRead(
-                id=user.id,
-                username=user.username,
-                email=user.email,
-                is_active=user.is_active,
-                created_at=user.created_at,
-                avatar_path=user.avatar_path,
-                bio=user.bio,
-            ))
-    return followed_users
 
-@app.put("/users/me", response_model=UserRead)
-async def update_my_profile(
-    user_in: UserUpdate,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
-):
-    for key, value in user_in.dict(exclude_unset=True).items():
-        setattr(current_user, key, value)
-    session.add(current_user)
-    session.commit()
-    session.refresh(current_user)
-    return current_user
 
-@app.put("/users/me/password", status_code=status.HTTP_200_OK) # 改为200 OK
-async def change_my_password(
-    password_in: UserPasswordUpdate,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
-):
-    if not verify_password(password_in.old_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="旧密码不正确")
-    current_user.hashed_password = get_password_hash(password_in.new_password)
-    session.add(current_user)
-    session.commit()
-    return {"message": "密码修改成功"}
 
-@app.post("/users/avatar", response_model=UserRead)
-async def upload_my_avatar(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
-):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="文件必须是图片")
-    
-    # 构建头像保存路径
-    avatar_filename = f"{current_user.id}.png" # 假设都保存为png
-    avatar_path = f"/data/myvideo/static/avatars/{avatar_filename}"
-    
-    with open(avatar_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    current_user.avatar_path = f"/static/avatars/{avatar_filename}"
-    session.add(current_user)
-    session.commit()
-    session.refresh(current_user)
-    return current_user
 
-@app.get("/users/me/blocks", response_model=List[UserRead])
-async def get_my_blocks(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
-):
-    blocked_entries = session.exec(
-        select(UserBlock).where(UserBlock.blocker_id == current_user.id)
-    ).all()
-    blocked_users = []
-    for entry in blocked_entries:
-        user = session.get(User, entry.blocked_id)
-        if user:
-            blocked_users.append(UserRead(
-                id=user.id,
-                username=user.username,
-                email=user.email,
-                is_active=user.is_active,
-                created_at=user.created_at,
-                avatar_path=user.avatar_path,
-                bio=user.bio,
-            ))
-    return blocked_users
 
-@app.post("/users/{user_id}/block")
-def block_user(user_id: UUID, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    if current_user.id == user_id:
-        raise HTTPException(status_code=400, detail="不能拉黑自己")
-    existing_block = session.exec(select(UserBlock).where(UserBlock.blocker_id == current_user.id, UserBlock.blocked_id == user_id)).first()
-    if not existing_block:
-        session.add(UserBlock(blocker_id=current_user.id, blocked_id=user_id))
-        session.commit()
-    return {"ok": True}
 
-@app.delete("/users/{user_id}/block")
-def unblock_user(user_id: UUID, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    existing_block = session.exec(select(UserBlock).where(UserBlock.blocker_id == current_user.id, UserBlock.blocked_id == user_id)).first()
-    if existing_block:
-        session.delete(existing_block)
-        session.commit()
-    return {"ok": True}
 
-@app.get("/users/{user_id}/videos/public", response_model=List[VideoRead])
-def get_user_public_videos(user_id: UUID, session: Session = Depends(get_session)):
-    videos = session.exec(
-        select(Video)
-        .where(Video.user_id == user_id)
-        .where(Video.visibility == "public")
-        .where(Video.status == "completed")
-        .order_by(desc(Video.created_at))
-    ).all()
-    user_exists = session.get(User, user_id)
-    if not user_exists:
-        raise HTTPException(status_code=404, detail="User not found")
-    return videos
+
+
 
 # --- 创作者 API 修改 ---
 
@@ -537,6 +454,51 @@ async def read_users_me(token: Annotated[str, Depends(oauth2_scheme)], session: 
     user = session.exec(select(User).where(User.username == username)).first()
     if not user: raise HTTPException(status_code=401)
     return user
+
+@app.get("/users/{user_id}/profile")
+def get_user_profile(
+    user_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    session: Session = Depends(get_session)
+):
+    target_user = session.get(User, user_id)
+    if not target_user: raise HTTPException(status_code=404)
+
+    # Followers count
+    followers_count = len(session.exec(select(UserFollow).where(UserFollow.followed_id == user_id)).all())
+    following_count = len(session.exec(select(UserFollow).where(UserFollow.follower_id == user_id)).all())
+
+    is_following = False
+    if current_user and str(current_user.id) != user_id:
+        is_following = session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id, UserFollow.followed_id == user_id)).first() is not None
+
+    videos_count = len(session.exec(select(Video).where(Video.user_id == user_id, Video.status == "completed", Video.visibility == "public")).all())
+
+    is_self = False
+    if current_user and str(current_user.id) == user_id:
+        is_self = True
+
+    return {
+        "id": target_user.id,
+        "username": target_user.username,
+        "email": target_user.email,
+        "avatar_path": target_user.avatar_path,
+        "bio": target_user.bio,
+        "created_at": target_user.created_at,
+        "is_active": target_user.is_active,
+        "is_following": is_following,
+        "is_self": is_self,
+        "videos_count": videos_count,
+        "followers_count": followers_count,
+        "following_count": following_count
+    }
+
+@app.get("/users/{user_id}/videos/public", response_model=List[VideoRead])
+def get_user_public_videos(
+    user_id: str,
+    session: Session = Depends(get_session)
+):
+    return session.exec(select(Video).where(Video.user_id == user_id, Video.status == "completed", Video.visibility == "public").order_by(desc(Video.created_at))).all()
 
 @app.get("/")
 def read_root(): return {"message": "MyVideo API is running!"}

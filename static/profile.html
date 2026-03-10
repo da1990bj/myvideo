@@ -100,10 +100,16 @@
                 
                 document.getElementById("fans-count").innerText = data.followers_count;
                 document.getElementById("follow-count").innerText = data.following_count;
-                document.getElementById("video-count").innerText = data.video_count;
-                
+                document.getElementById("video-count").innerText = data.videos_count;
+
                 isFollowing = data.is_following;
-                renderFollowBtn();
+
+                const btn = document.getElementById("follow-btn");
+                if (data.is_self) {
+                    btn.style.display = "none";
+                } else {
+                    renderFollowBtn();
+                }
             }
         } catch(e) { console.error(e); }
     }

@@ -61,18 +61,42 @@ class UserFollow(SQLModel, table=True):
     followed_id: UUID = Field(foreign_key="users.id", primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-# 视频点赞/踩
-class VideoLike(SQLModel, table=True):
-    __tablename__ = "video_likes"
-    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
-    video_id: UUID = Field(foreign_key="videos.id", primary_key=True)
-    like_type: str # "like" or "dislike"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 class UserBlock(SQLModel, table=True):
     __tablename__ = "user_blocks"
     blocker_id: UUID = Field(foreign_key="users.id", primary_key=True)
     blocked_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# 观看历史
+class UserVideoHistory(SQLModel, table=True):
+    __tablename__ = "user_video_history"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id", primary_key=True)
+    progress: float = Field(default=0.0) # 观看进度(秒)
+    last_watched: datetime = Field(default_factory=datetime.utcnow)
+    is_finished: bool = Field(default=False)
+
+# 评论系统
+class Comment(SQLModel, table=True):
+    __tablename__ = "comments"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user_id: UUID = Field(foreign_key="users.id")
+    owner: User = Relationship()
+
+    video_id: UUID = Field(foreign_key="videos.id")
+    video: Video = Relationship()
+
+# 点赞系统
+class VideoLike(SQLModel, table=True):
+    __tablename__ = "video_likes"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id", primary_key=True)
+    like_type: str = Field(default="like") # "like" or "dislike"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Schemas
@@ -94,11 +118,7 @@ class UserRead(SQLModel):
     avatar_path: Optional[str]
     bio: Optional[str] = None
 
-class UserReadProfile(UserRead):
-    is_following: bool = False
-    followers_count: int = 0
-    following_count: int = 0
-    video_count: int = 0
+
 
 class UserUpdate(SQLModel):
     bio: Optional[str] = None
@@ -120,8 +140,6 @@ class VideoUpdate(SQLModel):
     category_id: Optional[int] = None
     visibility: Optional[str] = None
     tags: Optional[List[str]] = None
-    likes_count: Optional[int] = None
-    dislikes_count: Optional[int] = None
 
 class VideoRead(SQLModel):
     id: UUID
@@ -139,7 +157,3 @@ class VideoRead(SQLModel):
     tags: List[str] = []
     owner: Optional[UserRead] = None
     category: Optional[Category] = None
-    likes_count: int = 0
-    dislikes_count: int = 0
-    is_liked_by_current_user: bool = False
-    is_disliked_by_current_user: bool = False

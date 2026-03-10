@@ -71,10 +71,6 @@
                 <label>标题</label>
                 <input type="text" id="editTitle" required>
             </div>
-            <div class="form-group">
-                <label>描述</label>
-                <textarea id="editDescription" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;"></textarea>
-            </div>
             
             <div class="form-group">
                 <label>封面设置</label>
@@ -124,7 +120,6 @@
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
     document.addEventListener("DOMContentLoaded", async () => {
-        console.log('Dashboard Page JS Version: 1.0.2'); // 添加版本号
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
         
@@ -215,36 +210,18 @@
                 "<div style='font-size:12px; color:#999;'>完播率: " + rate + "</div></td>" +
                 "<td>" + statusHtml + "</td>" +
                 "<td>" + new Date(v.created_at).toLocaleDateString() + "</td>" +
-                "<td><button class='action-btn' onclick='openEdit(\"" + v.id + "\", \"" + titleSafe + "\", \"" + (v.description ? v.description.replace(/\\'/g, "&apos;").replace(/\\"/g, "&quot;") : "") + "\", \"" + v.visibility + "\", \"" + (v.category ? v.category.id : "") + "\", \"" + tagsStr + "\", \"" + (v.thumbnail_path || "") + "\")'>编辑</button>" +
+                "<td><button class='action-btn' onclick='openEdit(\"" + v.id + "\", \"" + titleSafe + "\", \"" + v.visibility + "\", \"" + (v.category ? v.category.id : "") + "\", \"" + tagsStr + "\", \"" + (v.thumbnail_path || "") + "\")'>编辑</button>" +
                 "<button class='action-btn delete' onclick='deleteVideo(\"" + v.id + "\")'>删除</button></td>" +
                 "</tr>";
         });
         tbody.innerHTML = html;
     }
 
-    async function openEdit(id, title, description, visibility, categoryId, tagsStr, thumbPath) {
-        console.log('openEdit called for video ID:', id);
-        console.log('Received categoryId:', categoryId, 'Type:', typeof categoryId);
-
+    function openEdit(id, title, visibility, categoryId, tagsStr, thumbPath) {
         document.getElementById("editId").value = id;
         document.getElementById("editTitle").value = title;
-        document.getElementById("editDescription").value = description; // 填充描述
         document.getElementById("editVisibility").value = visibility;
-        
-        await loadCategories(); // 确保分类数据已加载
-        const editCategorySelect = document.getElementById("editCategory");
-        console.log('Category Select Options HTML before setting value:', editCategorySelect.outerHTML);
-
-        if (categoryId) {
-            const numericCategoryId = Number(categoryId);
-            editCategorySelect.value = numericCategoryId;
-            console.log('Attempted to set categoryId to:', numericCategoryId);
-        } else {
-            editCategorySelect.selectedIndex = 0;
-            console.log('No categoryId, setting selectedIndex to 0.');
-        }
-        console.log('Category Select current value after setting:', editCategorySelect.value);
-        console.log('Category Select current selectedIndex after setting:', editCategorySelect.selectedIndex);
+        if(categoryId) document.getElementById("editCategory").value = categoryId;
         
         // 恢复标签 (稳健解析)
         currentTags = tagsStr ? tagsStr.split(",").filter(t => t) : [];
@@ -306,9 +283,8 @@
         e.preventDefault();
         const id = document.getElementById("editId").value;
         const title = document.getElementById("editTitle").value;
-        const description = document.getElementById("editDescription").value; // 获取描述内容
         const visibility = document.getElementById("editVisibility").value;
-        const category_id = document.getElementById("editCategory").value;
+        const category_id = document.getElementById("editCategory").value.toString(); // 确保是字符串
         const token = localStorage.getItem("access_token");
 
         const currentThumbnailPath = document.getElementById("editThumbPreview").src;
@@ -321,7 +297,7 @@
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({ 
-                    title, description, visibility, category_id, // 增加 description
+                    title, visibility, category_id, 
                     tags: currentTags, // 提交数组
                     temp_thumbnail_path // 添加正确的临时封面路径字段名
                 })

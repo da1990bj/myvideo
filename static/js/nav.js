@@ -41,9 +41,10 @@ async function checkNavUser() {
         if (res.ok) {
             const user = await res.json();
             const avatar = user.avatar_path || "https://ui-avatars.com/api/?name=" + user.username;
-            area.innerHTML = 
+            area.innerHTML =
                 '<a href="/static/dashboard.html" class="nav-link">创作中心</a>' +
-                '<a href="/static/upload.html" class="upload-btn">投稿</a>' +
+                '<a href="/static/history.html" class="nav-link" style="margin-left:12px;">历史</a>' + // 新增
+                '<a href="/static/upload.html" class="upload-btn" style="margin-left:12px;">投稿</a>' +
                 '<img src="' + avatar + '" class="user-avatar" title="点击进入设置" onclick="location.href=\'/static/settings.html\'" style="margin-left:16px;">' +
                 '<a href="#" onclick="logout()" style="font-size:12px; color:#999; margin-left:12px; text-decoration:none;">退出</a>';
         } else {

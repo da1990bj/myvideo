@@ -59,8 +59,18 @@
         </div>
         
         <div style="line-height:1.6; color:#333; white-space:pre-wrap;" id="description"></div>
+
+        <!-- 评论区 -->
+        <div class="comments-section" style="margin-top:40px; border-top:1px solid #e7e7e7; padding-top:20px;">
+            <h3 style="font-size:18px; margin-bottom:20px;">评论</h3>
+            <div style="display:flex; gap:10px; margin-bottom:30px;">
+                <input type="text" id="comment-input" placeholder="发条友善的评论..." style="flex:1; padding:10px; border-radius:4px; border:1px solid #ddd; outline:none;">
+                <button onclick="postComment()" style="background:#00a1d6; color:#fff; border:none; padding:0 24px; border-radius:4px; cursor:pointer; font-size:14px;">发表</button>
+            </div>
+            <div id="comment-list"></div>
+        </div>
     </div>
-    
+
     <div class="sidebar">
         <h3>相关推荐</h3>
         <div id="rec-list"></div>
@@ -70,7 +80,6 @@
 <script>
     let currentAuthorId = null;
     let isFollowing = false;
-    let currentLoggedInUserId = null; // 添加当前登录用户ID变量
 
     document.addEventListener("DOMContentLoaded", async () => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -79,7 +88,70 @@
 
         await loadVideoDetails(videoId);
         await loadRecommendations();
+        await loadComments(videoId); // 新增
     });
+
+    // ... (loadVideoDetails 保持不变) ...
+
+    async function loadComments(videoId) {
+        try {
+            const res = await fetch(`/videos/${videoId}/comments`);
+            if (res.ok) {
+                const comments = await res.json();
+                const list = document.getElementById("comment-list");
+                list.innerHTML = "";
+                comments.forEach(c => {
+                    const div = document.createElement("div");
+                    div.style.marginBottom = "20px";
+                    div.style.display = "flex";
+                    div.style.gap = "16px";
+
+                    const avatar = c.user.avatar_path || `https://ui-avatars.com/api/?name=${c.user.username}&background=random`;
+                    const date = new Date(c.created_at).toLocaleString();
+
+                    div.innerHTML = `
+                        <img src="${avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
+                        <div style="flex:1;">
+                            <div style="font-size:13px; color:#fb7299; font-weight:500; margin-bottom:4px;">${c.user.username}</div>
+                            <div style="font-size:14px; line-height:1.5; color:#222; margin-bottom:4px;">${c.content}</div>
+                            <div style="font-size:12px; color:#999;">${date}</div>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function postComment() {
+        const input = document.getElementById("comment-input");
+        const content = input.value.trim();
+        if (!content) return;
+
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoId = urlParams.get('id');
+
+        const formData = new FormData();
+        formData.append("content", content);
+
+        try {
+            const res = await fetch(`/videos/${videoId}/comments`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: formData
+            });
+
+            if (res.ok) {
+                input.value = "";
+                await loadComments(videoId);
+            } else {
+                alert("发表评论失败");
+            }
+        } catch(e) { console.error(e); }
+    }
 
     async function loadVideoDetails(id) {
         try {
@@ -135,38 +207,77 @@
                 }
                 
                 // 统计
-                let counted = false;
-                player.onplay = () => { if(!counted) { fetch(`/videos/${id}/view`, {method:"POST"}); counted=true; } };
-                player.onended = () => fetch(`/videos/${id}/complete`, {method:"POST"});
-                
-                // 获取当前登录用户ID，以便判断是否是自己的视频
-                const currentToken = localStorage.getItem("access_token"); // 在函数内部重新获取 token
-                if (currentToken) {
-                    const userRes = await fetch(`/users/me`, { headers: { "Authorization": "Bearer " + currentToken } });
-                    if (userRes.ok) {
-                        const userData = await userRes.json();
-                        currentLoggedInUserId = userData.id;
+                let viewCounted = false;
+                let completeCounted = false;
+
+                player.onplay = () => {
+                    if(!viewCounted) {
+                        fetch(`/videos/${id}/view`, {method:"POST"});
+                        viewCounted=true;
                     }
-                }
-                checkFollowStatus(); // 统一在获取到登录用户ID后调用
+                };
+
+                // 90% 完播统计逻辑
+                player.addEventListener('timeupdate', () => {
+                    if (player.duration > 0 && !completeCounted) {
+                        if ((player.currentTime / player.duration) > 0.9) {
+                            fetch(`/videos/${id}/complete`, {method:"POST"});
+                            completeCounted = true;
+                        }
+                    }
+                });
+
+                checkFollowStatus(); // 恢复到原始调用
+
+                // --- 新增: 加载观看进度 ---
+                await loadAndResumeProgress(id, player);
+
+                // --- 新增: 定期上报进度 ---
+                let lastReportTime = 0;
+                const token = localStorage.getItem("access_token");
+                player.addEventListener('timeupdate', () => {
+                    const now = Date.now();
+                    if (token && !player.paused && (now - lastReportTime > 5000)) {
+                        fetch(`/videos/${id}/progress?progress=${player.currentTime}`, {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token }
+                        });
+                        lastReportTime = now;
+                    }
+                });
             }
         } catch (e) { console.error(e); }
     }
 
-    async function checkFollowStatus() {
-        // 如果是自己的视频，则不显示关注按钮
-        if (currentLoggedInUserId && currentAuthorId === currentLoggedInUserId) {
-            isFollowing = false; // 逻辑上不是关注，而是管理
-            updateFollowBtn(true); // 传入一个参数，指示是自己的视频
-            return;
-        }
-
+    async function loadAndResumeProgress(id, player) {
         const token = localStorage.getItem("access_token");
-        if (!token || !currentAuthorId) {
-             updateFollowBtn(); // 没有登录或没有作者ID，也更新按钮状态
-             return;
-        }
-        
+        if (!token) return;
+
+        try {
+            const res = await fetch(`/videos/${id}/progress`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.progress > 5) { // 只有超过5秒才恢复
+                    console.log("Resuming from", data.progress);
+                    // 尝试直接设置
+                    player.currentTime = data.progress;
+                    // 以防万一，在 loadedmetadata 再设置一次 (对于某些浏览器/HLS)
+                    player.addEventListener('loadedmetadata', () => {
+                         if(Math.abs(player.currentTime - data.progress) > 1) {
+                             player.currentTime = data.progress;
+                         }
+                    }, {once:true});
+                }
+            }
+        } catch (e) { console.error("Failed to load progress", e); }
+    }
+
+    async function checkFollowStatus() {
+        const token = localStorage.getItem("access_token");
+        if (!token || !currentAuthorId) return;
+
         // 这里偷个懒，直接请求 profile 接口来获取关注状态
         const res = await fetch(`/users/${currentAuthorId}/profile`, {
             headers: { "Authorization": "Bearer " + token }
@@ -174,39 +285,30 @@
         if (res.ok) {
             const data = await res.json();
             isFollowing = data.is_following;
-            updateFollowBtn();
-        } else {
-            // 如果获取失败，也更新一下按钮状态，可能是未登录或者其他错误
-            isFollowing = false;
-            updateFollowBtn();
+
+            const btn = document.getElementById("follow-btn");
+            if (data.is_self) {
+                btn.style.display = "none";
+            } else {
+                updateFollowBtn();
+            }
         }
     }
 
-    function updateFollowBtn(isOwnVideo = false) {
+    function updateFollowBtn() {
         const btn = document.getElementById("follow-btn");
-        if (isOwnVideo) {
-            btn.innerText = "编辑资料"; // 自己的视频显示编辑资料
-            btn.className = "follow-btn"; // 移除关注样式
-            btn.onclick = () => location.href = `/static/settings.html`; // 点击跳转到设置页
-        } else if (isFollowing) {
+        if (isFollowing) {
             btn.innerText = "已关注";
             btn.className = "follow-btn following";
-            btn.onclick = () => toggleFollow(); // 绑定回 toggleFollow
         } else {
             btn.innerText = "+ 关注";
             btn.className = "follow-btn";
-            btn.onclick = () => toggleFollow(); // 绑定回 toggleFollow
         }
     }
 
     async function toggleFollow() {
         const token = localStorage.getItem("access_token");
         if (!token) return location.href = "/static/login.html";
-        // 如果是自己的视频，不执行关注逻辑
-        if (currentLoggedInUserId && currentAuthorId === currentLoggedInUserId) {
-            location.href = `/static/settings.html`; // 或者其他编辑页面
-            return;
-        }
         
         const method = isFollowing ? "DELETE" : "POST";
         const res = await fetch(`/users/${currentAuthorId}/follow`, {

@@ -1,2 +1,7 @@
 postgres/
-redis/nginx/
+redis/
+nginx/
+app.pid
+*.log
+__pycache__/
+*.pyc
