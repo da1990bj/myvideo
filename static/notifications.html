@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>消息中心 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; background: #fff; min-height: 500px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
+        .header h2 { margin: 0; font-size: 20px; }
+        .read-all-btn { color: #666; font-size: 14px; cursor: pointer; text-decoration: none; }
+        .read-all-btn:hover { color: #00a1d6; }
+
+        .notif-item { display: flex; gap: 15px; padding: 15px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: 0.2s; }
+        .notif-item:hover { background: #fafafa; }
+        .notif-item.unread { background: #eef6fc; }
+        .notif-item:last-child { border-bottom: none; }
+
+        .sender-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+        .notif-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .notif-text { font-size: 15px; color: #333; margin-bottom: 4px; }
+        .notif-time { font-size: 12px; color: #999; }
+
+        .loading { text-align: center; color: #999; padding: 40px; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <div class="header">
+        <h2>消息通知</h2>
+        <a class="read-all-btn" onclick="markAllRead()">一键已读</a>
+    </div>
+    <div id="notif-list"></div>
+    <div id="loading" class="loading">加载中...</div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", async () => {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+        await loadNotifications(token);
+    });
+
+    async function loadNotifications(token) {
+        try {
+            const res = await fetch("/notifications?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const list = await res.json();
+                document.getElementById("loading").style.display = "none";
+                const container = document.getElementById("notif-list");
+
+                if (list.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:#ccc; padding:50px;">暂无消息</div>`;
+                    return;
+                }
+
+                container.innerHTML = "";
+                list.forEach(n => {
+                    const div = document.createElement("div");
+                    div.className = `notif-item ${n.is_read ? '' : 'unread'}`;
+                    div.onclick = () => handleNotifClick(n, token);
+
+                    const avatar = n.sender.avatar_path || `https://ui-avatars.com/api/?name=${n.sender.username}&background=random`;
+                    const text = getNotifText(n);
+                    const time = new Date(n.created_at).toLocaleString();
+
+                    div.innerHTML = `
+                        <img src="${avatar}" class="sender-avatar">
+                        <div class="notif-content">
+                            <div class="notif-text">${text}</div>
+                            <div class="notif-time">${time}</div>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function getNotifText(n) {
+        const user = `<span style="font-weight:bold; color:#333;">${n.sender.username}</span>`;
+        switch(n.type) {
+            case "follow": return `${user} 关注了你`;
+            case "comment": return `${user} 评论了你的视频`;
+            case "like_video": return `${user} 赞了你的视频`;
+            default: return `${user} 发来了新消息`;
+        }
+    }
+
+    async function handleNotifClick(n, token) {
+        // Mark read
+        if (!n.is_read) {
+            fetch(`/notifications/${n.id}/read`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+        }
+
+        // Navigate
+        if (n.type === "follow") {
+            location.href = `/static/profile.html?id=${n.sender.id}`; // Wait, I need sender ID. Backend returns sender object but maybe I need id.
+            // Backend sender object only has username/avatar_path. I should add id.
+            // Or just go to their profile by username if supported? Or just stay here.
+            // Actually, follower list is better.
+            // Let's check backend return.
+        } else if (n.type === "comment" || n.type === "like_video") {
+            location.href = `/static/video.html?id=${n.entity_id}`;
+        }
+    }
+
+    async function markAllRead() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return;
+        await fetch("/notifications/read-all", {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + token }
+        });
+        location.reload();
+    }
+</script>
+</body>
+</html>

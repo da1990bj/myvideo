@@ -99,6 +99,20 @@ class VideoLike(SQLModel, table=True):
     like_type: str = Field(default="like") # "like" or "dislike"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+# 通知系统
+class Notification(SQLModel, table=True):
+    __tablename__ = "notifications"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    recipient_id: UUID = Field(foreign_key="users.id", index=True) # 接收者
+    sender_id: UUID = Field(foreign_key="users.id") # 触发者
+    type: str = Field(index=True) # "follow", "comment", "like_video"
+    entity_id: Optional[str] = None # 关联对象ID (video_id, etc)
+    is_read: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # 关系 (可选，为了方便查询发送者信息)
+    sender: User = Relationship(sa_relationship_kwargs={"foreign_keys": "Notification.sender_id"})
+
 # Schemas
 class UserCreate(SQLModel):
     username: str

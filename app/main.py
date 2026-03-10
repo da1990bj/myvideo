@@ -12,8 +12,26 @@ import time
 from uuid import uuid4, UUID
 from datetime import datetime
 
+# --- Helpers ---
+def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, type: str, entity_id: str):
+    if sender_id == recipient_id: return
+
+    # Deduplicate for like/follow
+    if type in ["follow", "like_video"]:
+        existing = session.exec(select(Notification).where(
+            Notification.recipient_id == recipient_id,
+            Notification.sender_id == sender_id,
+            Notification.type == type,
+            Notification.entity_id == entity_id
+        )).first()
+        if existing: return
+
+    notif = Notification(sender_id=sender_id, recipient_id=recipient_id, type=type, entity_id=entity_id)
+    session.add(notif)
+    # Don't commit here, let caller commit
+
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike
+from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
@@ -200,6 +218,7 @@ def create_comment(
     if not video: raise HTTPException(status_code=404)
     comment = Comment(content=content, user_id=current_user.id, video_id=video_id)
     session.add(comment)
+    create_notification(session, current_user.id, video.user_id, "comment", str(video_id))
     session.commit()
     session.refresh(comment)
     return {"id": comment.id, "content": comment.content, "created_at": comment.created_at, "user": {"username": current_user.username, "avatar_path": current_user.avatar_path}}
@@ -242,6 +261,69 @@ def delete_comment(
     session.commit()
     return {"ok": True}
 
+# --- Notification APIs ---
+
+@app.get("/notifications")
+def get_notifications(
+    page: int = 1, size: int = 20,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    stmt = select(Notification).where(Notification.recipient_id == current_user.id).order_by(desc(Notification.created_at))
+    offset = (page - 1) * size
+    notifs = session.exec(stmt.offset(offset).limit(size)).all()
+
+    result = []
+    for n in notifs:
+        sender = session.get(User, n.sender_id)
+        result.append({
+            "id": n.id,
+            "type": n.type,
+            "entity_id": n.entity_id,
+            "is_read": n.is_read,
+            "created_at": n.created_at,
+            "sender": {
+                "id": sender.id if sender else None,
+                "username": sender.username if sender else "Unknown",
+                "avatar_path": sender.avatar_path if sender else None
+            }
+        })
+    return result
+
+@app.get("/notifications/unread-count")
+def get_unread_count(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    # Count manually to avoid importing func.count if not needed, or verify import
+    # Assuming list len is fast enough for MVP
+    count = len(session.exec(select(Notification).where(Notification.recipient_id == current_user.id, Notification.is_read == False)).all())
+    return {"count": count}
+
+@app.post("/notifications/read-all")
+def mark_all_read(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    notifs = session.exec(select(Notification).where(Notification.recipient_id == current_user.id, Notification.is_read == False)).all()
+    for n in notifs: n.is_read = True
+    session.add_all(notifs)
+    session.commit()
+    return {"ok": True}
+
+@app.post("/notifications/{notif_id}/read")
+def mark_one_read(
+    notif_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    notif = session.get(Notification, notif_id)
+    if notif and notif.recipient_id == current_user.id:
+        notif.is_read = True
+        session.add(notif)
+        session.commit()
+    return {"ok": True}
+
 @app.post("/videos/{video_id}/like")
 async def like_video(
     video_id: UUID,
@@ -279,6 +361,8 @@ async def like_video(
         # 新增点赞或踩
         new_like = VideoLike(user_id=current_user.id, video_id=video_id, like_type=like_type)
         session.add(new_like)
+        if like_type == "like":
+            create_notification(session, current_user.id, video.user_id, "like_video", str(video_id))
         session.commit()
         session.refresh(new_like)
         return {"status": "liked", "like_type": like_type}
@@ -424,6 +508,7 @@ def follow_user(user_id: str, current_user: User = Depends(get_current_user), se
     if str(current_user.id) == user_id: raise HTTPException(status_code=400)
     if not session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id).where(UserFollow.followed_id == user_id)).first():
         session.add(UserFollow(follower_id=current_user.id, followed_id=user_id))
+        create_notification(session, current_user.id, user_id, "follow", user_id)
         session.commit()
     return {"ok": True}
 
