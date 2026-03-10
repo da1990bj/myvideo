@@ -37,7 +37,7 @@ from security import get_password_hash, verify_password, create_access_token, AC
 from tasks import transcode_video_task
 from init_data import init_categories
 
-app = FastAPI(title="MyVideo Backend", version="1.8.0")
+app = FastAPI(title="MyVideo Backend", version="1.5.0")
 app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 

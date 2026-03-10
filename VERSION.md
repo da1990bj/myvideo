@@ -1,3 +1,9 @@
+v1.5
+- Upgrade Tag System: Architecture upgrade to relational DB, max 5 tags, allow tech tags (.+#)
+- Fix User Profile: Correct video counts (include approved), fix "Following" list display
+- Enhance UI: Tag input auto-disable, better feedback
+- Add backend tools: migrate_tags.py
+
 v1.4
 - Add Admin Panel (Dashboard, Video/User/Comment Management)
 - Add Admin Role and Permissions
