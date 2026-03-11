@@ -778,16 +778,25 @@ def delete_video(video_id: str, current_user: User = Depends(get_current_user), 
 
 @app.post("/users/{user_id}/follow")
 def follow_user(user_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    if str(current_user.id) == user_id: raise HTTPException(status_code=400)
-    if not session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id).where(UserFollow.followed_id == user_id)).first():
-        session.add(UserFollow(follower_id=current_user.id, followed_id=user_id))
-        create_notification(session, current_user.id, user_id, "follow", user_id)
+    target_user = get_user_by_id_or_username(user_id, session)
+    if not target_user: raise HTTPException(status_code=404, detail="User not found")
+    real_user_id = target_user.id
+
+    if current_user.id == real_user_id: raise HTTPException(status_code=400, detail="Cannot follow yourself")
+
+    if not session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id).where(UserFollow.followed_id == real_user_id)).first():
+        session.add(UserFollow(follower_id=current_user.id, followed_id=real_user_id))
+        create_notification(session, current_user.id, real_user_id, "follow", str(real_user_id))
         session.commit()
     return {"ok": True}
 
 @app.delete("/users/{user_id}/follow")
 def unfollow_user(user_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    existing = session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id).where(UserFollow.followed_id == user_id)).first()
+    target_user = get_user_by_id_or_username(user_id, session)
+    if not target_user: raise HTTPException(status_code=404, detail="User not found")
+    real_user_id = target_user.id
+
+    existing = session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id).where(UserFollow.followed_id == real_user_id)).first()
     if existing: session.delete(existing); session.commit()
     return {"ok": True}
 
@@ -830,27 +839,43 @@ async def read_users_me(token: Annotated[str, Depends(oauth2_scheme)], session: 
     if not user: raise HTTPException(status_code=401)
     return user
 
+def get_user_by_id_or_username(identifier: str, session: Session) -> Optional[User]:
+    # Try UUID
+    try:
+        user_uuid = UUID(identifier)
+        user = session.get(User, user_uuid)
+        if user: return user
+    except ValueError:
+        pass
+
+    # Try Username
+    user = session.exec(select(User).where(User.username == identifier)).first()
+    return user
+
 @app.get("/users/{user_id}/profile")
 def get_user_profile(
     user_id: str,
     current_user: Optional[User] = Depends(get_current_user_optional),
     session: Session = Depends(get_session)
 ):
-    target_user = session.get(User, user_id)
-    if not target_user: raise HTTPException(status_code=404)
+    target_user = get_user_by_id_or_username(user_id, session)
+    if not target_user: raise HTTPException(status_code=404, detail="User not found")
+
+    # Use real ID for queries
+    real_user_id = target_user.id
 
     # Followers count
-    followers_count = len(session.exec(select(UserFollow).where(UserFollow.followed_id == user_id)).all())
-    following_count = len(session.exec(select(UserFollow).where(UserFollow.follower_id == user_id)).all())
+    followers_count = session.exec(select(func.count()).select_from(UserFollow).where(UserFollow.followed_id == real_user_id)).one()
+    following_count = session.exec(select(func.count()).select_from(UserFollow).where(UserFollow.follower_id == real_user_id)).one()
 
     is_following = False
-    if current_user and str(current_user.id) != user_id:
-        is_following = session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id, UserFollow.followed_id == user_id)).first() is not None
+    if current_user and current_user.id != real_user_id:
+        is_following = session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id, UserFollow.followed_id == real_user_id)).first() is not None
 
-    videos_count = len(session.exec(select(Video).where(Video.user_id == user_id, Video.status.in_(["completed", "approved"]), Video.visibility == "public")).all())
+    videos_count = session.exec(select(func.count()).select_from(Video).where(Video.user_id == real_user_id, Video.status.in_(["completed", "approved"]), Video.visibility == "public")).one()
 
     is_self = False
-    if current_user and str(current_user.id) == user_id:
+    if current_user and current_user.id == real_user_id:
         is_self = True
 
     return {
@@ -873,7 +898,10 @@ def get_user_public_videos(
     user_id: str,
     session: Session = Depends(get_session)
 ):
-    return session.exec(select(Video).where(Video.user_id == user_id, Video.status.in_(["completed", "approved"]), Video.visibility == "public").order_by(desc(Video.created_at))).all()
+    target_user = get_user_by_id_or_username(user_id, session)
+    if not target_user: raise HTTPException(status_code=404, detail="User not found")
+
+    return session.exec(select(Video).where(Video.user_id == target_user.id, Video.status.in_(["completed", "approved"]), Video.visibility == "public").order_by(desc(Video.created_at))).all()
 
 @app.get("/")
 def read_root(): return {"message": "MyVideo API is running!"}

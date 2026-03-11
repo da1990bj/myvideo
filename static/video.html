@@ -487,6 +487,11 @@
                     const avatar = video.owner.avatar_path || "https://ui-avatars.com/api/?name=" + video.owner.username;
                     document.getElementById("author-avatar").src = avatar;
 
+                    // 点击跳转
+                    const goProfile = () => location.href = `/static/profile.html?id=${video.owner.username}`;
+                    document.getElementById("author-name").onclick = goProfile;
+                    document.getElementById("author-avatar").onclick = goProfile;
+
                     // Simple subs count placeholder
                     // document.getElementById("author-subs").innerText = "..."
 

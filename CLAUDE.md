@@ -15,6 +15,7 @@
 - **查看 Worker 日志**: `tail -f celery_worker.log`
 - **安装依赖**: `pip install -r app/requirements.txt`
 - **运行手动测试**: `python app/test_api.py <TOKEN>` (需要有效的 JWT 令牌)
+- **数据库迁移**: `python migrate_comments.py` (升级评论系统表结构)
 
 ## 架构 (Architecture)
 
@@ -35,11 +36,13 @@
 - `nginx/`: Nginx 配置文件
 - `postgres/` & `redis/`: 数据卷和配置
 - `manage.sh` & `manage_celery.sh`: 服务管理脚本
+- `migrate_comments.py`: 评论系统升级迁移脚本
 
 ## 核心功能与实现 (Key Features & Implementations)
 
 - **视频处理**: 视频上传后，由 Celery 异步处理生成 HLS 流和缩略图。
 - **播放**: 使用 `hls.js` 进行自适应码率流媒体播放。
-- **用户系统**: 包含认证、个人资料、观看历史和社交功能（评论、点赞、关注）。
-- **通知**: 基于轮询的用户交互通知系统。
+- **用户系统**: 包含认证、个人资料（支持用户名访问）、观看历史和社交功能。
+- **评论系统**: 支持嵌套回复（二级扁平化）、软删除（用户/管理员）、以及@提及功能。
+- **通知**: 基于轮询的用户交互通知系统（包含评论回复通知）。
 - **标签系统**: 独立的标签表结构，支持多对多关联，允许技术类标签（如 .+#）。
