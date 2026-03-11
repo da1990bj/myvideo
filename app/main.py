@@ -4,6 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, F
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, select, desc, update
+from sqlalchemy import func
 import shutil
 import os
 import random
@@ -261,36 +262,84 @@ def get_my_history(
 def create_comment(
     video_id: str,
     content: str = Form(...),
+    parent_id: Optional[int] = Form(None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     video = session.get(Video, video_id)
     if not video: raise HTTPException(status_code=404)
-    comment = Comment(content=content, user_id=current_user.id, video_id=video_id)
+
+    if parent_id:
+        parent = session.get(Comment, parent_id)
+        if not parent: raise HTTPException(status_code=404, detail="Parent comment not found")
+        # Ensure parent comment belongs to the same video
+        if str(parent.video_id) != video_id:
+            raise HTTPException(status_code=400, detail="Parent comment must belong to the same video")
+
+    comment = Comment(content=content, user_id=current_user.id, video_id=video_id, parent_id=parent_id)
     session.add(comment)
-    create_notification(session, current_user.id, video.user_id, "comment", str(video_id))
+
+    # Notification logic
+    if parent_id:
+        # Reply: Notify parent comment author
+        parent_comment = session.get(Comment, parent_id)
+        if parent_comment:
+            create_notification(session, current_user.id, parent_comment.user_id, "reply", str(video_id))
+    else:
+        # Top-level comment: Notify video author
+        create_notification(session, current_user.id, video.user_id, "comment", str(video_id))
+
     session.commit()
     session.refresh(comment)
-    return {"id": comment.id, "content": comment.content, "created_at": comment.created_at, "user": {"username": current_user.username, "avatar_path": current_user.avatar_path}}
+    return {
+        "id": comment.id,
+        "content": comment.content,
+        "created_at": comment.created_at,
+        "parent_id": comment.parent_id,
+        "user": {"username": current_user.username, "avatar_path": current_user.avatar_path}
+    }
 
 @app.get("/videos/{video_id}/comments")
 def get_comments(
     video_id: str,
+    parent_id: Optional[int] = Query(None),
     session: Session = Depends(get_session),
     page: int = 1,
     size: int = 20
 ):
-    statement = select(Comment).where(Comment.video_id == video_id).order_by(desc(Comment.created_at))
+    statement = select(Comment).where(Comment.video_id == video_id)
+
+    if parent_id:
+        statement = statement.where(Comment.parent_id == parent_id)
+    else:
+        statement = statement.where(Comment.parent_id == None)
+
+    statement = statement.order_by(desc(Comment.created_at))
     offset = (page - 1) * size
     comments = session.exec(statement.offset(offset).limit(size)).all()
 
     result = []
     for c in comments:
         user = session.get(User, c.user_id)
+
+        # Handle deleted content display
+        display_content = c.content
+        if c.is_deleted:
+            if c.deleted_by == "admin":
+                display_content = "该评论已由系统删除"
+            else:
+                display_content = "该评论已由用户删除"
+
+        # Get reply count
+        reply_count = session.exec(select(func.count(Comment.id)).where(Comment.parent_id == c.id)).one()
+
         result.append({
             "id": c.id,
-            "content": c.content,
+            "content": display_content,
             "created_at": c.created_at,
+            "parent_id": c.parent_id,
+            "reply_count": reply_count,
+            "is_deleted": c.is_deleted,
             "user": {
                 "username": user.username if user else "Unknown",
                 "avatar_path": user.avatar_path if user else None
@@ -307,7 +356,11 @@ def delete_comment(
     comment = session.get(Comment, comment_id)
     if not comment: raise HTTPException(status_code=404)
     if comment.user_id != current_user.id: raise HTTPException(status_code=403)
-    session.delete(comment)
+
+    # Soft delete
+    comment.is_deleted = True
+    comment.deleted_by = "user"
+    session.add(comment)
     session.commit()
     return {"ok": True}
 
@@ -318,9 +371,9 @@ def get_admin_stats(
     admin: User = Depends(get_current_admin),
     session: Session = Depends(get_session)
 ):
-    users = len(session.exec(select(User)).all())
-    videos = len(session.exec(select(Video)).all())
-    comments = len(session.exec(select(Comment)).all())
+    users = session.exec(select(func.count()).select_from(User)).one()
+    videos = session.exec(select(func.count()).select_from(Video)).one()
+    comments = session.exec(select(func.count()).select_from(Comment)).one()
     return {"users": users, "videos": videos, "comments": comments}
 
 @app.get("/admin/users", response_model=List[UserRead])
@@ -486,7 +539,9 @@ def delete_any_comment(
 ):
     comment = session.get(Comment, comment_id)
     if comment:
-        session.delete(comment)
+        comment.is_deleted = True
+        comment.deleted_by = "admin"
+        session.add(comment)
         session.commit()
     return {"ok": True}
 

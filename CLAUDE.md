@@ -1,44 +1,45 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+此文件为 Claude Code (claude.ai/code) 在处理本仓库代码时提供指南。
 
-## Commands
+## 常用命令 (Commands)
 
-- **Start API Server**: `./manage.sh start` (Runs Uvicorn on port 8000 with reload)
-- **Stop API Server**: `./manage.sh stop`
-- **Restart API Server**: `./manage.sh restart`
-- **Start Celery Worker**: `./manage_celery.sh start` (Processes async tasks like video transcoding)
-- **Stop Celery Worker**: `./manage_celery.sh stop`
-- **Start Infrastructure**: `docker-compose up -d` (Starts Postgres, Redis, Nginx)
-- **Stop Infrastructure**: `docker-compose down`
-- **View Server Logs**: `tail -f server.log`
-- **View Worker Logs**: `tail -f celery_worker.log`
-- **Install Dependencies**: `pip install -r app/requirements.txt`
-- **Run Manual Test**: `python app/test_api.py <TOKEN>` (Requires a valid JWT token)
+- **启动 API 服务器**: `./manage.sh start` (在 8000 端口运行 Uvicorn，开启热重载)
+- **停止 API 服务器**: `./manage.sh stop`
+- **重启 API 服务器**: `./manage.sh restart`
+- **启动 Celery Worker**: `./manage_celery.sh start` (处理异步任务，如视频转码)
+- **停止 Celery Worker**: `./manage_celery.sh stop`
+- **启动基础设施**: `docker-compose up -d` (启动 Postgres, Redis, Nginx)
+- **停止基础设施**: `docker-compose down`
+- **查看服务器日志**: `tail -f server.log`
+- **查看 Worker 日志**: `tail -f celery_worker.log`
+- **安装依赖**: `pip install -r app/requirements.txt`
+- **运行手动测试**: `python app/test_api.py <TOKEN>` (需要有效的 JWT 令牌)
 
-## Architecture
+## 架构 (Architecture)
 
-- **Backend Framework**: Python FastAPI (`app/main.py`)
-- **Database**: PostgreSQL with SQLModel ORM (`app/data_models.py`)
-- **Async Tasks**: Celery with Redis broker (`app/tasks.py`)
-- **Frontend**: Vanilla HTML5/CSS3/ES6 JavaScript (`static/`) served via Nginx
-- **Video Streaming**: HLS (m3u8) format, transcoded by FFmpeg via Celery tasks
-- **Authentication**: JWT (JSON Web Tokens) stateless authentication
-- **Deployment**:
-    - **Docker**: Manages PostgreSQL, Redis, and Nginx containers (`docker-compose.yml`)
-    - **Local Process**: FastAPI app and Celery worker run directly on the host machine, managed by shell scripts (`manage.sh`, `manage_celery.sh`)
+- **后端框架**: Python FastAPI (`app/main.py`)
+- **数据库**: PostgreSQL + SQLModel ORM (`app/data_models.py`)
+- **异步任务**: Celery + Redis 消息代理 (`app/tasks.py`)
+- **前端**: 原生 HTML5/CSS3/ES6 JavaScript (`static/`)，由 Nginx 提供服务
+- **视频流**: HLS (m3u8) 格式，通过 Celery 任务调用 FFmpeg 进行转码
+- **认证**: JWT (JSON Web Tokens) 无状态认证
+- **部署**:
+    - **Docker**: 管理 PostgreSQL, Redis 和 Nginx 容器 (`docker-compose.yml`)
+    - **本地进程**: FastAPI 应用和 Celery worker 直接在宿主机运行，通过 Shell 脚本管理 (`manage.sh`, `manage_celery.sh`)
 
-## Directory Structure
+## 目录结构 (Directory Structure)
 
-- `app/`: Core backend code (FastAPI + Celery)
-- `static/`: Frontend assets (HTML, JS, CSS, uploaded videos)
-- `nginx/`: Nginx configuration
-- `postgres/` & `redis/`: Data volumes and configurations
-- `manage.sh` & `manage_celery.sh`: Service management scripts
+- `app/`: 后端核心代码 (FastAPI + Celery)
+- `static/`: 前端静态资源 (HTML, JS, CSS, 上传的视频)
+- `nginx/`: Nginx 配置文件
+- `postgres/` & `redis/`: 数据卷和配置
+- `manage.sh` & `manage_celery.sh`: 服务管理脚本
 
-## Key Features & Implementations
+## 核心功能与实现 (Key Features & Implementations)
 
-- **Video Processing**: Videos are uploaded, then processed asynchronously by Celery to generate HLS streams and thumbnails.
-- **Playback**: Uses `hls.js` for adaptive bitrate streaming.
-- **User System**: Includes auth, profiles, watch history, and social features (comments, likes, follows).
-- **Notification**: Polling-based notification system for user interactions.
+- **视频处理**: 视频上传后，由 Celery 异步处理生成 HLS 流和缩略图。
+- **播放**: 使用 `hls.js` 进行自适应码率流媒体播放。
+- **用户系统**: 包含认证、个人资料、观看历史和社交功能（评论、点赞、关注）。
+- **通知**: 基于轮询的用户交互通知系统。
+- **标签系统**: 独立的标签表结构，支持多对多关联，允许技术类标签（如 .+#）。

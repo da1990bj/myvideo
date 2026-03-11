@@ -121,11 +121,28 @@ class Comment(SQLModel, table=True):
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    parent_id: Optional[int] = Field(default=None, foreign_key="comments.id")
+    like_count: int = Field(default=0)
+
+    is_deleted: bool = Field(default=False)
+    deleted_by: Optional[str] = Field(default=None) # "user" or "admin"
+
     user_id: UUID = Field(foreign_key="users.id")
     owner: User = Relationship()
 
     video_id: UUID = Field(foreign_key="videos.id")
     video: Video = Relationship()
+
+    # Self-referential relationship for nested comments
+    # parent: Optional["Comment"] = Relationship(back_populates="replies", sa_relationship_kwargs={"remote_side": "Comment.id"})
+    # replies: List["Comment"] = Relationship(back_populates="parent")
+
+# 评论点赞
+class CommentLike(SQLModel, table=True):
+    __tablename__ = "comment_likes"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    comment_id: int = Field(foreign_key="comments.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # 点赞系统
 class VideoLike(SQLModel, table=True):
