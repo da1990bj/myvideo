@@ -69,12 +69,10 @@
         <div class="form-group">
             <label>视频文件</label>
             <div class="file-drop-area" id="dropZone">
-                <p id="fileName" style="margin:0; color:#999;">点击或拖拽文件至此</p>
-                <input type="file" id="fileInput" accept="video/*" style="display:none;" required>
+                <p id="fileName" style="margin:0; color:#999;">点击或拖拽文件至此 (支持批量上传)</p>
+                <input type="file" id="fileInput" accept="video/*" style="display:none;" required multiple>
             </div>
-            <div class="progress-bar" id="progressBar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
+            <div id="fileList" style="margin-top: 20px;"></div>
         </div>
 
         <button type="submit" class="btn" id="submitBtn">立即投稿</button>
@@ -177,7 +175,7 @@
             input.focus();
         }
     }
-    
+
     window.removeTag = function(index) {
         tags.splice(index, 1);
         renderTags();
@@ -186,78 +184,107 @@
     function initDropZone() {
         const dropZone = document.getElementById("dropZone");
         const fileInput = document.getElementById("fileInput");
-        
+
         dropZone.onclick = () => fileInput.click();
-        
+
         fileInput.onchange = () => {
-            if(fileInput.files[0]) {
-                document.getElementById("fileName").innerText = fileInput.files[0].name;
-                document.getElementById("fileName").style.color = "#333";
-            }
+            updateFileList(fileInput.files);
         };
 
         dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "#00a1d6"; };
         dropZone.ondrop = (e) => {
             e.preventDefault();
-            if (e.dataTransfer.files[0]) {
+            if (e.dataTransfer.files) {
                 fileInput.files = e.dataTransfer.files;
-                document.getElementById("fileName").innerText = fileInput.files[0].name;
+                updateFileList(fileInput.files);
             }
         };
     }
 
+    function updateFileList(files) {
+        const list = document.getElementById("fileList");
+        list.innerHTML = "";
+        Array.from(files).forEach((file, index) => {
+            const item = document.createElement("div");
+            item.style.marginBottom = "10px";
+            item.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <span style="font-size:14px; color:#333;">${file.name}</span>
+                    <span id="status-${index}" style="font-size:13px; color:#999;">等待上传</span>
+                </div>
+                <div class="progress-bar" id="bar-${index}" style="display:block; margin-top:5px;">
+                    <div class="progress-fill" id="fill-${index}" style="width:0%"></div>
+                </div>
+            `;
+            list.appendChild(item);
+        });
+        document.getElementById("fileName").innerText = `已选择 ${files.length} 个文件`;
+        document.getElementById("fileName").style.color = "#333";
+    }
+
     async function handleUpload(e) {
         e.preventDefault();
-        
-        const file = document.getElementById("fileInput").files[0];
-        if (!file) return alert("请选择文件");
-        
+
+        const files = document.getElementById("fileInput").files;
+        if (files.length === 0) return alert("请选择文件");
+
         const btn = document.getElementById("submitBtn");
         btn.disabled = true;
-        btn.innerText = "上传中...";
-        document.getElementById("progressBar").style.display = "block";
-        
-        let percent = 0;
-        const interval = setInterval(() => {
-            if(percent < 90) {
-                percent += 5;
-                document.getElementById("progressFill").style.width = percent + "%";
+        btn.innerText = "正在上传队列...";
+
+        const baseTitle = document.getElementById("title").value;
+        const description = document.getElementById("description").value;
+        const category_id = document.getElementById("category").value;
+        const visibility = document.getElementById("visibility").value;
+        const tagString = tags.join(",");
+
+        const token = localStorage.getItem("access_token");
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const statusSpan = document.getElementById(`status-${i}`);
+            const fillDiv = document.getElementById(`fill-${i}`);
+
+            statusSpan.innerText = "上传中...";
+            statusSpan.style.color = "#00a1d6";
+
+            // 简单的模拟进度
+            fillDiv.style.width = "30%";
+
+            const formData = new FormData();
+            formData.append("title", files.length > 1 ? `${baseTitle} (${i+1})` : baseTitle);
+            formData.append("description", description);
+            formData.append("category_id", category_id);
+            formData.append("visibility", visibility);
+            formData.append("tags", tagString);
+            formData.append("file", file);
+
+            try {
+                fillDiv.style.width = "60%";
+                const res = await fetch("/videos/upload", {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + token },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    fillDiv.style.width = "100%";
+                    statusSpan.innerText = "上传成功";
+                    statusSpan.style.color = "green";
+                } else {
+                    const err = await res.json();
+                    statusSpan.innerText = "失败: " + (err.detail || "未知错误");
+                    statusSpan.style.color = "red";
+                }
+            } catch(e) {
+                console.error(e);
+                statusSpan.innerText = "网络错误";
+                statusSpan.style.color = "red";
             }
-        }, 200);
-
-        const formData = new FormData();
-        formData.append("title", document.getElementById("title").value);
-        formData.append("description", document.getElementById("description").value);
-        formData.append("category_id", document.getElementById("category").value);
-        formData.append("visibility", document.getElementById("visibility").value); // 新增
-        formData.append("tags", tags.join(","));
-        formData.append("file", file);
-
-        try {
-            const token = localStorage.getItem("access_token");
-            const res = await fetch("/videos/upload", {
-                method: "POST",
-                headers: { "Authorization": "Bearer " + token },
-                body: formData
-            });
-
-            clearInterval(interval);
-            
-            if (res.ok) {
-                document.getElementById("progressFill").style.width = "100%";
-                btn.innerText = "上传成功!";
-                setTimeout(() => location.href = "/static/dashboard.html", 1000); // 成功后跳转到创作中心看状态
-            } else {
-                const err = await res.json();
-                alert("上传失败: " + (err.detail || "未知错误"));
-                btn.disabled = false;
-                btn.innerText = "立即投稿";
-            }
-        } catch(e) {
-            console.error(e);
-            alert("网络错误");
-            btn.disabled = false;
         }
+
+        btn.innerText = "全部处理完毕";
+        setTimeout(() => location.href = "/static/dashboard.html", 2000);
     }
 </script>
 

@@ -16,6 +16,7 @@ class User(SQLModel, table=True):
     is_admin: bool = Field(default=False) # 新增管理员字段
     created_at: datetime = Field(default_factory=datetime.utcnow)
     videos: List["Video"] = Relationship(back_populates="owner")
+    collections: List["Collection"] = Relationship(back_populates="owner")
 
 # Category
 class Category(SQLModel, table=True):
@@ -160,11 +161,37 @@ class Notification(SQLModel, table=True):
     sender_id: UUID = Field(foreign_key="users.id") # 触发者
     type: str = Field(index=True) # "follow", "comment", "like_video"
     entity_id: Optional[str] = None # 关联对象ID (video_id, etc)
+    content: Optional[str] = None # Stores comment/reply content
     is_read: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # 关系 (可选，为了方便查询发送者信息)
     sender: User = Relationship(sa_relationship_kwargs={"foreign_keys": "Notification.sender_id"})
+
+# Collection
+class Collection(SQLModel, table=True):
+    __tablename__ = "collections"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    title: str = Field(index=True)
+    description: Optional[str] = None
+    cover_image: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user_id: UUID = Field(foreign_key="users.id")
+    owner: User = Relationship(back_populates="collections")
+
+    items: List["CollectionItem"] = Relationship(back_populates="collection")
+
+# Collection Item
+class CollectionItem(SQLModel, table=True):
+    __tablename__ = "collection_items"
+    collection_id: UUID = Field(foreign_key="collections.id", primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id", primary_key=True)
+    order: int = Field(default=0)
+    added_at: datetime = Field(default_factory=datetime.utcnow)
+
+    collection: Collection = Relationship(back_populates="items")
+    video: Video = Relationship()
 
 # Schemas
 class UserCreate(SQLModel):
@@ -225,3 +252,19 @@ class VideoRead(SQLModel):
     tags: List[str] = []
     owner: Optional[UserRead] = None
     category: Optional[Category] = None
+    collection_id: Optional[UUID] = None # Return collection ID if video belongs to one
+
+class CollectionCreate(SQLModel):
+    title: str
+    description: Optional[str] = None
+
+class CollectionRead(SQLModel):
+    id: UUID
+    title: str
+    description: Optional[str]
+    cover_image: Optional[str]
+    created_at: datetime
+    video_count: int = 0
+    owner: Optional[UserRead] = None
+    first_video_id: Optional[UUID] = None # Added for frontend navigation
+

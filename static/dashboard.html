@@ -40,26 +40,76 @@
 <script src="/static/js/nav.js"></script>
 
 <div class="container">
-    <h1>
-        <span>稿件管理 <span id="refresh-hint" class="refresh-indicator">自动刷新中...</span></span>
-        <a href="/static/upload.html" class="upload-btn">投稿</a>
+    <h1 style="display:flex; justify-content:space-between; align-items:center;">
+        <span>内容管理 <span id="refresh-hint" class="refresh-indicator">自动刷新中...</span></span>
+        <div style="display:flex; gap:10px;">
+             <button id="tab-btn-videos" class="upload-btn" onclick="switchTab('videos')" style="background:#00a1d6;">我的视频</button>
+             <button id="tab-btn-collections" class="upload-btn" onclick="switchTab('collections')" style="background:#fff; color:#666; border:1px solid #ddd;">我的合集</button>
+             <a href="/static/upload.html" class="upload-btn" style="background:#fb7299;">投稿</a>
+        </div>
     </h1>
-    
-    <table>
-        <thead>
-            <tr>
-                <th width="40%">视频信息</th>
-                <th>数据 (播放/完播)</th>
-                <th>状态</th>
-                <th>时间</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody id="video-list">
-            <tr><td colspan="5" style="text-align:center;">加载中...</td></tr>
-        </tbody>
-    </table>
+
+    <!-- Videos Tab -->
+    <div id="tab-videos">
+        <table>
+            <thead>
+                <tr>
+                    <th width="40%">视频信息</th>
+                    <th>数据 (播放/完播)</th>
+                    <th>状态</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="video-list">
+                <tr><td colspan="5" style="text-align:center;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Collections Tab -->
+    <div id="tab-collections" style="display:none;">
+        <div style="text-align:right; margin:10px 0;">
+            <button class="upload-btn" onclick="openCollectionModal()" style="background:#2f9e44;">+ 新建合集</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="50%">合集信息</th>
+                    <th>视频数</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="collection-list">
+                <tr><td colspan="4" style="text-align:center;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<!-- Collection Modal -->
+<div id="collectionModal" class="modal">
+    <div class="modal-content">
+        <h2 id="colModalTitle">创建合集</h2>
+        <form id="collectionForm" onsubmit="handleCollectionSubmit(event)">
+            <input type="hidden" id="colId">
+            <div class="form-group">
+                <label>合集标题</label>
+                <input type="text" id="colTitle" required placeholder="例如：Python教程系列">
+            </div>
+            <div class="form-group">
+                <label>简介描述</label>
+                <textarea id="colDesc" rows="3" placeholder="介绍一下这个合集..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" onclick="document.getElementById('collectionModal').style.display='none'" style="padding:8px 16px; margin-right:10px; background:#eee; border:none; border-radius:4px; cursor:pointer;">取消</button>
+                <button type="submit" style="padding:8px 16px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 
 <!-- 编辑弹窗 -->
 <div id="editModal" class="modal">
@@ -119,15 +169,149 @@
     const colors = ['#e7f5ff', '#fff0f6', '#ebfbee', '#fff9db', '#f3f0ff'];
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
+    let currentTab = 'videos';
+
     document.addEventListener("DOMContentLoaded", async () => {
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
-        
+
         await loadCategories();
         loadMyVideos();
-        refreshTimer = setInterval(loadMyVideos, 3000);
+        // refreshTimer = setInterval(loadMyVideos, 3000); // Only auto-refresh videos for now
         initTagInput();
     });
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.getElementById("tab-videos").style.display = tab === 'videos' ? 'block' : 'none';
+        document.getElementById("tab-collections").style.display = tab === 'collections' ? 'block' : 'none';
+
+        const btnVideos = document.getElementById("tab-btn-videos");
+        const btnCols = document.getElementById("tab-btn-collections");
+
+        if (tab === 'videos') {
+            btnVideos.style.background = "#00a1d6";
+            btnVideos.style.color = "#fff";
+            btnVideos.style.border = "none";
+            btnCols.style.background = "#fff";
+            btnCols.style.color = "#666";
+            btnCols.style.border = "1px solid #ddd";
+            loadMyVideos();
+        } else {
+            btnCols.style.background = "#00a1d6";
+            btnCols.style.color = "#fff";
+            btnCols.style.border = "none";
+            btnVideos.style.background = "#fff";
+            btnVideos.style.color = "#666";
+            btnVideos.style.border = "1px solid #ddd";
+            loadMyCollections();
+        }
+    }
+
+    async function loadMyCollections() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/collections?user_id=" + parseJwt(token).sub, { // Need to resolve username to ID or backend supports "me"
+                 // Actually backend /collections takes user_id. But "me" logic is better.
+                 // Backend: get_collections(user_id=...). If I pass nothing, it lists all? No, existing code:
+                 // if user_id: filter.
+                 // So I need to pass my user_id.
+            });
+            // Wait, /collections expects user_id param to filter by user. If not provided, it returns all?
+            // Let's check backend code again.
+            // Yes.
+
+            // To be safe, let's use /users/me to get ID first or use a new endpoint /users/me/collections.
+            // I'll use /users/me first.
+            const userRes = await fetch("/users/me", { headers: { "Authorization": "Bearer " + token } });
+            const user = await userRes.json();
+
+            const res2 = await fetch("/collections?user_id=" + user.id, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res2.ok) {
+                const cols = await res2.json();
+                renderCollections(cols);
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function parseJwt (token) {
+        var base64Url = token.split('.')[1];
+        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    }
+
+    function renderCollections(cols) {
+        const tbody = document.getElementById("collection-list");
+        if (cols.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:40px;'>暂无合集</td></tr>";
+            return;
+        }
+
+        let html = "";
+        cols.forEach(c => {
+             html += `<tr>
+                <td>
+                    <div style="font-weight:bold; font-size:16px;">${c.title}</div>
+                    <div style="color:#999; font-size:12px; margin-top:4px;">${c.description || "暂无简介"}</div>
+                </td>
+                <td>${c.video_count} 个视频</td>
+                <td>${new Date(c.created_at).toLocaleDateString()}</td>
+                <td>
+                    <button class='action-btn' onclick='location.href="/static/collection_manage.html?id=${c.id}"'>管理内容</button>
+                    <button class='action-btn delete' onclick='deleteCollection("${c.id}")'>删除</button>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function openCollectionModal() {
+        document.getElementById("colId").value = "";
+        document.getElementById("colTitle").value = "";
+        document.getElementById("colDesc").value = "";
+        document.getElementById("colModalTitle").innerText = "创建合集";
+        document.getElementById("collectionModal").style.display = "flex";
+    }
+
+    async function handleCollectionSubmit(e) {
+        e.preventDefault();
+        const title = document.getElementById("colTitle").value;
+        const description = document.getElementById("colDesc").value;
+        const token = localStorage.getItem("access_token");
+
+        try {
+            const res = await fetch("/collections", {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ title, description })
+            });
+            if (res.ok) {
+                document.getElementById("collectionModal").style.display = "none";
+                loadMyCollections();
+            } else {
+                alert("创建失败");
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function deleteCollection(id) {
+        if(!confirm("确定删除此合集吗？合集内的视频不会被删除。")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/collections/" + id, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadMyCollections();
+            else alert("删除失败");
+        } catch(e) { alert("网络错误"); }
+    }
 
     async function loadCategories() {
         try {

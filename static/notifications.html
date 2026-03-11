@@ -83,12 +83,21 @@
 
     function getNotifText(n) {
         const user = `<span style="font-weight:bold; color:#333;">${n.sender.username}</span>`;
+        let text = "";
+
         switch(n.type) {
-            case "follow": return `${user} 关注了你`;
-            case "comment": return `${user} 评论了你的视频`;
-            case "like_video": return `${user} 赞了你的视频`;
-            default: return `${user} 发来了新消息`;
+            case "follow": text = `${user} 关注了你`; break;
+            case "comment": text = `${user} 评论了你的视频`; break;
+            case "reply": text = `${user} 回复了你的评论`; break;
+            case "like_video": text = `${user} 赞了你的视频`; break;
+            case "system": text = `<span style="font-weight:bold; color:#f04c49;">系统通知</span>`; break;
+            default: text = `${user} 发来了新消息`;
         }
+
+        if (n.content) {
+            text += `<div style="margin-top:4px; font-size:14px; color:#666; background:#f9f9f9; padding:8px; border-radius:4px;">${n.content}</div>`;
+        }
+        return text;
     }
 
     async function handleNotifClick(n, token) {
@@ -102,13 +111,21 @@
 
         // Navigate
         if (n.type === "follow") {
-            location.href = `/static/profile.html?id=${n.sender.id}`; // Wait, I need sender ID. Backend returns sender object but maybe I need id.
-            // Backend sender object only has username/avatar_path. I should add id.
-            // Or just go to their profile by username if supported? Or just stay here.
-            // Actually, follower list is better.
-            // Let's check backend return.
-        } else if (n.type === "comment" || n.type === "like_video") {
-            location.href = `/static/video.html?id=${n.entity_id}`;
+            location.href = `/static/profile.html?id=${n.entity_id}`;
+        } else if (n.type === "comment" || n.type === "reply") {
+            if (n.entity_id.includes("#")) {
+                const parts = n.entity_id.split("#");
+                const videoId = parts[0];
+                const commentId = parts[1];
+                location.href = `/static/video.html?id=${videoId}#comment-${commentId}`;
+            } else {
+                // Fallback for old notifications
+                location.href = `/static/video.html?id=${n.entity_id}`;
+            }
+        } else if (n.type === "like_video" || n.type === "system") {
+            if (n.entity_id && n.entity_id.length > 20) { // Check if valid UUID length approx
+                 location.href = `/static/video.html?id=${n.entity_id}`;
+            }
         }
     }
 

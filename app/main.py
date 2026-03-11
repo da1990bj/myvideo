@@ -15,7 +15,7 @@ from datetime import datetime
 from utils import clean_tags
 
 # --- Helpers ---
-def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, type: str, entity_id: str):
+def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, type: str, entity_id: str, content: str = None):
     if sender_id == recipient_id: return
 
     # Deduplicate for like/follow
@@ -28,12 +28,12 @@ def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, t
         )).first()
         if existing: return
 
-    notif = Notification(sender_id=sender_id, recipient_id=recipient_id, type=type, entity_id=entity_id)
+    notif = Notification(sender_id=sender_id, recipient_id=recipient_id, type=type, entity_id=entity_id, content=content)
     session.add(notif)
     # Don't commit here, let caller commit
 
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag
+from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
@@ -176,7 +176,16 @@ def get_videos(session: Session = Depends(get_session), page: int = Query(1, ge=
 def read_video(video_id: str, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if not video: raise HTTPException(status_code=404, detail="Video not found")
-    return video
+
+    # Convert to Read model first to avoid modifying ORM object
+    video_read = VideoRead.from_orm(video)
+
+    # Check if video belongs to any collection (take the first one found)
+    collection_item = session.exec(select(CollectionItem).where(CollectionItem.video_id == video_id)).first()
+    if collection_item:
+        video_read.collection_id = collection_item.collection_id
+
+    return video_read
 
 # --- History ---
 
@@ -252,9 +261,18 @@ def get_my_history(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    statement = select(Video).join(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id).order_by(desc(UserVideoHistory.last_watched))
+    statement = select(Video, UserVideoHistory).join(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id).order_by(desc(UserVideoHistory.last_watched))
     offset = (page - 1) * size
-    return session.exec(statement.offset(offset).limit(size)).all()
+    results = session.exec(statement.offset(offset).limit(size)).all()
+
+    videos = []
+    for video, history in results:
+        # Convert to Read model and attach progress
+        v_read = VideoRead.from_orm(video)
+        v_read.progress = int(history.progress)
+        videos.append(v_read)
+
+    return videos
 
 # --- Comments ---
 
@@ -278,16 +296,18 @@ def create_comment(
 
     comment = Comment(content=content, user_id=current_user.id, video_id=video_id, parent_id=parent_id)
     session.add(comment)
+    session.flush() # Ensure ID is generated
+    session.refresh(comment)
 
     # Notification logic
     if parent_id:
         # Reply: Notify parent comment author
         parent_comment = session.get(Comment, parent_id)
         if parent_comment:
-            create_notification(session, current_user.id, parent_comment.user_id, "reply", str(video_id))
+            create_notification(session, current_user.id, parent_comment.user_id, "reply", f"{video_id}#{comment.id}", content)
     else:
         # Top-level comment: Notify video author
-        create_notification(session, current_user.id, video.user_id, "comment", str(video_id))
+        create_notification(session, current_user.id, video.user_id, "comment", f"{video_id}#{comment.id}", content)
 
     session.commit()
     session.refresh(comment)
@@ -346,6 +366,26 @@ def get_comments(
             }
         })
     return result
+
+@app.get("/comments/{comment_id}")
+def get_comment(
+    comment_id: int,
+    session: Session = Depends(get_session)
+):
+    comment = session.get(Comment, comment_id)
+    if not comment: raise HTTPException(status_code=404)
+    user = session.get(User, comment.user_id)
+    return {
+        "id": comment.id,
+        "content": comment.content,
+        "created_at": comment.created_at,
+        "parent_id": comment.parent_id,
+        "video_id": comment.video_id,
+        "user": {
+            "username": user.username if user else "Unknown",
+            "avatar_path": user.avatar_path if user else None
+        }
+    }
 
 @app.delete("/comments/{comment_id}")
 def delete_comment(
@@ -423,7 +463,7 @@ def ban_video(
     log = VideoAuditLog(video_id=video_id, operator_id=admin.id, action="ban", reason=reason)
     session.add(log)
 
-    create_notification(session, admin.id, video.user_id, "system", f"您的视频《{video.title}》因违规被下架: {reason}")
+    create_notification(session, admin.id, video.user_id, "system", str(video.id), f"您的视频《{video.title}》因违规被下架: {reason}")
 
     session.commit()
     return {"ok": True}
@@ -444,7 +484,7 @@ def approve_video(
     log = VideoAuditLog(video_id=video_id, operator_id=admin.id, action="approve")
     session.add(log)
 
-    create_notification(session, admin.id, video.user_id, "system", f"您的视频《{video.title}》申诉/审核已通过并上架")
+    create_notification(session, admin.id, video.user_id, "system", str(video.id), f"您的视频《{video.title}》申诉/审核已通过并上架")
 
     session.commit()
     return {"ok": True}
@@ -564,6 +604,7 @@ def get_notifications(
             "id": n.id,
             "type": n.type,
             "entity_id": n.entity_id,
+            "content": n.content,
             "is_read": n.is_read,
             "created_at": n.created_at,
             "sender": {
@@ -646,7 +687,7 @@ async def like_video(
         new_like = VideoLike(user_id=current_user.id, video_id=video_id, like_type=like_type)
         session.add(new_like)
         if like_type == "like":
-            create_notification(session, current_user.id, video.user_id, "like_video", str(video_id))
+            create_notification(session, current_user.id, video.user_id, "like_video", str(video_id), f"赞了你的视频: {video.title}")
         session.commit()
         session.refresh(new_like)
         return {"status": "liked", "like_type": like_type}
@@ -676,6 +717,174 @@ async def unlike_video(
 @app.get("/categories", response_model=List[Category])
 def get_categories(session: Session = Depends(get_session)):
     return session.exec(select(Category)).all()
+
+
+# --- Collections ---
+
+@app.post("/collections", response_model=CollectionRead)
+def create_collection(
+    collection: CollectionCreate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    new_collection = Collection(
+        title=collection.title,
+        description=collection.description,
+        user_id=current_user.id
+    )
+    session.add(new_collection)
+    session.commit()
+    session.refresh(new_collection)
+    return new_collection
+
+@app.get("/collections", response_model=List[CollectionRead])
+def get_collections(
+    user_id: Optional[str] = Query(None),
+    page: int = 1, size: int = 20,
+    session: Session = Depends(get_session)
+):
+    stmt = select(Collection)
+    if user_id:
+        target_user = get_user_by_id_or_username(user_id, session)
+        if target_user:
+            stmt = stmt.where(Collection.user_id == target_user.id)
+
+    stmt = stmt.order_by(desc(Collection.created_at))
+    collections = session.exec(stmt.offset((page-1)*size).limit(size)).all()
+
+    # Enrich with video count and owner
+    result = []
+    for c in collections:
+        video_count = session.exec(select(func.count()).select_from(CollectionItem).where(CollectionItem.collection_id == c.id)).one()
+        c_read = CollectionRead.from_orm(c)
+        c_read.video_count = video_count
+        c_read.owner = session.get(User, c.user_id)
+
+        # Get first video ID
+        first_item = session.exec(select(CollectionItem).where(CollectionItem.collection_id == c.id).order_by(CollectionItem.order).limit(1)).first()
+        if first_item:
+            c_read.first_video_id = first_item.video_id
+            # Set default cover if not set
+            if not c_read.cover_image:
+                first_video = session.get(Video, first_item.video_id)
+                if first_video and first_video.thumbnail_path:
+                    c_read.cover_image = first_video.thumbnail_path
+
+        result.append(c_read)
+    return result
+
+@app.get("/collections/{collection_id}")
+def get_collection_details(
+    collection_id: UUID,
+    session: Session = Depends(get_session)
+):
+    collection = session.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    # Get videos in order
+    stmt = select(Video, CollectionItem.order).join(CollectionItem).where(CollectionItem.collection_id == collection_id).order_by(CollectionItem.order)
+    results = session.exec(stmt).all()
+
+    videos = []
+    for vid, order in results:
+        v_read = VideoRead.from_orm(vid)
+        # We can attach order if needed, but VideoRead doesn't have it.
+        videos.append(v_read)
+
+    c_read = CollectionRead.from_orm(collection)
+    c_read.video_count = len(videos)
+    c_read.owner = session.get(User, collection.user_id)
+
+    return {
+        "collection": c_read,
+        "videos": videos
+    }
+
+@app.post("/collections/{collection_id}/videos")
+def add_video_to_collection(
+    collection_id: UUID,
+    video_id: UUID = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    collection = session.get(Collection, collection_id)
+    if not collection: raise HTTPException(status_code=404)
+    if collection.user_id != current_user.id: raise HTTPException(status_code=403)
+
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404, detail="Video not found")
+
+    # Check if already exists
+    existing = session.exec(select(CollectionItem).where(CollectionItem.collection_id == collection_id, CollectionItem.video_id == video_id)).first()
+    if existing: return {"ok": True, "message": "Already in collection"}
+
+    # Get max order
+    max_order = session.exec(select(func.max(CollectionItem.order)).where(CollectionItem.collection_id == collection_id)).one()
+    new_order = (max_order if max_order is not None else -1) + 1
+
+    item = CollectionItem(collection_id=collection_id, video_id=video_id, order=new_order)
+    session.add(item)
+    session.commit()
+    return {"ok": True}
+
+@app.delete("/collections/{collection_id}/videos/{video_id}")
+def remove_video_from_collection(
+    collection_id: UUID,
+    video_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    collection = session.get(Collection, collection_id)
+    if not collection: raise HTTPException(status_code=404)
+    if collection.user_id != current_user.id: raise HTTPException(status_code=403)
+
+    item = session.exec(select(CollectionItem).where(CollectionItem.collection_id == collection_id, CollectionItem.video_id == video_id)).first()
+    if item:
+        session.delete(item)
+        session.commit()
+    return {"ok": True}
+
+@app.put("/collections/{collection_id}/reorder")
+def reorder_collection_videos(
+    collection_id: UUID,
+    video_ids: List[UUID] = Body(...),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    collection = session.get(Collection, collection_id)
+    if not collection: raise HTTPException(status_code=404)
+    if collection.user_id != current_user.id: raise HTTPException(status_code=403)
+
+    # Verify all videos belong to this collection (optional but good for integrity)
+    # Ideally we just update the order for the ones present.
+
+    for index, vid in enumerate(video_ids):
+        item = session.exec(select(CollectionItem).where(CollectionItem.collection_id == collection_id, CollectionItem.video_id == vid)).first()
+        if item:
+            item.order = index
+            session.add(item)
+
+    session.commit()
+    return {"ok": True}
+
+@app.delete("/collections/{collection_id}")
+def delete_collection(
+    collection_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    collection = session.get(Collection, collection_id)
+    if not collection: raise HTTPException(status_code=404)
+    if collection.user_id != current_user.id: raise HTTPException(status_code=403)
+
+    items = session.exec(select(CollectionItem).where(CollectionItem.collection_id == collection_id)).all()
+    for item in items:
+        session.delete(item)
+
+    session.delete(collection)
+    session.commit()
+    return {"ok": True}
 
 
 # --- 创作者 API 修改 ---
@@ -786,7 +995,7 @@ def follow_user(user_id: str, current_user: User = Depends(get_current_user), se
 
     if not session.exec(select(UserFollow).where(UserFollow.follower_id == current_user.id).where(UserFollow.followed_id == real_user_id)).first():
         session.add(UserFollow(follower_id=current_user.id, followed_id=real_user_id))
-        create_notification(session, current_user.id, real_user_id, "follow", str(real_user_id))
+        create_notification(session, current_user.id, real_user_id, "follow", str(real_user_id), "关注了你")
         session.commit()
     return {"ok": True}
 

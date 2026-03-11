@@ -141,6 +141,19 @@
     </div>
 
     <div class="sidebar">
+        <!-- Playlist Container -->
+        <div id="playlist-container" style="display:none; margin-bottom:20px; border:1px solid #ddd; border-radius:8px; overflow:hidden; background:#fff;">
+            <div style="background:#f4f5f7; padding:12px; border-bottom:1px solid #e5e5e5;">
+                <div style="font-weight:600; font-size:15px; margin-bottom:4px;" id="pl-title">合集标题</div>
+                <div style="font-size:12px; color:#606060;">
+                    正在播放: <span id="pl-index">1</span> / <span id="pl-total">10</span>
+                </div>
+            </div>
+            <div id="pl-list" style="max-height:400px; overflow-y:auto;">
+                <!-- Items -->
+            </div>
+        </div>
+
         <div id="rec-list"></div>
     </div>
 </div>
@@ -153,13 +166,107 @@
     document.addEventListener("DOMContentLoaded", async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const videoId = urlParams.get('id');
+        const collectionId = urlParams.get('collection_id');
+
         if (!videoId) return location.href = "/static/index.html";
 
         await loadCurrentUser();
-        await loadVideoDetails(videoId);
-        await loadRecommendations();
+        await loadVideoDetails(videoId); // This might need to know about collection for autoplay next?
+
+        if (collectionId) {
+            loadPlaylist(collectionId, videoId);
+        } else {
+            loadRecommendations();
+        }
+
         await loadComments(videoId);
+        setTimeout(handleHashScroll, 500); // Wait a bit for rendering
     });
+
+    async function handleHashScroll() {
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith("#comment-")) return;
+
+        const commentId = hash.replace("#comment-", "");
+        if (!commentId) return;
+
+        try {
+            const res = await fetch(`/comments/${commentId}`);
+            if (res.ok) {
+                const comment = await res.json();
+
+                if (comment.parent_id) {
+                    // It's a reply
+                    // Find parent element
+                    const parentEl = document.getElementById(`comment-${comment.parent_id}`);
+                    if (parentEl) {
+                        parentEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                        // Expand replies
+                        await toggleReplies(comment.parent_id);
+                        // Wait for replies to render
+                        setTimeout(() => {
+                             const replyEl = document.getElementById(`comment-${commentId}`);
+                             if (replyEl) {
+                                 replyEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                                 replyEl.style.backgroundColor = "#fff9db"; // Highlight
+                                 setTimeout(() => replyEl.style.backgroundColor = "", 2000);
+                             }
+                        }, 500);
+                    }
+                } else {
+                    // It's a top-level comment
+                    const el = document.getElementById(`comment-${commentId}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.style.backgroundColor = "#fff9db"; // Highlight
+                        setTimeout(() => el.style.backgroundColor = "", 2000);
+                    }
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadPlaylist(colId, currentVideoId) {
+        try {
+            const res = await fetch(`/collections/${colId}`);
+            if (res.ok) {
+                const data = await res.json();
+                const container = document.getElementById("playlist-container");
+                container.style.display = "block";
+
+                document.getElementById("pl-title").innerText = data.collection.title;
+                document.getElementById("pl-total").innerText = data.videos.length;
+
+                const list = document.getElementById("pl-list");
+                let currentIndex = -1;
+
+                let html = "";
+                data.videos.forEach((v, index) => {
+                    const isCurrent = v.id === currentVideoId;
+                    if (isCurrent) currentIndex = index;
+
+                    html += `
+                        <div class="pl-item" onclick="location.href='/static/video.html?id=${v.id}&collection_id=${colId}'"
+                             style="padding:10px; display:flex; gap:10px; cursor:pointer; ${isCurrent ? 'background:#e7f5ff;' : 'background:#fff'}; border-bottom:1px solid #f0f0f0;">
+                            <div style="color:#666; width:20px; font-size:13px; display:flex; align-items:center; justify-content:center;">${isCurrent ? '▶' : (index+1)}</div>
+                            <div style="flex:1;">
+                                <div style="font-size:13px; font-weight:500; color:${isCurrent?'#00a1d6':'#333'}; line-height:1.4; margin-bottom:2px;">${v.title}</div>
+                                <div style="font-size:12px; color:#999;">${v.owner ? v.owner.username : ''}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                list.innerHTML = html;
+                document.getElementById("pl-index").innerText = currentIndex + 1;
+
+                // Optional: Scroll to active item
+                const activeItem = list.children[currentIndex];
+                if (activeItem) {
+                    activeItem.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
 
     async function loadCurrentUser() {
         const token = localStorage.getItem("access_token");
@@ -500,14 +607,44 @@
 
                 // Player logic (simplified copy)
                 const player = document.getElementById("player");
+                const qualitySel = document.getElementById("quality");
                 player.poster = video.thumbnail_path;
+
                 if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
                     const hls = new Hls();
                     hls.loadSource(video.processed_file_path);
                     hls.attachMedia(player);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => player.play());
+
+                    hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                        const levels = hls.levels;
+                        if (levels.length > 1) {
+                            qualitySel.style.display = "block";
+                            qualitySel.innerHTML = '<option value="-1">Auto</option>';
+                            levels.forEach((level, index) => {
+                                const opt = document.createElement("option");
+                                opt.value = index;
+                                opt.text = level.height + "p";
+                                qualitySel.appendChild(opt);
+                            });
+
+                            qualitySel.onchange = (e) => {
+                                hls.currentLevel = parseInt(e.target.value);
+                            };
+                        }
+                        player.play();
+                    });
                 } else {
                     player.src = video.processed_file_path;
+                }
+
+                // Auto-load playlist if video belongs to a collection and no collection_id in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                if (!urlParams.get('collection_id') && video.collection_id) {
+                    // Option 1: Just load it
+                    loadPlaylist(video.collection_id, video.id);
+                    // Option 2: Update URL (cleaner but optional)
+                    // const newUrl = `${window.location.pathname}?id=${video.id}&collection_id=${video.collection_id}`;
+                    // window.history.replaceState(null, '', newUrl);
                 }
             }
         } catch(e) {}
@@ -521,6 +658,10 @@
          if(res.ok) {
              const data = await res.json();
              isFollowing = data.is_following;
+
+             // Fix subscribers count
+             document.getElementById("author-subs").innerText = data.followers_count + " 粉丝";
+
              const btn = document.getElementById("follow-btn");
              if(data.is_self) btn.style.display="none";
              else {

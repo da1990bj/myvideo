@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>管理合集 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        .container { max-width: 1000px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        h1 { margin-top: 0; color: #333; }
+        .back-link { color: #666; text-decoration: none; margin-bottom: 20px; display: inline-block; }
+
+        .layout { display: flex; gap: 20px; }
+        .left-col { flex: 2; }
+        .right-col { flex: 1; border-left: 1px solid #eee; padding-left: 20px; }
+
+        .video-list { list-style: none; padding: 0; }
+        .video-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; background: #fff; }
+        .video-item:last-child { border-bottom: none; }
+        .video-thumb { width: 80px; height: 45px; object-fit: cover; margin-right: 10px; background: #eee; }
+        .video-info { flex: 1; }
+        .video-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+        .btn-add { background: #00a1d6; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-remove { background: #ff4d4f; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+
+        .search-box { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <a href="/static/dashboard.html" class="back-link">← 返回创作中心</a>
+    <h1 id="colTitle">合集管理</h1>
+    <p id="colDesc" style="color:#666;"></p>
+
+    <div class="layout">
+        <div class="left-col">
+            <h3>已收录视频</h3>
+            <div id="colVideos" class="video-list">加载中...</div>
+        </div>
+        <div class="right-col">
+            <h3>添加视频</h3>
+            <input type="text" id="searchInput" class="search-box" placeholder="搜索我的视频..." oninput="searchMyVideos()">
+            <div id="myVideos" class="video-list" style="max-height: 500px; overflow-y: auto;">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const colId = new URLSearchParams(location.search).get("id");
+    let allMyVideos = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        if (!colId) { alert("参数错误"); location.href="/static/dashboard.html"; return; }
+        const token = localStorage.getItem("access_token");
+        if (!token) location.href = "/static/login.html";
+
+        await loadCollection();
+        await loadAllMyVideos();
+    });
+
+    async function loadCollection() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/collections/" + colId, { headers: { "Authorization": "Bearer " + token } });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("colTitle").innerText = "管理合集: " + data.collection.title;
+                document.getElementById("colDesc").innerText = data.collection.description || "";
+                renderColVideos(data.videos);
+            } else {
+                alert("加载失败");
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadAllMyVideos() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/users/me/videos", { headers: { "Authorization": "Bearer " + token } });
+            if (res.ok) {
+                allMyVideos = await res.json();
+                renderMyVideos(allMyVideos);
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function renderColVideos(videos) {
+        const list = document.getElementById("colVideos");
+        if (videos.length === 0) {
+            list.innerHTML = "<div style='padding:20px; text-align:center; color:#999;'>暂无视频，请从右侧添加</div>";
+            return;
+        }
+
+        let html = "";
+        videos.forEach((v, index) => {
+            html += `
+                <div class="video-item">
+                    <span style="margin-right:10px; color:#999; width:20px;">${index+1}</span>
+                    <img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="video-thumb">
+                    <div class="video-info">
+                        <div class="video-title">${v.title}</div>
+                        <div style="font-size:12px; color:#999;">${new Date(v.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <button class="btn-remove" onclick="removeVideo('${v.id}')">移除</button>
+                </div>
+            `;
+        });
+        list.innerHTML = html;
+    }
+
+    function renderMyVideos(videos) {
+        const list = document.getElementById("myVideos");
+        if (videos.length === 0) {
+            list.innerHTML = "<div style='padding:20px; text-align:center;'>没有可添加的视频</div>";
+            return;
+        }
+
+        let html = "";
+        videos.forEach(v => {
+            html += `
+                <div class="video-item">
+                    <div class="video-info">
+                        <div class="video-title">${v.title}</div>
+                    </div>
+                    <button class="btn-add" onclick="addVideo('${v.id}')">添加</button>
+                </div>
+            `;
+        });
+        list.innerHTML = html;
+    }
+
+    function searchMyVideos() {
+        const keyword = document.getElementById("searchInput").value.toLowerCase();
+        const filtered = allMyVideos.filter(v => v.title.toLowerCase().includes(keyword));
+        renderMyVideos(filtered);
+    }
+
+    async function addVideo(vid) {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/collections/${colId}/videos`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ video_id: vid })
+            });
+            if (res.ok) {
+                loadCollection(); // Refresh list
+            } else {
+                const err = await res.json();
+                alert("添加失败: " + (err.detail || err.message));
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function removeVideo(vid) {
+        if(!confirm("确定移除吗？")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/collections/${colId}/videos/${vid}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                loadCollection();
+            } else {
+                alert("移除失败");
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+</script>
+</body>
+</html>
