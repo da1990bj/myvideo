@@ -33,6 +33,11 @@ function renderSidebar() {
         <a href="/static/admin/videos.html" class="admin-link">视频管理</a>
         <a href="/static/admin/users.html" class="admin-link">用户管理</a>
         <a href="/static/admin/comments.html" class="admin-link">评论管理</a>
+        <div style="height: 1px; background: #eee; margin: 10px 0;"></div>
+        <a href="/static/admin/roles.html" class="admin-link">角色权限</a>
+        <a href="/static/admin/settings.html" class="admin-link">系统设置</a>
+        <a href="/static/admin/logs.html" class="admin-link">操作日志</a>
+        <div style="height: 1px; background: #eee; margin: 10px 0;"></div>
         <a href="/static/index.html" class="admin-link" style="margin-top:20px; color:#666;">返回前台</a>
     </div>
     <style>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 角色权限</title>
+    <style>
+        .container { padding: 20px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; margin-top: 20px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background: #f9f9f9; }
+        .perm-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .desc-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn { padding: 6px 12px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #008dbd; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+    <div class="container">
+        <h1>角色权限管理</h1>
+        <p>注意：修改权限可能会影响系统功能。请谨慎操作。</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>角色名称</th>
+                    <th>描述</th>
+                    <th>权限列表 (逗号分隔)</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="roles-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        async function loadRoles() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/roles", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const roles = await res.json();
+                const tbody = document.getElementById("roles-body");
+                tbody.innerHTML = "";
+                roles.forEach(role => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${role.id}</td>
+                        <td>${role.name}</td>
+                        <td>
+                            <input type="text" class="desc-input" value="${role.description || ''}" id="desc-${role.id}">
+                        </td>
+                        <td>
+                            <input type="text" class="perm-input" value="${role.permissions}" id="perm-${role.id}">
+                        </td>
+                        <td>
+                            <button class="btn" onclick="saveRole(${role.id})">保存</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                alert("加载失败");
+            }
+        }
+
+        async function saveRole(roleId) {
+            const token = localStorage.getItem("access_token");
+            const perms = document.getElementById(`perm-${roleId}`).value;
+            const desc = document.getElementById(`desc-${roleId}`).value;
+
+            const res = await fetch(`/admin/roles/${roleId}`, {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ permissions: perms, description: desc })
+            });
+
+            if (res.ok) {
+                alert("保存成功");
+                loadRoles();
+            } else {
+                alert("保存失败");
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", loadRoles);
+    </script>
+</body>
+</html>

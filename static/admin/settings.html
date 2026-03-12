@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 系统设置</title>
+    <style>
+        .container { padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        .label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; max-width: 400px; }
+        .btn { padding: 10px 20px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #008dbd; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+    <div class="container">
+        <h1>系统设置</h1>
+        <div id="config-form"></div>
+        <button class="btn" onclick="saveConfig()">保存设置</button>
+    </div>
+
+    <script>
+        async function loadConfig() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/config", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const config = await res.json();
+                const form = document.getElementById("config-form");
+                form.innerHTML = "";
+
+                // Define known keys for better labels (optional)
+                const labels = {
+                    "site_name": "站点名称",
+                    "maintenance_mode": "维护模式 (true/false)",
+                    "allow_registration": "允许注册 (true/false)",
+                    "max_upload_size_mb": "最大上传 (MB)",
+                    "site_notice": "全站公告"
+                };
+
+                // Sort keys or use predefined list
+                const keys = Object.keys(config).sort();
+
+                keys.forEach(key => {
+                    const value = config[key];
+                    const label = labels[key] || key;
+                    const div = document.createElement("div");
+                    div.className = "form-group";
+                    div.innerHTML = `
+                        <label class="label">${label} (${key})</label>
+                        <input type="text" class="input" id="conf-${key}" value="${value}">
+                    `;
+                    form.appendChild(div);
+                });
+            } else {
+                alert("加载失败");
+            }
+        }
+
+        async function saveConfig() {
+            const token = localStorage.getItem("access_token");
+            const inputs = document.querySelectorAll(".input");
+            const data = {};
+            inputs.forEach(input => {
+                const key = input.id.replace("conf-", "");
+                data[key] = input.value;
+            });
+
+            const res = await fetch("/admin/config", {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert("保存成功");
+            } else {
+                alert("保存失败");
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", loadConfig);
+    </script>
+</body>
+</html>

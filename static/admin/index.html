@@ -28,11 +28,29 @@
                 <div class="num" id="comment-count">-</div>
             </div>
         </div>
+
+        <h2 style="margin-top: 40px;">服务器状态</h2>
+        <div style="display: flex; gap: 20px; margin-top: 20px;">
+            <div class="card">
+                <div class="label">CPU 使用率</div>
+                <div class="num" id="cpu-stat">-</div>
+            </div>
+            <div class="card">
+                <div class="label">内存使用率</div>
+                <div class="num" id="mem-stat">-</div>
+            </div>
+            <div class="card">
+                <div class="label">磁盘使用率</div>
+                <div class="num" id="disk-stat">-</div>
+            </div>
+        </div>
     </div>
 
     <script>
         document.addEventListener("DOMContentLoaded", async () => {
             const token = localStorage.getItem("access_token");
+
+            // Business Stats
             const res = await fetch("/admin/stats", {
                 headers: { "Authorization": "Bearer " + token }
             });
@@ -41,6 +59,17 @@
                 document.getElementById("user-count").innerText = data.users;
                 document.getElementById("video-count").innerText = data.videos;
                 document.getElementById("comment-count").innerText = data.comments;
+            }
+
+            // System Stats
+            const resSys = await fetch("/admin/stats/system", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (resSys.ok) {
+                const data = await resSys.json();
+                document.getElementById("cpu-stat").innerText = data.cpu_percent + "%";
+                document.getElementById("mem-stat").innerText = data.memory.percent + "%";
+                document.getElementById("disk-stat").innerText = data.disk.percent + "%";
             }
         });
     </script>

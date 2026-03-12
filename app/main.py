@@ -33,14 +33,17 @@ def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, t
     # Don't commit here, let caller commit
 
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead, VideoFavorite, CollectionFavorite
+from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead, VideoFavorite, CollectionFavorite, Role, SystemConfig, AdminLog
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
+import psutil
 
 app = FastAPI(title="MyVideo Backend", version="1.5.0")
 app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+
+
 
 @app.on_event("startup")
 def on_startup():
@@ -82,6 +85,55 @@ async def get_current_admin(current_user: User = Depends(get_current_user)):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
+
+# --- RBAC & Helpers ---
+
+def log_admin_action(session: Session, admin_id: UUID, action: str, target_id: str = None, details: str = None, ip_address: str = None):
+    log = AdminLog(admin_id=admin_id, action=action, target_id=target_id, details=details, ip_address=ip_address)
+    session.add(log)
+    # Note: Caller must commit
+
+def check_permission(user: User, permission: str, session: Session) -> bool:
+    if user.is_admin: # Legacy admin check fallback or superuser override
+         # Ideally rely on Role, but for migration safety:
+         # Check if role exists
+         if user.role_id:
+             role = session.get(Role, user.role_id)
+             if role:
+                 if role.permissions == "*": return True
+                 perms = role.permissions.split(",")
+                 return permission in perms
+    # Default fail if no role or not admin
+    return False
+
+class PermissionChecker:
+    def __init__(self, permission: str):
+        self.permission = permission
+
+    def __call__(self, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+        if not user.is_active: raise HTTPException(status_code=400, detail="Inactive user")
+
+        # Check Role
+        if not user.role_id:
+            raise HTTPException(status_code=403, detail="Role not assigned")
+
+        role = session.get(Role, user.role_id)
+        if not role:
+             raise HTTPException(status_code=403, detail="Role not found")
+
+        allowed = False
+        if role.permissions == "*":
+            allowed = True
+        else:
+            perms = role.permissions.split(",")
+            if self.permission in perms:
+                allowed = True
+
+        if not allowed:
+            raise HTTPException(status_code=403, detail=f"Permission '{self.permission}' required")
+
+        return user
+
 
 # --- Helper to process tags ---
 def process_tags(session: Session, video: Video, tag_list: List[str]):
@@ -132,7 +184,7 @@ async def upload_video(
     category_id: int = Form(None),
     tags: str = Form(""),
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(PermissionChecker("video:upload")),
     session: Session = Depends(get_session)
 ):
     if not file.content_type.startswith("video/"): raise HTTPException(status_code=400, detail="File must be a video")
@@ -294,7 +346,7 @@ def create_comment(
     video_id: str,
     content: str = Form(...),
     parent_id: Optional[int] = Form(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(PermissionChecker("comment:create")),
     session: Session = Depends(get_session)
 ):
     video = session.get(Video, video_id)
@@ -419,9 +471,125 @@ def delete_comment(
 
 # --- Admin APIs ---
 
+@app.get("/admin/stats/system")
+def get_system_stats(
+    user: User = Depends(PermissionChecker("*")), # Super admin only
+    session: Session = Depends(get_session)
+):
+    cpu_percent = psutil.cpu_percent(interval=None) # Non-blocking
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+
+    return {
+        "cpu_percent": cpu_percent,
+        "memory": {
+            "total": memory.total,
+            "available": memory.available,
+            "percent": memory.percent
+        },
+        "disk": {
+            "total": disk.total,
+            "free": disk.free,
+            "percent": disk.percent
+        }
+    }
+
+@app.get("/admin/roles")
+def get_roles(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    return session.exec(select(Role)).all()
+
+@app.post("/admin/roles")
+def create_role(
+    name: str = Body(..., embed=True),
+    description: str = Body(None, embed=True),
+    permissions: str = Body("", embed=True),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    if session.exec(select(Role).where(Role.name == name)).first():
+        raise HTTPException(status_code=400, detail="Role already exists")
+
+    role = Role(name=name, description=description, permissions=permissions)
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+    log_admin_action(session, user.id, "create_role", str(role.id), name)
+    return role
+
+@app.put("/admin/roles/{role_id}")
+def update_role(
+    role_id: int,
+    permissions: str = Body(..., embed=True),
+    description: str = Body(None, embed=True),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    role = session.get(Role, role_id)
+    if not role: raise HTTPException(status_code=404)
+    role.permissions = permissions
+    if description is not None:
+        role.description = description
+    session.add(role)
+    session.commit()
+    log_admin_action(session, user.id, "update_role", str(role_id), f"Permissions: {permissions}")
+    return {"ok": True}
+
+@app.get("/admin/config")
+def get_system_config(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    configs = session.exec(select(SystemConfig)).all()
+    result = {}
+    for c in configs:
+        result[c.key] = c.value
+    return result
+
+@app.put("/admin/config")
+def update_system_config(
+    config: dict = Body(...),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    for key, value in config.items():
+        conf = session.get(SystemConfig, key)
+        if conf:
+            conf.value = str(value)
+            conf.updated_at = datetime.utcnow()
+            session.add(conf)
+            log_admin_action(session, user.id, "update_config", key, f"Set to {value}")
+    session.commit()
+    return {"ok": True}
+
+@app.get("/admin/logs")
+def get_admin_logs(
+    page: int = 1, size: int = 20,
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    stmt = select(AdminLog).order_by(desc(AdminLog.created_at))
+    logs = session.exec(stmt.offset((page-1)*size).limit(size)).all()
+
+    # Enrich with admin username
+    result = []
+    for log in logs:
+        admin_user = session.get(User, log.admin_id)
+        result.append({
+            "id": log.id,
+            "admin_name": admin_user.username if admin_user else "Unknown",
+            "action": log.action,
+            "target_id": log.target_id,
+            "details": log.details,
+            "created_at": log.created_at
+        })
+    return result
+
 @app.get("/admin/stats")
 def get_admin_stats(
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("video:audit")), # Allow auditors too
     session: Session = Depends(get_session)
 ):
     users = session.exec(select(func.count()).select_from(User)).one()
@@ -432,7 +600,7 @@ def get_admin_stats(
 @app.get("/admin/users", response_model=List[UserRead])
 def get_all_users(
     page: int = 1, size: int = 20,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("user:ban")), # Require user management perm
     session: Session = Depends(get_session)
 ):
     return session.exec(select(User).order_by(desc(User.created_at)).offset((page-1)*size).limit(size)).all()
@@ -441,20 +609,50 @@ def get_all_users(
 def update_user_status(
     user_id: str,
     is_active: bool,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("user:ban")),
     session: Session = Depends(get_session)
 ):
     user = session.get(User, user_id)
     if not user: raise HTTPException(status_code=404)
     user.is_active = is_active
     session.add(user)
+
+    log_admin_action(session, admin.id, "update_user_status", user_id, f"Set active={is_active}")
+
+    session.commit()
+    return {"ok": True}
+
+@app.put("/admin/users/{user_id}/role")
+def update_user_role(
+    user_id: str,
+    role_id: int = Body(..., embed=True),
+    admin: User = Depends(PermissionChecker("admin:super")), # Only super admin can change roles
+    session: Session = Depends(get_session)
+):
+    user = session.get(User, user_id)
+    if not user: raise HTTPException(status_code=404)
+
+    role = session.get(Role, role_id)
+    if not role: raise HTTPException(status_code=404, detail="Role not found")
+
+    user.role_id = role.id
+
+    # Backward compatibility
+    if role.name == "Super Admin":
+        user.is_admin = True
+    else:
+        user.is_admin = False
+
+    session.add(user)
+    log_admin_action(session, admin.id, "update_user_role", user_id, f"Role set to {role.name}")
+
     session.commit()
     return {"ok": True}
 
 @app.get("/admin/videos", response_model=List[VideoRead])
 def get_all_videos(
     page: int = 1, size: int = 20,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("video:audit")),
     session: Session = Depends(get_session)
 ):
     return session.exec(select(Video).order_by(desc(Video.created_at)).offset((page-1)*size).limit(size)).all()
@@ -463,7 +661,7 @@ def get_all_videos(
 def ban_video(
     video_id: str,
     reason: str = Body(..., embed=True),
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("video:ban")),
     session: Session = Depends(get_session)
 ):
     video = session.get(Video, video_id)
@@ -476,6 +674,8 @@ def ban_video(
     log = VideoAuditLog(video_id=video_id, operator_id=admin.id, action="ban", reason=reason)
     session.add(log)
 
+    log_admin_action(session, admin.id, "ban_video", video_id, reason)
+
     create_notification(session, admin.id, video.user_id, "system", str(video.id), f"您的视频《{video.title}》因违规被下架: {reason}")
 
     session.commit()
@@ -484,7 +684,7 @@ def ban_video(
 @app.post("/admin/videos/{video_id}/approve")
 def approve_video(
     video_id: str,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("video:audit")),
     session: Session = Depends(get_session)
 ):
     video = session.get(Video, video_id)
@@ -496,6 +696,8 @@ def approve_video(
 
     log = VideoAuditLog(video_id=video_id, operator_id=admin.id, action="approve")
     session.add(log)
+
+    log_admin_action(session, admin.id, "approve_video", video_id)
 
     create_notification(session, admin.id, video.user_id, "system", str(video.id), f"您的视频《{video.title}》申诉/审核已通过并上架")
 
@@ -532,7 +734,14 @@ def get_audit_logs(
     video = session.get(Video, video_id)
     if not video: raise HTTPException(status_code=404)
 
-    if not current_user.is_admin and video.user_id != current_user.id:
+    # Allow if admin (with permission) or owner
+    is_admin = False
+    if current_user.role_id:
+        role = session.get(Role, current_user.role_id)
+        if role and (role.permissions == "*" or "video:audit" in role.permissions):
+            is_admin = True
+
+    if not is_admin and video.user_id != current_user.id:
         raise HTTPException(status_code=403)
 
     logs = session.exec(select(VideoAuditLog).where(VideoAuditLog.video_id == video_id).order_by(desc(VideoAuditLog.created_at))).all()
@@ -554,7 +763,7 @@ def update_video_status(
     video_id: str,
     status: str,
     visibility: str,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("video:audit")),
     session: Session = Depends(get_session)
 ):
     video = session.get(Video, video_id)
@@ -562,13 +771,16 @@ def update_video_status(
     video.status = status
     video.visibility = visibility
     session.add(video)
+
+    log_admin_action(session, admin.id, "update_video_status", video_id, f"Status: {status}, Visibility: {visibility}")
+
     session.commit()
     return {"ok": True}
 
 @app.get("/admin/comments")
 def get_all_comments(
     page: int = 1, size: int = 20,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("comment:delete")), # Usually auditors view comments
     session: Session = Depends(get_session)
 ):
     comments = session.exec(select(Comment).order_by(desc(Comment.created_at)).offset((page-1)*size).limit(size)).all()
@@ -587,7 +799,7 @@ def get_all_comments(
 @app.delete("/admin/comments/{comment_id}")
 def delete_any_comment(
     comment_id: int,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(PermissionChecker("comment:delete")),
     session: Session = Depends(get_session)
 ):
     comment = session.get(Comment, comment_id)
@@ -595,6 +807,9 @@ def delete_any_comment(
         comment.is_deleted = True
         comment.deleted_by = "admin"
         session.add(comment)
+
+        log_admin_action(session, admin.id, "delete_comment", str(comment_id))
+
         session.commit()
     return {"ok": True}
 
@@ -666,7 +881,7 @@ def mark_one_read(
 async def like_video(
     video_id: UUID,
     like_type: str, # "like" or "dislike"
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(PermissionChecker("social:interaction")),
     session: Session = Depends(get_session)
 ):
     if like_type not in ["like", "dislike"]:
@@ -1122,7 +1337,7 @@ def delete_video(video_id: str, current_user: User = Depends(get_current_user), 
 # 警告：全量覆盖必须包含所有代码，否则会丢接口。我把所有代码合并一下。
 
 @app.post("/users/{user_id}/follow")
-def follow_user(user_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def follow_user(user_id: str, current_user: User = Depends(PermissionChecker("social:interaction")), session: Session = Depends(get_session)):
     target_user = get_user_by_id_or_username(user_id, session)
     if not target_user: raise HTTPException(status_code=404, detail="User not found")
     real_user_id = target_user.id
@@ -1136,7 +1351,7 @@ def follow_user(user_id: str, current_user: User = Depends(get_current_user), se
     return {"ok": True}
 
 @app.delete("/users/{user_id}/follow")
-def unfollow_user(user_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def unfollow_user(user_id: str, current_user: User = Depends(PermissionChecker("social:interaction")), session: Session = Depends(get_session)):
     target_user = get_user_by_id_or_username(user_id, session)
     if not target_user: raise HTTPException(status_code=404, detail="User not found")
     real_user_id = target_user.id
@@ -1172,7 +1387,12 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
 @app.post("/users/register", response_model=UserRead)
 def register_user(user: UserCreate, session: Session = Depends(get_session)):
     if session.exec(select(User).where(User.username == user.username)).first(): raise HTTPException(status_code=400)
-    new_user = User(username=user.username, email=user.email, hashed_password=get_password_hash(user.password))
+
+    # Assign default role
+    default_role = session.exec(select(Role).where(Role.name == "Standard User")).first()
+    role_id = default_role.id if default_role else None
+
+    new_user = User(username=user.username, email=user.email, hashed_password=get_password_hash(user.password), role_id=role_id)
     session.add(new_user); session.commit(); session.refresh(new_user)
     return new_user
 

@@ -14,9 +14,42 @@ class User(SQLModel, table=True):
     bio: Optional[str] = None
     is_active: bool = Field(default=True)
     is_admin: bool = Field(default=False) # 新增管理员字段
+    role_id: Optional[int] = Field(default=None, foreign_key="roles.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     videos: List["Video"] = Relationship(back_populates="owner")
     collections: List["Collection"] = Relationship(back_populates="owner")
+    role: Optional["Role"] = Relationship(back_populates="users")
+
+# Role
+class Role(SQLModel, table=True):
+    __tablename__ = "roles"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+    description: Optional[str] = None
+    permissions: str = Field(default="") # Comma separated list of permissions
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    users: List["User"] = Relationship(back_populates="role")
+
+# System Configuration
+class SystemConfig(SQLModel, table=True):
+    __tablename__ = "system_config"
+    key: str = Field(primary_key=True)
+    value: str
+    description: Optional[str] = None
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Admin Audit Log
+class AdminLog(SQLModel, table=True):
+    __tablename__ = "admin_logs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    admin_id: UUID = Field(foreign_key="users.id")
+    action: str
+    target_id: Optional[str] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    admin: User = Relationship()
 
 # Category
 class Category(SQLModel, table=True):
@@ -290,4 +323,46 @@ class CollectionRead(SQLModel):
     is_favorited: bool = False
     owner: Optional[UserRead] = None
     first_video_id: Optional[UUID] = None # Added for frontend navigation
+
+# RBAC Schemas
+class RoleBase(SQLModel):
+    name: str
+    description: Optional[str] = None
+    permissions: str = ""
+
+class RoleCreate(RoleBase):
+    pass
+
+class RoleRead(RoleBase):
+    id: int
+    created_at: datetime
+    user_count: int = 0 # Computed field
+
+class RoleUpdate(SQLModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[str] = None
+
+# System Config Schemas
+class SystemConfigRead(SQLModel):
+    key: str
+    value: str
+    description: Optional[str] = None
+    updated_at: datetime
+
+class SystemConfigUpdate(SQLModel):
+    value: str
+    description: Optional[str] = None
+
+# Admin Log Schemas
+class AdminLogRead(SQLModel):
+    id: int
+    admin_id: UUID
+    admin_username: Optional[str] = None # Computed
+    action: str
+    target_id: Optional[str] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    created_at: datetime
+
 
