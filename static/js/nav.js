@@ -8,6 +8,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     link.href = "/static/css/style.css";
     document.head.appendChild(link);
 
+    // Add inline styles for menu items hover effect
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .menu-item:hover { background-color: #f4f5f7; color: #00a1d6 !important; }
+    `;
+    document.head.appendChild(style);
+
     // 渲染 HTML 骨架
     const header = document.createElement("header");
     header.className = "global-header";
@@ -60,8 +67,19 @@ async function checkNavUser() {
                     '<svg width="24" height="24" viewBox="0 0 24 24" fill="#666"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>' +
                     '<div id="nav-badge" style="display:none; position:absolute; top:-6px; right:-6px; background:#fb7299; color:#fff; font-size:10px; padding:0 4px; border-radius:10px; height:16px; line-height:16px; min-width:16px; text-align:center;">0</div>' +
                 '</div>' +
-                '<img src="' + avatar + '" class="user-avatar" title="点击进入设置" onclick="location.href=\'/static/settings.html\'" style="margin-left:16px;">' +
-                '<a href="#" onclick="logout()" style="font-size:12px; color:#999; margin-left:12px; text-decoration:none;">退出</a>';
+
+                // User Menu Dropdown
+                '<div style="display:inline-block; position:relative; margin-left:16px; vertical-align:middle;" onmouseenter="showUserMenu(this)" onmouseleave="hideUserMenu(this)">' +
+                    '<img src="' + avatar + '" class="user-avatar" style="cursor:pointer;">' +
+                    '<div class="user-menu-dropdown" style="display:none; position:absolute; top:100%; right:0; width:150px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15); border-radius:4px; z-index:1000; padding:8px 0; text-align:left;">' +
+                        '<div style="padding:10px 16px; font-weight:bold; border-bottom:1px solid #eee; margin-bottom:5px;">' + user.username + '</div>' +
+                        '<a href="/static/profile.html?id=' + user.username + '" class="menu-item" style="display:block; padding:8px 16px; color:#333; text-decoration:none; font-size:14px;">个人主页</a>' +
+                        '<a href="/static/settings.html" class="menu-item" style="display:block; padding:8px 16px; color:#333; text-decoration:none; font-size:14px;">设置</a>' +
+                        '<div style="border-top:1px solid #eee; margin:5px 0;"></div>' +
+                        '<a href="#" onclick="logout()" class="menu-item" style="display:block; padding:8px 16px; color:#f04c49; text-decoration:none; font-size:14px;">退出登录</a>' +
+                    '</div>' +
+                '</div>';
+
 
             pollNotifications(token);
         } else {
@@ -108,6 +126,14 @@ function showHistory(el) {
 
 function hideHistory(el) {
     el.querySelector('.history-dropdown').style.display = 'none';
+}
+
+function showUserMenu(el) {
+    el.querySelector('.user-menu-dropdown').style.display = 'block';
+}
+
+function hideUserMenu(el) {
+    el.querySelector('.user-menu-dropdown').style.display = 'none';
 }
 
 async function loadNavHistory(container) {

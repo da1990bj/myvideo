@@ -65,10 +65,19 @@
         <div class="tabs">
             <div class="tab active" onclick="switchTab('videos')" id="tab-videos">投稿视频</div>
             <div class="tab" onclick="switchTab('collections')" id="tab-collections">合集列表</div>
+            <div class="tab" onclick="switchTab('liked')" id="tab-liked" style="display:none;">喜欢的视频</div>
+            <div class="tab" onclick="switchTab('favorites')" id="tab-favorites" style="display:none;">收藏</div>
         </div>
 
         <div id="video-list" class="video-grid"></div>
         <div id="collection-list" class="video-grid" style="display:none;"></div>
+        <div id="liked-list" class="video-grid" style="display:none;"></div>
+        <div id="favorites-list" style="display:none;">
+            <h3 style="margin:0 0 10px; font-size:16px;">收藏的合集</h3>
+            <div id="fav-col-list" class="video-grid" style="margin-bottom:30px;"></div>
+            <h3 style="margin:0 0 10px; font-size:16px;">收藏的视频</h3>
+            <div id="fav-vid-list" class="video-grid"></div>
+        </div>
     </div>
 </div>
 
@@ -86,15 +95,30 @@
     });
 
     function switchTab(tab) {
-        document.getElementById("tab-videos").className = tab === 'videos' ? 'tab active' : 'tab';
-        document.getElementById("tab-collections").className = tab === 'collections' ? 'tab active' : 'tab';
+        const idMap = {
+            'videos': 'video-list',
+            'collections': 'collection-list',
+            'liked': 'liked-list',
+            'favorites': 'favorites-list'
+        };
 
-        document.getElementById("video-list").style.display = tab === 'videos' ? 'grid' : 'none';
-        document.getElementById("collection-list").style.display = tab === 'collections' ? 'grid' : 'none';
+        // Reset all
+        Object.keys(idMap).forEach(t => {
+            const el = document.getElementById("tab-" + t);
+            if(el) el.className = 'tab';
+            const list = document.getElementById(idMap[t]);
+            if(list) list.style.display = 'none';
+        });
 
-        if (tab === 'collections') {
-            loadCollections();
+        document.getElementById("tab-" + tab).className = 'tab active';
+        const activeList = document.getElementById(idMap[tab]);
+        if (activeList) {
+            activeList.style.display = tab === 'favorites' ? 'block' : 'grid';
         }
+
+        if (tab === 'collections') loadCollections();
+        if (tab === 'liked') loadLikedVideos();
+        if (tab === 'favorites') loadFavorites();
     }
 
     async function loadPublicVideos() {
@@ -186,11 +210,81 @@
                 const btn = document.getElementById("follow-btn");
                 if (data.is_self) {
                     btn.style.display = "none";
+                    // Show private tabs
+                    document.getElementById("tab-liked").style.display = "block";
+                    document.getElementById("tab-favorites").style.display = "block";
                 } else {
                     renderFollowBtn();
                 }
             }
         } catch(e) { console.error(e); }
+    }
+
+    async function loadLikedVideos() {
+        const container = document.getElementById("liked-list");
+        if(container.children.length > 0) return;
+        try {
+            const res = await fetch(`/users/me/liked/videos`, { headers: { "Authorization": "Bearer " + token } });
+            if(res.ok) {
+                const videos = await res.json();
+                renderVideoList(container, videos, "暂无喜欢的视频");
+            }
+        } catch(e) {}
+    }
+
+    async function loadFavorites() {
+        const vidContainer = document.getElementById("fav-vid-list");
+        const colContainer = document.getElementById("fav-col-list");
+        if(vidContainer.children.length > 0) return;
+
+        try {
+            // Videos
+            const resV = await fetch(`/users/me/favorites/videos`, { headers: { "Authorization": "Bearer " + token } });
+            if(resV.ok) {
+                renderVideoList(vidContainer, await resV.json(), "暂无收藏视频");
+            }
+            // Collections
+            const resC = await fetch(`/users/me/favorites/collections`, { headers: { "Authorization": "Bearer " + token } });
+            if(resC.ok) {
+                const cols = await resC.json();
+                if(cols.length === 0) colContainer.innerHTML = "<p style='color:#999; text-align:center;'>暂无收藏合集</p>";
+                else {
+                    let html = "";
+                    cols.forEach(c => {
+                       const clickAction = c.first_video_id
+                            ? `location.href='/static/video.html?id=${c.first_video_id}&collection_id=${c.id}'`
+                            : `alert('该合集暂无视频')`;
+                       let coverHtml = '<div class="col-cover">💿</div>';
+                       if (c.cover_image) coverHtml = `<img src="${c.cover_image}" class="col-cover" style="object-fit:cover; width:100%;">`;
+
+                       html += `<div class="collection-card" onclick="${clickAction}">
+                            ${coverHtml}
+                            <div class="col-count-badge">${c.video_count}个视频</div>
+                            <div class="col-info">
+                                <div class="title" style="height:auto; margin-bottom:4px;">${c.title}</div>
+                                <div style="font-size:12px; color:#999;">${c.owner.username}</div>
+                            </div>
+                        </div>`;
+                    });
+                    colContainer.innerHTML = html;
+                }
+            }
+        } catch(e) {}
+    }
+
+    function renderVideoList(container, videos, emptyText) {
+        if (videos.length === 0) return container.innerHTML = `<p style='color:#999; grid-column:1/-1; text-align:center;'>${emptyText}</p>`;
+        let html = "";
+        videos.forEach(v => {
+            html += `
+                <div class="video-card" onclick="location.href='/static/video.html?id=${v.id}'">
+                    <img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb">
+                    <div class="title">${v.title}</div>
+                    <div style="padding:0 10px 10px; font-size:12px; color:#999;">${v.views}播放 · ${timeSince(new Date(v.created_at))}</div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
     }
 
     function renderFollowBtn() {

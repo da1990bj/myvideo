@@ -7,6 +7,14 @@
         body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
         .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         h1 { margin-top: 0; color: #333; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Stats Dashboard */
+        .stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #eee; text-align: center; }
+        .stat-card h3 { margin: 0 0 10px; font-size: 14px; color: #666; font-weight: normal; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #333; }
+        .stat-card .icon { font-size: 24px; margin-bottom: 5px; display: block; }
+
         .upload-btn { background: #fb7299; color: #fff; text-decoration: none; padding: 8px 20px; border-radius: 4px; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
@@ -40,6 +48,24 @@
 <script src="/static/js/nav.js"></script>
 
 <div class="container">
+    <div class="stats-overview">
+        <div class="stat-card">
+            <span class="icon">📺</span>
+            <h3>总播放量</h3>
+            <div class="value" id="total-views">...</div>
+        </div>
+        <div class="stat-card">
+            <span class="icon">👍</span>
+            <h3>获赞总数</h3>
+            <div class="value" id="total-likes">...</div>
+        </div>
+        <div class="stat-card">
+            <span class="icon">⭐</span>
+            <h3>获藏总数</h3>
+            <div class="value" id="total-favs">...</div>
+        </div>
+    </div>
+
     <h1 style="display:flex; justify-content:space-between; align-items:center;">
         <span>内容管理 <span id="refresh-hint" class="refresh-indicator">自动刷新中...</span></span>
         <div style="display:flex; gap:10px;">
@@ -175,11 +201,27 @@
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
 
+        loadStats(); // Add stats loading
         await loadCategories();
         loadMyVideos();
         // refreshTimer = setInterval(loadMyVideos, 3000); // Only auto-refresh videos for now
         initTagInput();
     });
+
+    async function loadStats() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/users/me/stats", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("total-views").innerText = data.total_views;
+                document.getElementById("total-likes").innerText = data.total_likes;
+                document.getElementById("total-favs").innerText = data.total_favorites;
+            }
+        } catch(e) { console.error(e); }
+    }
 
     function switchTab(tab) {
         currentTab = tab;

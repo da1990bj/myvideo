@@ -85,6 +85,12 @@
         .reply-input-box { margin-top: 8px; display: none; margin-bottom: 16px;}
 
         .deleted-text { font-style: italic; color: #606060; background: #f9f9f9; padding: 4px 8px; border-radius: 4px; display: inline-block;}
+
+        .action-btn { background: #f2f2f2; border: none; padding: 6px 12px; border-radius: 18px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+        .action-btn:hover { background: #e5e5e5; }
+        .action-btn.active { background: #0f0f0f; color: #fff; }
+        .action-btn svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; fill: none; transition: 0.2s; }
+        .action-btn.active svg { fill: currentColor; }
     </style>
 </head>
 <body>
@@ -111,9 +117,19 @@
         </div>
 
         <div class="description-box">
-            <div class="video-meta">
-                <span id="views" style="color:#0f0f0f; font-weight:500;">0次观看</span>
-                <span id="date"></span>
+            <div class="video-meta" style="justify-content: space-between;">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <span id="views" style="color:#0f0f0f; font-weight:500;">0次观看</span>
+                    <span id="date"></span>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="like-btn" class="action-btn" onclick="toggleLike()">
+                        <span id="like-icon"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></span> <span id="like-count">0</span>
+                    </button>
+                    <button id="fav-btn" class="action-btn" onclick="toggleFavorite()">
+                        <span id="fav-icon"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span> <span id="fav-text">收藏</span>
+                    </button>
+                </div>
             </div>
             <div id="description"></div>
         </div>
@@ -162,10 +178,14 @@
     let currentAuthorId = null;
     let isFollowing = false;
     let currentUser = null;
+    let isLiked = false;
+    let isFavorited = false;
+    let currentVideoId = null;
 
     document.addEventListener("DOMContentLoaded", async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const videoId = urlParams.get('id');
+        currentVideoId = videoId;
         const collectionId = urlParams.get('collection_id');
 
         if (!videoId) return location.href = "/static/index.html";
@@ -227,14 +247,26 @@
     }
 
     async function loadPlaylist(colId, currentVideoId) {
+        const token = localStorage.getItem("access_token");
         try {
-            const res = await fetch(`/collections/${colId}`);
+            const headers = token ? { "Authorization": "Bearer " + token } : {};
+            const res = await fetch(`/collections/${colId}`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 const container = document.getElementById("playlist-container");
                 container.style.display = "block";
 
-                document.getElementById("pl-title").innerText = data.collection.title;
+                const isColFav = data.collection.is_favorited;
+                const favIconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${isColFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                const favBtnText = isColFav ? "已收藏" : "收藏合集";
+                const favBtnStyle = isColFav ? "color:#f08c00; font-weight:bold;" : "color:#666;";
+
+                document.getElementById("pl-title").innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                        <span>${data.collection.title}</span>
+                        <button onclick="toggleCollectionFavorite('${colId}', this)" style="border:none; background:none; cursor:pointer; font-size:12px; display:flex; align-items:center; ${favBtnStyle}">${favIconSvg}${favBtnText}</button>
+                    </div>
+                `;
                 document.getElementById("pl-total").innerText = data.videos.length;
 
                 const list = document.getElementById("pl-list");
@@ -264,6 +296,37 @@
                 if (activeItem) {
                     activeItem.scrollIntoView({ block: 'center', behavior: 'smooth' });
                 }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function toggleCollectionFavorite(colId, btn) {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        // Optimistic toggle
+        const isFav = btn.innerText.includes("已收藏");
+        const newIsFav = !isFav;
+
+        const iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${newIsFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+
+        btn.innerHTML = `${iconSvg}${newIsFav ? "已收藏" : "收藏合集"}`;
+        btn.style.color = newIsFav ? "#f08c00" : "#666";
+        btn.style.fontWeight = newIsFav ? "bold" : "normal";
+
+        try {
+            const res = await fetch(`/collections/${colId}/favorite`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (!res.ok) {
+                // Revert
+                const revertFav = !newIsFav;
+                const revertSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${revertFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                btn.innerHTML = `${revertSvg}${revertFav ? "已收藏" : "收藏合集"}`;
+                btn.style.color = revertFav ? "#f08c00" : "#666";
+                btn.style.fontWeight = revertFav ? "bold" : "normal";
+                alert("操作失败");
             }
         } catch(e) { console.error(e); }
     }
@@ -588,6 +651,12 @@
                 document.getElementById("date").innerText = new Date(video.created_at).toLocaleDateString(); // Simple date
                 document.getElementById("description").innerText = video.description || "";
 
+                // Update Like/Fav UI
+                document.getElementById("like-count").innerText = video.like_count;
+                isLiked = video.is_liked;
+                isFavorited = video.is_favorited;
+                updateActionButtons();
+
                 if (video.owner) {
                     currentAuthorId = video.owner.id;
                     document.getElementById("author-name").innerText = video.owner.username;
@@ -690,6 +759,77 @@
                 l.appendChild(d);
             });
         }
+    }
+
+    function updateActionButtons() {
+        const likeBtn = document.getElementById("like-btn");
+        const favBtn = document.getElementById("fav-btn");
+
+        if (isLiked) {
+            likeBtn.classList.add("active");
+        } else {
+            likeBtn.classList.remove("active");
+        }
+
+        if (isFavorited) {
+            favBtn.classList.add("active");
+            document.getElementById("fav-text").innerText = "已收藏";
+        } else {
+            favBtn.classList.remove("active");
+            document.getElementById("fav-text").innerText = "收藏";
+        }
+    }
+
+    async function toggleLike() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        // Optimistic update
+        isLiked = !isLiked;
+        let count = parseInt(document.getElementById("like-count").innerText);
+        count = isLiked ? count + 1 : count - 1;
+        document.getElementById("like-count").innerText = count;
+        updateActionButtons();
+
+        const method = isLiked ? "POST" : "DELETE"; // Logic handled by backend if post same type toggles? No backend handles POST toggle but DELETE is explicit
+        // Backend: POST like -> if exists and same type -> delete. So just POST is enough for toggle if backend supports it.
+        // My backend logic: POST like -> if like exists -> delete.
+        // So I should always use POST like.
+
+        try {
+            const res = await fetch(`/videos/${currentVideoId}/like?like_type=like`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                // Sync actual count
+                document.getElementById("like-count").innerText = data.like_count;
+                // isLiked is already updated by optimistic but verifying status
+                isLiked = data.status === "liked";
+                updateActionButtons();
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function toggleFavorite() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        isFavorited = !isFavorited;
+        updateActionButtons();
+
+        try {
+            const res = await fetch(`/videos/${currentVideoId}/favorite`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                isFavorited = data.status === "favorited";
+                updateActionButtons();
+            }
+        } catch(e) { console.error(e); }
     }
 </script>
 </body>

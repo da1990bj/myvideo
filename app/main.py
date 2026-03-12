@@ -33,7 +33,7 @@ def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, t
     # Don't commit here, let caller commit
 
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead
+from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead, VideoFavorite, CollectionFavorite
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
@@ -173,12 +173,25 @@ def get_videos(session: Session = Depends(get_session), page: int = Query(1, ge=
     return session.exec(statement.offset(offset).limit(size)).all()
 
 @app.get("/videos/{video_id}", response_model=VideoRead)
-def read_video(video_id: str, session: Session = Depends(get_session)):
+def read_video(
+    video_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    session: Session = Depends(get_session)
+):
     video = session.get(Video, video_id)
     if not video: raise HTTPException(status_code=404, detail="Video not found")
 
     # Convert to Read model first to avoid modifying ORM object
     video_read = VideoRead.from_orm(video)
+
+    if current_user:
+        # Check liked
+        like = session.exec(select(VideoLike).where(VideoLike.user_id == current_user.id, VideoLike.video_id == video_id, VideoLike.like_type == 'like')).first()
+        video_read.is_liked = like is not None
+
+        # Check favorited
+        fav = session.exec(select(VideoFavorite).where(VideoFavorite.user_id == current_user.id, VideoFavorite.video_id == video_id)).first()
+        video_read.is_favorited = fav is not None
 
     # Check if video belongs to any collection (take the first one found)
     collection_item = session.exec(select(CollectionItem).where(CollectionItem.video_id == video_id)).first()
@@ -673,24 +686,37 @@ async def like_video(
         if existing_like.like_type == like_type:
             # 已经点过赞/踩，再次点击表示取消
             session.delete(existing_like)
+            if like_type == 'like':
+                video.like_count = max(0, video.like_count - 1)
+                session.add(video)
             session.commit()
-            return {"status": "unliked", "like_type": like_type}
+            return {"status": "unliked", "like_type": like_type, "like_count": video.like_count}
         else:
             # 改变点赞/踩类型
+            # 如果是从 dislike 变 like，like_count + 1
+            # 如果是从 like 变 dislike，like_count - 1
+            if existing_like.like_type == 'dislike' and like_type == 'like':
+                video.like_count += 1
+            elif existing_like.like_type == 'like' and like_type == 'dislike':
+                video.like_count = max(0, video.like_count - 1)
+
             existing_like.like_type = like_type
             session.add(existing_like)
+            session.add(video)
             session.commit()
             session.refresh(existing_like)
-            return {"status": "changed", "like_type": like_type}
+            return {"status": "changed", "like_type": like_type, "like_count": video.like_count}
     else:
         # 新增点赞或踩
         new_like = VideoLike(user_id=current_user.id, video_id=video_id, like_type=like_type)
         session.add(new_like)
         if like_type == "like":
+            video.like_count += 1
+            session.add(video)
             create_notification(session, current_user.id, video.user_id, "like_video", str(video_id), f"赞了你的视频: {video.title}")
         session.commit()
         session.refresh(new_like)
-        return {"status": "liked", "like_type": like_type}
+        return {"status": "liked", "like_type": like_type, "like_count": video.like_count}
 
 @app.delete("/videos/{video_id}/like")
 async def unlike_video(
@@ -709,8 +735,11 @@ async def unlike_video(
 
     if existing_like:
         session.delete(existing_like)
+        if existing_like.like_type == 'like':
+            video.like_count = max(0, video.like_count - 1)
+            session.add(video)
         session.commit()
-        return {"status": "unliked", "like_type": existing_like.like_type}
+        return {"status": "unliked", "like_type": existing_like.like_type, "like_count": video.like_count}
     else:
         raise HTTPException(status_code=404, detail="Not liked or disliked by user")
 
@@ -718,6 +747,103 @@ async def unlike_video(
 def get_categories(session: Session = Depends(get_session)):
     return session.exec(select(Category)).all()
 
+# --- Favorites ---
+
+@app.post("/videos/{video_id}/favorite")
+def favorite_video(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    video = session.get(Video, video_id)
+    if not video: raise HTTPException(status_code=404)
+
+    existing = session.exec(select(VideoFavorite).where(VideoFavorite.user_id == current_user.id, VideoFavorite.video_id == video_id)).first()
+    if existing:
+        # Cancel favorite
+        session.delete(existing)
+        video.favorite_count = max(0, video.favorite_count - 1)
+        status = "unfavorited"
+    else:
+        # Add favorite
+        fav = VideoFavorite(user_id=current_user.id, video_id=video_id)
+        session.add(fav)
+        video.favorite_count += 1
+        status = "favorited"
+
+    session.add(video)
+    session.commit()
+    return {"status": status, "favorite_count": video.favorite_count}
+
+@app.post("/collections/{collection_id}/favorite")
+def favorite_collection(
+    collection_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    col = session.get(Collection, collection_id)
+    if not col: raise HTTPException(status_code=404)
+
+    existing = session.exec(select(CollectionFavorite).where(CollectionFavorite.user_id == current_user.id, CollectionFavorite.collection_id == collection_id)).first()
+    if existing:
+        session.delete(existing)
+        col.favorite_count = max(0, col.favorite_count - 1)
+        status = "unfavorited"
+    else:
+        fav = CollectionFavorite(user_id=current_user.id, collection_id=collection_id)
+        session.add(fav)
+        col.favorite_count += 1
+        status = "favorited"
+
+    session.add(col)
+    session.commit()
+    return {"status": status, "favorite_count": col.favorite_count}
+
+@app.get("/users/me/favorites/videos", response_model=List[VideoRead])
+def get_my_favorite_videos(
+    page: int = 1, size: int = 20,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    stmt = select(Video).join(VideoFavorite).where(VideoFavorite.user_id == current_user.id).order_by(desc(VideoFavorite.created_at))
+    return session.exec(stmt.offset((page-1)*size).limit(size)).all()
+
+@app.get("/users/me/favorites/collections", response_model=List[CollectionRead])
+def get_my_favorite_collections(
+    page: int = 1, size: int = 20,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    stmt = select(Collection).join(CollectionFavorite).where(CollectionFavorite.user_id == current_user.id).order_by(desc(CollectionFavorite.created_at))
+    collections = session.exec(stmt.offset((page-1)*size).limit(size)).all()
+
+    # Reuse enrichment logic
+    result = []
+    for c in collections:
+        video_count = session.exec(select(func.count()).select_from(CollectionItem).where(CollectionItem.collection_id == c.id)).one()
+        c_read = CollectionRead.from_orm(c)
+        c_read.video_count = video_count
+        c_read.owner = session.get(User, c.user_id)
+        c_read.is_favorited = True # Since we queried favorites table
+
+        first_item = session.exec(select(CollectionItem).where(CollectionItem.collection_id == c.id).order_by(CollectionItem.order).limit(1)).first()
+        if first_item:
+            c_read.first_video_id = first_item.video_id
+            if not c_read.cover_image:
+                first_video = session.get(Video, first_item.video_id)
+                if first_video and first_video.thumbnail_path:
+                    c_read.cover_image = first_video.thumbnail_path
+        result.append(c_read)
+    return result
+
+@app.get("/users/me/liked/videos", response_model=List[VideoRead])
+def get_my_liked_videos(
+    page: int = 1, size: int = 20,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    stmt = select(Video).join(VideoLike).where(VideoLike.user_id == current_user.id, VideoLike.like_type == 'like').order_by(desc(VideoLike.created_at))
+    return session.exec(stmt.offset((page-1)*size).limit(size)).all()
 
 # --- Collections ---
 
@@ -741,6 +867,7 @@ def create_collection(
 def get_collections(
     user_id: Optional[str] = Query(None),
     page: int = 1, size: int = 20,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     session: Session = Depends(get_session)
 ):
     stmt = select(Collection)
@@ -760,6 +887,10 @@ def get_collections(
         c_read.video_count = video_count
         c_read.owner = session.get(User, c.user_id)
 
+        if current_user:
+            fav = session.exec(select(CollectionFavorite).where(CollectionFavorite.user_id == current_user.id, CollectionFavorite.collection_id == c.id)).first()
+            c_read.is_favorited = fav is not None
+
         # Get first video ID
         first_item = session.exec(select(CollectionItem).where(CollectionItem.collection_id == c.id).order_by(CollectionItem.order).limit(1)).first()
         if first_item:
@@ -776,6 +907,7 @@ def get_collections(
 @app.get("/collections/{collection_id}")
 def get_collection_details(
     collection_id: UUID,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     session: Session = Depends(get_session)
 ):
     collection = session.get(Collection, collection_id)
@@ -795,6 +927,10 @@ def get_collection_details(
     c_read = CollectionRead.from_orm(collection)
     c_read.video_count = len(videos)
     c_read.owner = session.get(User, collection.user_id)
+
+    if current_user:
+        fav = session.exec(select(CollectionFavorite).where(CollectionFavorite.user_id == current_user.id, CollectionFavorite.collection_id == collection_id)).first()
+        c_read.is_favorited = fav is not None
 
     return {
         "collection": c_read,
@@ -1111,6 +1247,26 @@ def get_user_public_videos(
     if not target_user: raise HTTPException(status_code=404, detail="User not found")
 
     return session.exec(select(Video).where(Video.user_id == target_user.id, Video.status.in_(["completed", "approved"]), Video.visibility == "public").order_by(desc(Video.created_at))).all()
+
+@app.get("/users/me/stats")
+def get_my_creator_stats(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    # Total Likes (sum of like_count of my videos)
+    total_likes = session.exec(select(func.sum(Video.like_count)).where(Video.user_id == current_user.id)).one() or 0
+    # Total Favorites (sum of favorite_count of my videos)
+    total_video_favs = session.exec(select(func.sum(Video.favorite_count)).where(Video.user_id == current_user.id)).one() or 0
+    # Total Collection Favs (sum of favorite_count of my collections)
+    total_col_favs = session.exec(select(func.sum(Collection.favorite_count)).where(Collection.user_id == current_user.id)).one() or 0
+    # Total Views
+    total_views = session.exec(select(func.sum(Video.views)).where(Video.user_id == current_user.id)).one() or 0
+
+    return {
+        "total_likes": total_likes,
+        "total_favorites": total_video_favs + total_col_favs,
+        "total_views": total_views
+    }
 
 @app.get("/")
 def read_root(): return {"message": "MyVideo API is running!"}

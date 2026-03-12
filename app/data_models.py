@@ -61,6 +61,8 @@ class Video(SQLModel, table=True):
     task_id: Optional[str] = None
     views: int = Field(default=0)
     complete_views: int = Field(default=0)
+    like_count: int = Field(default=0)
+    favorite_count: int = Field(default=0)
     progress: int = Field(default=0)
     duration: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -175,6 +177,7 @@ class Collection(SQLModel, table=True):
     title: str = Field(index=True)
     description: Optional[str] = None
     cover_image: Optional[str] = None
+    favorite_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     user_id: UUID = Field(foreign_key="users.id")
@@ -192,6 +195,20 @@ class CollectionItem(SQLModel, table=True):
 
     collection: Collection = Relationship(back_populates="items")
     video: Video = Relationship()
+
+# 视频收藏
+class VideoFavorite(SQLModel, table=True):
+    __tablename__ = "video_favorites"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# 合集收藏
+class CollectionFavorite(SQLModel, table=True):
+    __tablename__ = "collection_favorites"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    collection_id: UUID = Field(foreign_key="collections.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Schemas
 class UserCreate(SQLModel):
@@ -247,7 +264,11 @@ class VideoRead(SQLModel):
     duration: Optional[int]
     views: int
     complete_views: int
+    like_count: int = 0
+    favorite_count: int = 0
     progress: int = 0
+    is_liked: bool = False
+    is_favorited: bool = False
     created_at: datetime
     tags: List[str] = []
     owner: Optional[UserRead] = None
@@ -265,6 +286,8 @@ class CollectionRead(SQLModel):
     cover_image: Optional[str]
     created_at: datetime
     video_count: int = 0
+    favorite_count: int = 0
+    is_favorited: bool = False
     owner: Optional[UserRead] = None
     first_video_id: Optional[UUID] = None # Added for frontend navigation
 
