@@ -221,7 +221,11 @@
 
             socket.on('connect', () => {
                 console.log('✅ WebSocket connected (dashboard):', socket.id);
-                loadMyVideos(true);
+                // 停止轮询
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
+                }
             });
 
             socket.on('transcode_progress', (data) => {
@@ -230,8 +234,9 @@
 
             socket.on('disconnect', (reason) => {
                 console.log('WebSocket disconnected (dashboard):', reason);
+                // 启用轮询作为降级
                 if (!refreshTimer) {
-                    refreshTimer = setInterval(loadMyVideos, 5000);
+                    refreshTimer = setInterval(() => loadMyVideos(true), 5000);
                 }
             });
 
@@ -239,10 +244,15 @@
                 console.error('WebSocket error:', error);
             });
 
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connect_error:', error);
+            });
+
         } catch (e) {
             console.error('Failed to initialize WebSocket:', e);
+            // Fallback: 启用轮询
             if (!refreshTimer) {
-                refreshTimer = setInterval(loadMyVideos, 5000);
+                refreshTimer = setInterval(() => loadMyVideos(true), 5000);
             }
         }
     }
@@ -281,9 +291,9 @@
         // 初始化 WebSocket 连接
         initWebSocket();
 
-        loadStats(); // Add stats loading
+        loadStats();
         await loadCategories();
-        loadMyVideos();
+        loadMyVideos(true);  // 初始加载，不显示轮询提示
         initTagInput();
     });
 
@@ -451,35 +461,41 @@
         } catch(e) {}
     }
 
-    async function loadMyVideos(fromWebSocket = false) {
+    async function loadMyVideos(skipPolling = false) {
         const token = localStorage.getItem("access_token");
         try {
-            document.getElementById("refresh-hint").classList.add("show");
+            // 只在手动刷新或轮询时显示提示
+            if (!skipPolling) {
+                document.getElementById("refresh-hint").classList.add("show");
+            }
+
             const res = await fetch("/users/me/videos", {
                 headers: { "Authorization": "Bearer " + token }
             });
-            setTimeout(() => document.getElementById("refresh-hint").classList.remove("show"), 500);
+
+            if (!skipPolling) {
+                setTimeout(() => document.getElementById("refresh-hint").classList.remove("show"), 500);
+            }
 
             if (res.ok) {
                 const videos = await res.json();
                 renderTable(videos);
 
-                // 智能轮询管理
-                if (socket && socket.connected) {
-                    // WebSocket已连接，停止轮询
-                    if (refreshTimer) {
+                // 仅在WebSocket未连接时启用轮询
+                if (!socket || !socket.connected) {
+                    const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
+                    if (hasProcessing && !refreshTimer) {
+                        // 有处理中的视频且没有定时器，启动轮询
+                        refreshTimer = setInterval(() => loadMyVideos(true), 5000);
+                    } else if (!hasProcessing && refreshTimer) {
+                        // 没有处理中的视频，停止轮询
                         clearInterval(refreshTimer);
                         refreshTimer = null;
                     }
-                } else {
-                    // WebSocket未连接，需要轮询
-                    const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
-                    if (!hasProcessing && refreshTimer) {
-                        clearInterval(refreshTimer);
-                        refreshTimer = setInterval(loadMyVideos, 10000);
-                    } else if (hasProcessing && !refreshTimer) {
-                        refreshTimer = setInterval(loadMyVideos, 3000);
-                    }
+                } else if (refreshTimer) {
+                    // WebSocket已连接，停止轮询
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
                 }
             }
         } catch (e) { console.error(e); }

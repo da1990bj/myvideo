@@ -112,7 +112,7 @@ async def connect(sid, environ, auth):
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
             if username is None:
-                raise ConnectionRefusedError('Invalid token')
+                raise ConnectionRefusedError('Invalid token: no username')
 
             # 从数据库获取用户
             with Session(engine) as session:
@@ -122,15 +122,18 @@ async def connect(sid, environ, auth):
 
                 # 建立连接
                 conn_info = await manager.connect(str(user.id), sid)
-                logger.info(f"User {user.username} ({user.id}) connected to WebSocket: {conn_info}")
+                logger.info(f"✅ WebSocket connected: User {user.username} ({user.id}), SID: {sid}")
 
         except JWTError as e:
-            logger.warning(f"Invalid JWT token in WebSocket connect (SID: {sid}): {e}")
-            raise ConnectionRefusedError('Invalid JWT token')
+            logger.warning(f"JWT validation failed in WebSocket connect (SID: {sid}): {str(e)}")
+            raise ConnectionRefusedError(f'Invalid JWT token')
 
+    except ConnectionRefusedError as e:
+        logger.warning(f"WebSocket connection refused (SID: {sid}): {str(e)}")
+        raise
     except Exception as e:
-        logger.error(f"Error in WebSocket connect handler: {e}")
-        raise ConnectionRefusedError(str(e))
+        logger.error(f"Unexpected error in WebSocket connect handler (SID: {sid}): {str(e)}")
+        raise ConnectionRefusedError(f'Connection error')
 
 
 @sio.event
