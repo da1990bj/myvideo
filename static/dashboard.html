@@ -207,21 +207,6 @@
     function initWebSocket() {
         const token = localStorage.getItem("access_token");
 
-        // 根据当前主机名决定连接URL
-        // 本地开发：直接连接到uvicorn:8000
-        // 生产环境：通过代理连接到 /socket.io
-        const hostname = window.location.hostname;
-        let socketUrl;
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            // 开发环境：直连uvicorn端口8000
-            socketUrl = `http://localhost:8000`;
-            console.log('Connecting to Socket.IO via direct port: ' + socketUrl);
-        } else {
-            // 生产环境：通过代理
-            socketUrl = '/';
-            console.log('Connecting to Socket.IO via proxy');
-        }
-
         const socketOptions = {
             auth: { token: token },
             reconnection: true,
@@ -231,8 +216,10 @@
             transports: ['websocket', 'polling']
         };
 
+        console.log('Initializing WebSocket connection via Nginx proxy...');
+
         try {
-            socket = io(socketUrl, socketOptions);
+            socket = io('/', socketOptions);
 
             socket.on('connect', () => {
                 console.log('✅ WebSocket connected (dashboard):', socket.id);
