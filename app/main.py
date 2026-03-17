@@ -17,7 +17,6 @@ from datetime import datetime
 from utils import clean_tags
 
 # WebSocket support
-from python_socketio import AsyncServer
 from fastapi_socketio import SocketManager
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@
 
 # Configuration
 APP_DIR="/data/myvideo/app"
-PYTHON="/home/da/anaconda3/envs/myvideo/bin/python3.1"
+PYTHON="/home/da/anaconda3/envs/myvideo/bin/python3.10"
 UVICORN_BIN="/home/da/anaconda3/envs/myvideo/bin/uvicorn"
 LOG_FILE="/data/myvideo/server.log"
 PID_FILE="/data/myvideo/app.pid"
