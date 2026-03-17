@@ -17,7 +17,8 @@ from datetime import datetime
 from utils import clean_tags
 
 # WebSocket support
-from fastapi_socketio import SocketManager
+import socketio
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +51,24 @@ import psutil
 app = FastAPI(title="MyVideo Backend", version="2.0.0")
 app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
 
-# --- WebSocket 配置 ---
-# 使用 fastapi-socketio 进行 SocketIO 集成
-socketio_app = SocketManager(
-    app=app,
+# --- WebSocket 配置 (使用 python-socketio) ---
+sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins=["*"],  # 生产环境应指定具体域名
-    background_task_io='threading'
+    cors_allowed_origins='*',
+    ping_timeout=60,
+    ping_interval=25
+)
+
+# 将Socket.IO作为ASGI应用
+socketio_app = socketio.ASGIApp(sio, app)
+
+# 添加CORS支持
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -77,51 +89,52 @@ def on_startup():
 
 # --- WebSocket 事件处理 ---
 
-@socketio_app.on("connect")
-async def websocket_connect(sid, environ, auth):
+@sio.event
+async def connect(sid, environ, auth):
     """
     WebSocket 连接事件处理
     客户端连接时自动触发
 
-    auth 参数应包含有效的JWT token
+    auth 参数应包含有效的JWT token (通过auth dict传递)
     """
     try:
         # 提取并验证 JWT token
-        token = auth.get('token') if auth else None
+        token = None
+        if auth and isinstance(auth, dict):
+            token = auth.get('token')
 
         if not token:
             logger.warning(f"WebSocket connect attempt without token (SID: {sid})")
-            return False  # 拒绝连接
+            raise ConnectionRefusedError('No token provided')
 
         # 验证 token 和获取用户
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
             if username is None:
-                return False
+                raise ConnectionRefusedError('Invalid token')
 
             # 从数据库获取用户
             with Session(engine) as session:
                 user = session.exec(select(User).where(User.username == username)).first()
                 if not user:
-                    return False
+                    raise ConnectionRefusedError('User not found')
 
                 # 建立连接
                 conn_info = await manager.connect(str(user.id), sid)
                 logger.info(f"User {user.username} ({user.id}) connected to WebSocket: {conn_info}")
-                return True
 
-        except JWTError:
-            logger.warning(f"Invalid JWT token in WebSocket connect (SID: {sid})")
-            return False
+        except JWTError as e:
+            logger.warning(f"Invalid JWT token in WebSocket connect (SID: {sid}): {e}")
+            raise ConnectionRefusedError('Invalid JWT token')
 
     except Exception as e:
         logger.error(f"Error in WebSocket connect handler: {e}")
-        return False
+        raise ConnectionRefusedError(str(e))
 
 
-@socketio_app.on("disconnect")
-async def websocket_disconnect(sid):
+@sio.event
+async def disconnect(sid):
     """
     WebSocket 断开连接事件处理
     """
@@ -133,15 +146,15 @@ async def websocket_disconnect(sid):
         logger.error(f"Error in WebSocket disconnect handler: {e}")
 
 
-@socketio_app.on("ping")
-async def websocket_ping(sid):
+@sio.event
+async def ping(sid):
     """
     心跳检测 - 客户端定期发送ping保持连接
     """
     return {"pong": True}
 
 
-@socketio_app.on("get_connection_info")
+@sio.event
 async def get_connection_info(sid):
     """
     获取当前连接池的统计信息（用于监控）

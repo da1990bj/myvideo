@@ -70,13 +70,13 @@ class ConnectionManager:
                 return user_id
         return None
 
-    async def push_progress(self, socketio, user_id: str, video_id: str, progress: int, status: str = "processing"):
+    async def push_progress(self, sio, user_id: str, video_id: str, progress: int, status: str = "processing"):
         """
         推送转码进度给创作者
         实时将转码进度更新推送到客户端
 
         Args:
-            socketio: SocketIO实例（用于emit）
+            sio: Socket.IO AsyncServer实例
             user_id: 目标用户ID
             video_id: 视频ID
             progress: 进度百分比 (0-100)
@@ -96,7 +96,7 @@ class ConnectionManager:
                 self.user_videos[user_id].discard(video_id)
 
             # 推送事件到客户端
-            await socketio.emit(
+            await sio.emit(
                 'transcode_progress',
                 {
                     'video_id': str(video_id),
@@ -112,12 +112,12 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error pushing progress to user {user_id}: {e}")
 
-    async def push_batch_progress(self, socketio, user_id: str, videos_data: list):
+    async def push_batch_progress(self, sio, user_id: str, videos_data: list):
         """
         批量推送多个视频的进度（用于连接恢复）
 
         Args:
-            socketio: SocketIO实例
+            sio: Socket.IO AsyncServer实例
             user_id: 目标用户ID
             videos_data: 视频进度数据列表
                 [
@@ -130,7 +130,7 @@ class ConnectionManager:
 
         try:
             sid = self.active_connections[user_id]
-            await socketio.emit(
+            await sio.emit(
                 'transcode_progress_batch',
                 {'videos': videos_data},
                 room=sid

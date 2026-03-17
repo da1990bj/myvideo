@@ -82,7 +82,7 @@ def transcode_video_task(self, video_id: str):
             # 导入WebSocket管理器用于推送进度
             try:
                 from socketio_handler import manager
-                from main import socketio_app
+                from main import sio
                 websocket_available = True
             except (ImportError, RuntimeError) as e:
                 logger.warning(f"WebSocket not available: {e}")
@@ -101,7 +101,7 @@ def transcode_video_task(self, video_id: str):
                         asyncio.set_event_loop(loop)
                         loop.run_until_complete(
                             manager.push_progress(
-                                socketio=socketio_app.sio,
+                                sio=sio,
                                 user_id=str(video.user_id),
                                 video_id=video_id_str,
                                 progress=progress,
@@ -239,7 +239,7 @@ def transcode_video_task(self, video_id: str):
                     asyncio.set_event_loop(loop)
                     loop.run_until_complete(
                         manager.push_progress(
-                            socketio=socketio_app.sio,
+                            sio=sio,
                             user_id=str(video.user_id),
                             video_id=video_id,
                             progress=100,
@@ -261,7 +261,7 @@ def transcode_video_task(self, video_id: str):
                     asyncio.set_event_loop(loop)
                     loop.run_until_complete(
                         manager.push_progress(
-                            socketio=socketio_app.sio,
+                            sio=sio,
                             user_id=str(video.user_id),
                             video_id=video_id,
                             progress=0,

@@ -1,7 +1,11 @@
 // 统一导航栏渲染逻辑
 const NAV_API_BASE = "";
+let siteConfig = { site_name: "MyVideo" }; // 默认值
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // 先获取系统配置
+    await loadSiteConfig();
+
     // 动态加载 CSS
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -15,13 +19,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     `;
     document.head.appendChild(style);
 
-    // 渲染 HTML 骨架
+    // 渲染 HTML 骨架，使用动态站点名称
     const header = document.createElement("header");
     header.className = "global-header";
     header.innerHTML =
         '<a href="/static/index.html" class="logo">' +
         '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>' +
-        ' MyVideo</a>' +
+        ' ' + siteConfig.site_name + '</a>' +
         '<div class="nav-right" id="global-nav-auth"></div>';
 
     // 插入到 body 最前面
@@ -30,6 +34,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 检查登录状态并更新 UI
     checkNavUser();
 });
+
+// 获取系统配置
+async function loadSiteConfig() {
+    try {
+        const res = await fetch("/system/config");
+        if (res.ok) {
+            const config = await res.json();
+            if (config.site_name) {
+                siteConfig.site_name = config.site_name;
+            }
+        }
+    } catch(e) {
+        console.warn("Failed to load site config:", e);
+    }
+}
 
 async function checkNavUser() {
     const token = localStorage.getItem("access_token");

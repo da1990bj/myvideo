@@ -23,8 +23,8 @@ start() {
     cd "$APP_DIR" || exit 1
 
     # Run with nohup in background
-    # Replicating the exact command structure
-    nohup "$PYTHON" "$UVICORN_BIN" main:app --host 0.0.0.0 --port 8000 --reload > "$LOG_FILE" 2>&1 &
+    # Use socketio_app to properly handle WebSocket connections
+    nohup "$PYTHON" "$UVICORN_BIN" main:socketio_app --host 0.0.0.0 --port 8000 --reload > "$LOG_FILE" 2>&1 &
 
     PID=$!
     echo "$PID" > "$PID_FILE"

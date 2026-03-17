@@ -259,6 +259,8 @@ class UserRead(SQLModel):
     email: str
     is_active: bool
     is_admin: bool = False
+    role_id: Optional[int] = None
+    role_name: Optional[str] = None # Added for easier display
     created_at: datetime
     avatar_path: Optional[str]
     bio: Optional[str] = None
