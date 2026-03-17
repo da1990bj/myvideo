@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>创作者中心 - MyVideo</title>
+    <!-- Socket.IO 客户端库 (v4.x) -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
         .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -196,15 +198,92 @@
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
     let currentTab = 'videos';
+    let socket;
+    let refreshTimer;
+    const videoStateMap = {};  // 缓存视频状态 {video_id: {progress, status}}
+
+    /**
+     * 初始化 WebSocket 连接
+     */
+    function initWebSocket() {
+        const token = localStorage.getItem("access_token");
+        const socketOptions = {
+            auth: { token: token },
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: 10,
+            transports: ['websocket', 'polling']
+        };
+
+        try {
+            socket = io('/', socketOptions);
+
+            socket.on('connect', () => {
+                console.log('✅ WebSocket connected (dashboard):', socket.id);
+                loadMyVideos(true);
+            });
+
+            socket.on('transcode_progress', (data) => {
+                onTranscodeProgress(data);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('WebSocket disconnected (dashboard):', reason);
+                if (!refreshTimer) {
+                    refreshTimer = setInterval(loadMyVideos, 5000);
+                }
+            });
+
+            socket.on('error', (error) => {
+                console.error('WebSocket error:', error);
+            });
+
+        } catch (e) {
+            console.error('Failed to initialize WebSocket:', e);
+            if (!refreshTimer) {
+                refreshTimer = setInterval(loadMyVideos, 5000);
+            }
+        }
+    }
+
+    /**
+     * 处理转码进度更新
+     */
+    function onTranscodeProgress(data) {
+        const { video_id, progress, status } = data;
+        videoStateMap[video_id] = { progress, status };
+
+        // 只有视频列表标签处于活跃时才更新UI
+        if (currentTab === 'videos') {
+            const row = document.querySelector(`tr[data-video-id="${video_id}"]`);
+            if (row) {
+                const statusCell = row.querySelector('td:nth-child(3)');
+
+                if (status === "processing") {
+                    const progressHtml = "<div style='font-size:12px; color:#00a1d6;'>转码中 " + progress + "%</div>" +
+                                        "<div style='width:100px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
+                                        "<div style='width:" + progress + "%; height:100%; background:#00a1d6; border-radius:2px;'></div></div>";
+                    statusCell.innerHTML = progressHtml;
+                } else if (status === "completed") {
+                    statusCell.innerHTML = "<span class='status-badge status-completed'>已发布</span>";
+                } else if (status === "failed") {
+                    statusCell.innerHTML = "<span class='status-badge' style='color:red; background:#ffe6e6;'>处理失败</span>";
+                }
+            }
+        }
+    }
 
     document.addEventListener("DOMContentLoaded", async () => {
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
 
+        // 初始化 WebSocket 连接
+        initWebSocket();
+
         loadStats(); // Add stats loading
         await loadCategories();
         loadMyVideos();
-        // refreshTimer = setInterval(loadMyVideos, 3000); // Only auto-refresh videos for now
         initTagInput();
     });
 
@@ -372,7 +451,7 @@
         } catch(e) {}
     }
 
-    async function loadMyVideos() {
+    async function loadMyVideos(fromWebSocket = false) {
         const token = localStorage.getItem("access_token");
         try {
             document.getElementById("refresh-hint").classList.add("show");
@@ -384,11 +463,23 @@
             if (res.ok) {
                 const videos = await res.json();
                 renderTable(videos);
-                
-                const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
-                if (!hasProcessing && refreshTimer) {
-                    clearInterval(refreshTimer);
-                    refreshTimer = setInterval(loadMyVideos, 10000); 
+
+                // 智能轮询管理
+                if (socket && socket.connected) {
+                    // WebSocket已连接，停止轮询
+                    if (refreshTimer) {
+                        clearInterval(refreshTimer);
+                        refreshTimer = null;
+                    }
+                } else {
+                    // WebSocket未连接，需要轮询
+                    const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
+                    if (!hasProcessing && refreshTimer) {
+                        clearInterval(refreshTimer);
+                        refreshTimer = setInterval(loadMyVideos, 10000);
+                    } else if (hasProcessing && !refreshTimer) {
+                        refreshTimer = setInterval(loadMyVideos, 3000);
+                    }
                 }
             }
         } catch (e) { console.error(e); }
@@ -400,25 +491,28 @@
             tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:40px;'>暂无稿件</td></tr>";
             return;
         }
-        
+
         let html = "";
         videos.forEach(v => {
-            console.log('Video ID:', v.id, 'Original category_id:', v.category_id, 'Type:', typeof v.category_id); // 添加日志
             const statusClass = v.status === "completed" ? "status-completed" : "";
             const rate = v.views > 0 ? Math.round((v.complete_views / v.views) * 100) + "%" : "0%";
-            
+
+            // 优先使用 WebSocket 推送的进度
+            const progress = videoStateMap[v.id]?.progress || v.progress || 0;
+            const status = videoStateMap[v.id]?.status || v.status;
+
             let statusHtml = "";
-            if (v.status === "processing") {
-                statusHtml = "<div style='font-size:12px; color:#00a1d6;'>转码中 " + (v.progress || 0) + "%</div>" +
+            if (status === "processing") {
+                statusHtml = "<div style='font-size:12px; color:#00a1d6;'>转码中 " + progress + "%</div>" +
                              "<div style='width:100px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
-                             "<div style='width:" + (v.progress || 0) + "%; height:100%; background:#00a1d6; border-radius:2px;'></div></div>";
-            } else if (v.status === "failed") {
+                             "<div style='width:" + progress + "%; height:100%; background:#00a1d6; border-radius:2px;'></div></div>";
+            } else if (status === "failed") {
                 statusHtml = "<span class='status-badge' style='color:red; background:#ffe6e6;'>处理失败</span>";
-            } else if (v.status === "pending") {
+            } else if (status === "pending") {
                 statusHtml = "<span class='status-badge'>等待处理</span>";
-            } else if (v.status === "banned") {
+            } else if (status === "banned") {
                 statusHtml = `<span class='status-badge' style='color:white; background:#f04c49;' title='原因: ${v.ban_reason || "未知"}'>已下架</span><div style="font-size:12px; color:#f04c49; margin-top:4px;">${v.ban_reason || ""}</div>`;
-            } else if (v.status === "appealing") {
+            } else if (status === "appealing") {
                 statusHtml = "<span class='status-badge' style='color:#f08c00; background:#fff9db;'>申诉中</span>";
             } else {
                 statusHtml = "<span class='status-badge " + statusClass + "'>已发布</span>";
@@ -431,13 +525,13 @@
 
             let buttons = `<button class='action-btn' onclick='openEdit("${v.id}", "${titleSafe}", "${v.visibility}", "${(v.category ? v.category.id : "")}", "${tagsStr}", "${(v.thumbnail_path || "")}")'>编辑</button>`;
 
-            if (v.status === "banned") {
+            if (status === "banned") {
                 buttons += `<button class='action-btn' style='color:#f08c00;' onclick='appealVideo("${v.id}")'>申诉</button>`;
             }
 
             buttons += `<button class='action-btn delete' onclick='deleteVideo("${v.id}")'>删除</button>`;
 
-            html += "<tr>" +
+            html += "<tr data-video-id='" + v.id + "'>" +
                 "<td><div class='video-cell'>" +
                 "<img src='" + (v.thumbnail_path || "/static/default_thumb.jpg") + "' class='thumb'>" +
                 "<div class='video-info'>" +
