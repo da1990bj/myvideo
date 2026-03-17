@@ -11,3 +11,7 @@ python-jose[cryptography]
 passlib[bcrypt]
 ffmpeg-python
 python-dotenv
+python-socketio>=5.9
+python-engineio>=4.7
+aioredis>=2.0
+python-socketio[asyncio_client]

@@ -10,9 +10,17 @@ import os
 import random
 import subprocess
 import time
+import asyncio
+import logging
 from uuid import uuid4, UUID
 from datetime import datetime
 from utils import clean_tags
+
+# WebSocket support
+from python_socketio import AsyncServer
+from fastapi_socketio import SocketManager
+
+logger = logging.getLogger(__name__)
 
 # --- Helpers ---
 def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, type: str, entity_id: str, content: str = None):
@@ -37,10 +45,21 @@ from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, Vid
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
 from init_data import init_categories
+from socketio_handler import manager
 import psutil
 
-app = FastAPI(title="MyVideo Backend", version="1.5.0")
+app = FastAPI(title="MyVideo Backend", version="2.0.0")
 app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
+
+# --- WebSocket 配置 ---
+# 使用 fastapi-socketio 进行 SocketIO 集成
+socketio_app = SocketManager(
+    app=app,
+    async_mode='asgi',
+    cors_allowed_origins=["*"],  # 生产环境应指定具体域名
+    background_task_io='threading'
+)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 
@@ -54,6 +73,81 @@ def on_startup():
     os.makedirs("/data/myvideo/static/thumbnails/temp", exist_ok=True) # 临时目录
     os.makedirs("/data/myvideo/static/avatars", exist_ok=True)
     init_categories()
+    logger.info("MyVideo v2.0 startup complete - WebSocket support enabled")
+
+
+# --- WebSocket 事件处理 ---
+
+@socketio_app.on("connect")
+async def websocket_connect(sid, environ, auth):
+    """
+    WebSocket 连接事件处理
+    客户端连接时自动触发
+
+    auth 参数应包含有效的JWT token
+    """
+    try:
+        # 提取并验证 JWT token
+        token = auth.get('token') if auth else None
+
+        if not token:
+            logger.warning(f"WebSocket connect attempt without token (SID: {sid})")
+            return False  # 拒绝连接
+
+        # 验证 token 和获取用户
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username: str = payload.get("sub")
+            if username is None:
+                return False
+
+            # 从数据库获取用户
+            with Session(engine) as session:
+                user = session.exec(select(User).where(User.username == username)).first()
+                if not user:
+                    return False
+
+                # 建立连接
+                conn_info = await manager.connect(str(user.id), sid)
+                logger.info(f"User {user.username} ({user.id}) connected to WebSocket: {conn_info}")
+                return True
+
+        except JWTError:
+            logger.warning(f"Invalid JWT token in WebSocket connect (SID: {sid})")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error in WebSocket connect handler: {e}")
+        return False
+
+
+@socketio_app.on("disconnect")
+async def websocket_disconnect(sid):
+    """
+    WebSocket 断开连接事件处理
+    """
+    try:
+        user_id = await manager.disconnect_by_sid(sid)
+        if user_id:
+            logger.info(f"User {user_id} disconnected from WebSocket (SID: {sid})")
+    except Exception as e:
+        logger.error(f"Error in WebSocket disconnect handler: {e}")
+
+
+@socketio_app.on("ping")
+async def websocket_ping(sid):
+    """
+    心跳检测 - 客户端定期发送ping保持连接
+    """
+    return {"pong": True}
+
+
+@socketio_app.on("get_connection_info")
+async def get_connection_info(sid):
+    """
+    获取当前连接池的统计信息（用于监控）
+    """
+    return manager.get_connection_info()
 
 async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)], session: Session = Depends(get_session)):
     credentials_exception = HTTPException(
@@ -176,6 +270,19 @@ def process_tags(session: Session, video: Video, tag_list: List[str]):
 
         tag.usage_count += 1
         session.add(tag)
+
+# --- Public System Config API ---
+@app.get("/system/config")
+def get_public_system_config(session: Session = Depends(get_session)):
+    """Get public system configuration (no auth required)"""
+    configs = session.exec(select(SystemConfig)).all()
+    result = {}
+    # Only return public config like site_name
+    public_keys = ["site_name", "site_notice"]
+    for c in configs:
+        if c.key in public_keys:
+            result[c.key] = c.value
+    return result
 
 @app.post("/videos/upload", response_model=VideoRead)
 async def upload_video(
@@ -603,7 +710,16 @@ def get_all_users(
     admin: User = Depends(PermissionChecker("user:ban")), # Require user management perm
     session: Session = Depends(get_session)
 ):
-    return session.exec(select(User).order_by(desc(User.created_at)).offset((page-1)*size).limit(size)).all()
+    users = session.exec(select(User).order_by(desc(User.created_at)).offset((page-1)*size).limit(size)).all()
+    result = []
+    for u in users:
+        u_read = UserRead.from_orm(u)
+        if u.role:
+            u_read.role_name = u.role.name
+        else:
+            u_read.role_name = "无角色"
+        result.append(u_read)
+    return result
 
 @app.post("/admin/users/{user_id}/status")
 def update_user_status(

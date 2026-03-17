@@ -3,9 +3,14 @@ import os
 import subprocess
 import re
 import math
+import json
+import asyncio
+import logging
 from sqlmodel import Session, select
 from database import engine
 from data_models import Video
+
+logger = logging.getLogger(__name__)
 
 # 配置 Celery
 celery_app = Celery(
@@ -19,10 +24,21 @@ celery_app.conf.update(
     result_expires=3600,
 )
 
-def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration):
-    """辅助函数: 运行 FFmpeg 并更新进度"""
+def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration, push_progress_callback=None):
+    """
+    辅助函数: 运行 FFmpeg 并更新进度
+
+    Args:
+        cmd: FFmpeg命令行
+        video: Video对象
+        session: 数据库会话
+        start_percent: 本阶段的开始百分比
+        end_percent: 本阶段的结束百分比
+        total_duration: 视频总时长
+        push_progress_callback: 进度回调函数 (video_id, progress) -> None
+    """
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    
+
     for line in process.stdout:
         if "out_time_ms=" in line:
             match = re.search(r"out_time_ms=(\d+)", line)
@@ -34,12 +50,19 @@ def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration):
                     local_percent = min((sec / total_duration) * 100, 100)
                     # 映射到总进度 (start_percent -> end_percent)
                     global_percent = int(start_percent + (local_percent / 100) * (end_percent - start_percent))
-                    
+
                     if global_percent > video.progress and global_percent % 2 == 0:
                         video.progress = global_percent
                         session.add(video)
                         session.commit()
-    
+
+                        # 触发进度推送回调（用于WebSocket）
+                        if push_progress_callback:
+                            try:
+                                push_progress_callback(str(video.id), global_percent)
+                            except Exception as e:
+                                logger.warning(f"Error in progress callback: {e}")
+
     process.wait()
     if process.returncode != 0:
         raise Exception("FFmpeg error")
@@ -55,6 +78,39 @@ def transcode_video_task(self, video_id: str):
             video.progress = 0
             session.add(video)
             session.commit()
+
+            # 导入WebSocket管理器用于推送进度
+            try:
+                from socketio_handler import manager
+                from main import socketio_app
+                websocket_available = True
+            except (ImportError, RuntimeError) as e:
+                logger.warning(f"WebSocket not available: {e}")
+                websocket_available = False
+
+            # 创建进度推送回调函数
+            def push_progress_callback(video_id_str, progress):
+                """
+                该回调函数在FFmpeg进度更新时被调用
+                通过WebSocket推送进度给创作者
+                """
+                if websocket_available:
+                    try:
+                        # 使用asyncio在Celery worker中运行异步函数
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(
+                            manager.push_progress(
+                                socketio=socketio_app.sio,
+                                user_id=str(video.user_id),
+                                video_id=video_id_str,
+                                progress=progress,
+                                status="processing"
+                            )
+                        )
+                        loop.close()
+                    except Exception as e:
+                        logger.warning(f"Failed to push progress via WebSocket: {e}")
 
             input_path = video.original_file_path
             
@@ -156,7 +212,7 @@ def transcode_video_task(self, video_id: str):
                 ]
 
                 end_p = current_progress_base + step
-                run_ffmpeg(cmd, video, session, current_progress_base, end_p, total_duration)
+                run_ffmpeg(cmd, video, session, current_progress_base, end_p, total_duration, push_progress_callback)
                 current_progress_base = end_p
 
                 # Add to master
@@ -175,12 +231,49 @@ def transcode_video_task(self, video_id: str):
             video.thumbnail_path = f"/static/thumbnails/{video.id}.jpg"
             video.status = "completed"
             video.progress = 100
-            
+
+            # 推送完成状态
+            if websocket_available:
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(
+                        manager.push_progress(
+                            socketio=socketio_app.sio,
+                            user_id=str(video.user_id),
+                            video_id=video_id,
+                            progress=100,
+                            status="completed"
+                        )
+                    )
+                    loop.close()
+                except Exception as e:
+                    logger.warning(f"Failed to push completion status: {e}")
+
         except Exception as e:
             video.status = "failed"
-            print(f"Error: {e}")
+            logger.error(f"Transcoding error for video {video_id}: {e}")
+
+            # 推送失败状态
+            if websocket_available:
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(
+                        manager.push_progress(
+                            socketio=socketio_app.sio,
+                            user_id=str(video.user_id),
+                            video_id=video_id,
+                            progress=0,
+                            status="failed"
+                        )
+                    )
+                    loop.close()
+                except Exception as push_error:
+                    logger.warning(f"Failed to push error status: {push_error}")
+
             return f"Error: {e}"
-            
+
         finally:
             session.add(video)
             session.commit()
