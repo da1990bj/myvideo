@@ -206,6 +206,7 @@
      */
     function initWebSocket() {
         const token = localStorage.getItem("access_token");
+
         const socketOptions = {
             auth: { token: token },
             reconnection: true,
@@ -214,6 +215,8 @@
             reconnectionAttempts: 10,
             transports: ['websocket', 'polling']
         };
+
+        console.log('Initializing WebSocket connection...');
 
         try {
             socket = io('/', socketOptions);

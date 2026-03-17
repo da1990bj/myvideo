@@ -54,9 +54,12 @@ app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static
 # --- WebSocket 配置 (使用 python-socketio) ---
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins='*',
+    cors_allowed_origins=['*'],
+    cors_credentials=True,
     ping_timeout=60,
-    ping_interval=25
+    ping_interval=25,
+    engineio_logger=False,
+    logger=False
 )
 
 # 将Socket.IO作为ASGI应用
