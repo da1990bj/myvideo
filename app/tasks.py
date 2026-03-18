@@ -334,3 +334,71 @@ def regenerate_thumbnail_task(self, video_id: str):
         except Exception as e:
             print(f"Error: {e}")
             return f"Error: {e}"
+
+
+# ==================== 推荐系统定时任务 ====================
+
+@celery_app.task(bind=True)
+def compute_all_recommendation_scores(self):
+    """
+    计算所有活跃用户的推荐分数
+
+    每天凌晨2点执行一次
+    """
+    from data_models import User
+    from recommendation_engine import compute_user_recommendation_scores
+
+    logger.info("Starting recommendation score computation...")
+
+    try:
+        with Session(engine) as session:
+            # 获取所有活跃用户
+            active_users = session.exec(select(User).where(User.is_active == True)).all()
+            logger.info(f"Found {len(active_users)} active users")
+
+            processed_count = 0
+            error_count = 0
+
+            for user in active_users:
+                try:
+                    # 异步运行推荐计算
+                    result = asyncio.run(
+                        compute_user_recommendation_scores(session, user.id)
+                    )
+                    if result > 0:
+                        processed_count += 1
+                        logger.debug(f"Computed recommendations for user {user.username}")
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"Error computing recommendations for user {user.id}: {e}")
+
+            logger.info(f"Recommendation computation complete. Processed: {processed_count}, Errors: {error_count}")
+            return {
+                "status": "completed",
+                "processed": processed_count,
+                "errors": error_count,
+                "total": len(active_users)
+            }
+
+    except Exception as e:
+        logger.error(f"Critical error in recommendation computation: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# Celery Beat 定时任务配置
+celery_app.conf.beat_schedule = {
+    'compute-recommendations-daily': {
+        'task': 'tasks.compute_all_recommendation_scores',
+        'schedule': 3600 * 24,  # 每24小时执行一次（可使用crontab更精确控制）
+        'options': {'queue': 'default'}
+    },
+}
+
+# 如果需要更精确的时间控制，可以使用 crontab：
+# from celery.schedules import crontab
+# celery_app.conf.beat_schedule = {
+#     'compute-recommendations-daily': {
+#         'task': 'tasks.compute_all_recommendation_scores',
+#         'schedule': crontab(hour=2, minute=0),  # 每天凌晨2点执行
+#     },
+# }

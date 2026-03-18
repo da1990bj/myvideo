@@ -243,6 +243,87 @@ class CollectionFavorite(SQLModel, table=True):
     collection_id: UUID = Field(foreign_key="collections.id", primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+# ==================== 推荐系统表 ====================
+
+# 视频推荐配置表（手动推荐）
+class VideoRecommendation(SQLModel, table=True):
+    __tablename__ = "video_recommendations"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id", index=True)
+
+    # 推荐位置和优先级
+    recommendation_type: str  # "featured_carousel", "category_featured", "trending", "sidebar"
+    slot_position: int = Field(default=0)  # 排序位置，越小越靠前
+    priority: int = Field(default=5)  # 1-10，优先级
+
+    # 推荐配置
+    reason: str = Field(default="")  # 推荐理由
+    enabled: bool = Field(default=True)
+    expires_at: Optional[datetime] = None
+
+    # 审计信息
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: UUID = Field(foreign_key="users.id")
+
+# 推荐位配置表
+class RecommendationSlot(SQLModel, table=True):
+    __tablename__ = "recommendation_slots"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slot_name: str = Field(unique=True, index=True)  # "home_carousel", "sidebar_related"
+    display_title: str = Field(default="")
+    description: Optional[str] = None
+
+    # 推荐位配置
+    max_items: int = Field(default=10)
+    recommendation_strategy: str = Field(default="manual_first")  # "manual_first", "algorithm_only", "mixed"
+
+    # 登录状态相关配置
+    show_authenticated: bool = Field(default=True)
+    show_unauthenticated: bool = Field(default=True)
+    unauthenticated_strategy: str = Field(default="trending_only")  # "trending_only", "popular_categories", "hidden"
+
+    enabled: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+# 用户-视频推荐分数缓存表
+class UserVideoScore(SQLModel, table=True):
+    __tablename__ = "user_video_scores"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True, index=True)
+    video_id: UUID = Field(foreign_key="videos.id", primary_key=True, index=True)
+
+    # 四个维度的推荐分数
+    collaborative_score: float = Field(default=0.0)  # 协同过滤
+    similarity_score: float = Field(default=0.0)     # 点赞/收藏相似
+    category_score: float = Field(default=0.0)       # 分类偏好
+    tag_score: float = Field(default=0.0)            # 标签偏好
+    final_score: float = Field(default=0.0)          # 加权综合分
+
+    # 控制信息
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+
+# 推荐日志表（用于分析）
+class RecommendationLog(SQLModel, table=True):
+    __tablename__ = "recommendation_logs"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    video_id: UUID = Field(foreign_key="videos.id", index=True)
+
+    # 推荐来源和位置
+    recommendation_source: str  # "manual", "collaborative", "similarity", "category", "tag", "trending"
+    slot_name: str = Field(default="")  # 推荐位置
+    impression_rank: int = Field(default=0)  # 排名
+
+    # 用户交互数据
+    clicked: bool = Field(default=False)
+    watched: bool = Field(default=False)
+    clicked_at: Optional[datetime] = None
+    watched_duration: Optional[float] = None
+
+    # 时间戳
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
 # Schemas
 class UserCreate(SQLModel):
     username: str
@@ -368,3 +449,116 @@ class AdminLogRead(SQLModel):
     created_at: datetime
 
 
+# ==================== 推荐系统 Schema ====================
+
+class VideoRecommendationRead(SQLModel):
+    id: UUID
+    video_id: UUID
+    recommendation_type: str
+    slot_position: int
+    priority: int
+    reason: str
+    enabled: bool
+    expires_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    created_by: UUID
+
+class VideoRecommendationWithVideoRead(SQLModel):
+    id: UUID
+    video_id: UUID
+    video: Optional["VideoRead"] = None
+    recommendation_type: str
+    slot_position: int
+    priority: int
+    reason: str
+    enabled: bool
+    expires_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    created_by: UUID
+
+class VideoRecommendationCreate(SQLModel):
+    video_id: UUID
+    recommendation_type: str
+    slot_position: int = 0
+    priority: int = 5
+    reason: str = ""
+    expires_at: Optional[datetime] = None
+
+class VideoRecommendationUpdate(SQLModel):
+    recommendation_type: Optional[str] = None
+    slot_position: Optional[int] = None
+    priority: Optional[int] = None
+    reason: Optional[str] = None
+    enabled: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+
+class RecommendationSlotRead(SQLModel):
+    id: int
+    slot_name: str
+    display_title: str
+    description: Optional[str]
+    max_items: int
+    recommendation_strategy: str
+    show_authenticated: bool
+    show_unauthenticated: bool
+    unauthenticated_strategy: str
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+class RecommendationSlotCreate(SQLModel):
+    slot_name: str
+    display_title: str
+    description: Optional[str] = None
+    max_items: int = 10
+    recommendation_strategy: str = "manual_first"
+    show_authenticated: bool = True
+    show_unauthenticated: bool = True
+    unauthenticated_strategy: str = "trending_only"
+
+class RecommendationSlotUpdate(SQLModel):
+    display_title: Optional[str] = None
+    description: Optional[str] = None
+    max_items: Optional[int] = None
+    recommendation_strategy: Optional[str] = None
+    show_authenticated: Optional[bool] = None
+    show_unauthenticated: Optional[bool] = None
+    unauthenticated_strategy: Optional[str] = None
+    enabled: Optional[bool] = None
+
+class UserVideoScoreRead(SQLModel):
+    user_id: UUID
+    video_id: UUID
+    collaborative_score: float
+    similarity_score: float
+    category_score: float
+    tag_score: float
+    final_score: float
+    last_updated: datetime
+
+class RecommendationLogRead(SQLModel):
+    id: UUID
+    user_id: UUID
+    video_id: UUID
+    recommendation_source: str
+    slot_name: str
+    impression_rank: int
+    clicked: bool
+    watched: bool
+    clicked_at: Optional[datetime]
+    watched_duration: Optional[float]
+    created_at: datetime
+
+class RecommendationResponse(SQLModel):
+    """推荐API返回的视频推荐"""
+    video: VideoRead
+    score: float
+    source: str
+    reason: str
+
+class RecommendationsListResponse(SQLModel):
+    """推荐列表API返回"""
+    recommendations: List[RecommendationResponse]
+    slot_info: dict  # {"slot_name": str, "display_title": str}

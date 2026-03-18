@@ -13,7 +13,7 @@ import time
 import asyncio
 import logging
 from uuid import uuid4, UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils import clean_tags
 
 # WebSocket support
@@ -41,11 +41,21 @@ def create_notification(session: Session, sender_id: UUID, recipient_id: UUID, t
     # Don't commit here, let caller commit
 
 from database import engine, get_session, init_db
-from data_models import User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate, UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification, VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead, VideoFavorite, CollectionFavorite, Role, SystemConfig, AdminLog
+from data_models import (
+    User, UserCreate, UserRead, UserLogin, Token, Video, VideoRead, Category, VideoUpdate, UserUpdate,
+    UserFollow, UserBlock, UserPasswordUpdate, EmailUpdate, UserVideoHistory, Comment, VideoLike, Notification,
+    VideoAuditLog, Tag, VideoTag, Collection, CollectionItem, CollectionCreate, CollectionRead, VideoFavorite,
+    CollectionFavorite, Role, SystemConfig, AdminLog,
+    VideoRecommendation, VideoRecommendationRead, VideoRecommendationWithVideoRead, VideoRecommendationCreate, VideoRecommendationUpdate,
+    RecommendationSlot, RecommendationSlotRead, RecommendationSlotCreate, RecommendationSlotUpdate,
+    RecommendationLog, UserVideoScore, RecommendationResponse, RecommendationsListResponse
+)
 from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
 from tasks import transcode_video_task
-from init_data import init_categories
+from init_data import init_categories, init_recommendation_slots, init_recommendation_config
+from cache_manager import get_cache, RecommendationCache
 from socketio_handler import manager
+from recommendation_engine import RecommendationEngine, compute_user_recommendation_scores
 import psutil
 
 app = FastAPI(title="MyVideo Backend", version="2.0.0")
@@ -87,7 +97,17 @@ def on_startup():
     os.makedirs("/data/myvideo/static/thumbnails/temp", exist_ok=True) # 临时目录
     os.makedirs("/data/myvideo/static/avatars", exist_ok=True)
     init_categories()
-    logger.info("MyVideo v2.0 startup complete - WebSocket support enabled")
+    init_recommendation_slots()
+    init_recommendation_config()
+
+    # 初始化缓存系统
+    try:
+        cache = get_cache()
+        logger.info(f"✅ 缓存系统已初始化 ({'Redis' if cache.enabled else '本地缓存'})")
+    except Exception as e:
+        logger.warning(f"⚠️ 缓存初始化失败: {e}")
+
+    logger.info("✅ MyVideo v2.0 startup complete - WebSocket support enabled + Recommendation system + Caching enabled")
 
 
 # --- WebSocket 事件处理 ---
@@ -1624,3 +1644,717 @@ def get_my_creator_stats(
 
 @app.get("/")
 def read_root(): return {"message": "MyVideo API is running!"}
+
+
+# ==================== 推荐系统 API ====================
+
+@app.get("/recommendations", response_model=RecommendationsListResponse)
+async def get_recommendations(
+    slot_name: str,
+    limit: int = Query(10, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    exclude_video_ids: Optional[List[str]] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    session: Session = Depends(get_session)
+):
+    """
+    获取推荐视频列表 (支持缓存)
+
+    参数：
+    - slot_name: 推荐位名字（如 "sidebar_related", "home_carousel"）
+    - limit: 返回数量（1-50，默认10）
+    - offset: 页码偏移
+    - exclude_video_ids: 要排除的视频ID列表
+    """
+    try:
+        # 转换exclude_video_ids为UUID
+        exclude_ids = []
+        if exclude_video_ids:
+            for vid_str in exclude_video_ids:
+                try:
+                    exclude_ids.append(UUID(vid_str))
+                except ValueError:
+                    pass
+
+        # ==================== 缓存逻辑 ====================
+        cache = get_cache()
+        cache_key = f"{slot_name}:{limit}"
+
+        # 尝试从缓存获取推荐ID列表
+        cached_recs = cache.get(
+            slot_name,
+            user_id=None,  # 推荐位推荐内容与用户无关
+            limit=limit
+        )
+
+        if cached_recs:
+            # 使用缓存的推荐
+            logger.info(f"📦 缓存命中: {slot_name} (limit={limit})")
+            recommendations = cached_recs
+        else:
+            # 计算推荐
+            logger.info(f"📝 计算推荐: {slot_name}")
+            engine = RecommendationEngine(session, current_user.id if current_user else None)
+            recommendations = await engine.get_recommendations_for_slot(
+                slot_name=slot_name,
+                limit=limit,
+                exclude_video_ids=exclude_ids
+            )
+            # 保存到缓存
+            cache.set(slot_name, recommendations, ttl=RecommendationCache.CACHE_CONFIG.get(slot_name))
+
+        # 处理offset
+        recommendations = recommendations[offset:]
+
+        # 转换为响应格式
+        result = []
+        for rec in recommendations:
+            video = session.get(Video, rec["video_id"])
+            if video:
+                # 检查用户是否点赞和收藏
+                is_liked = False
+                is_favorited = False
+                if current_user:
+                    is_liked = session.exec(
+                        select(VideoLike).where(
+                            VideoLike.user_id == current_user.id,
+                            VideoLike.video_id == video.id
+                        )
+                    ).first() is not None
+
+                    is_favorited = session.exec(
+                        select(VideoFavorite).where(
+                            VideoFavorite.user_id == current_user.id,
+                            VideoFavorite.video_id == video.id
+                        )
+                    ).first() is not None
+
+                video_read = VideoRead(
+                    id=video.id,
+                    title=video.title,
+                    description=video.description,
+                    status=video.status,
+                    visibility=video.visibility,
+                    processed_file_path=video.processed_file_path,
+                    thumbnail_path=video.thumbnail_path,
+                    duration=video.duration,
+                    views=video.views,
+                    complete_views=video.complete_views,
+                    like_count=video.like_count,
+                    favorite_count=video.favorite_count,
+                    is_liked=is_liked,
+                    is_favorited=is_favorited,
+                    created_at=video.created_at,
+                    tags=video.tags,
+                    owner=UserRead(
+                        id=video.owner.id,
+                        username=video.owner.username,
+                        email=video.owner.email,
+                        is_active=video.owner.is_active,
+                        is_admin=video.owner.is_admin,
+                        role_id=video.owner.role_id,
+                        created_at=video.owner.created_at,
+                        avatar_path=video.owner.avatar_path,
+                        bio=video.owner.bio
+                    ) if video.owner else None,
+                    category=video.category
+                )
+
+                result.append(RecommendationResponse(
+                    video=video_read,
+                    score=rec["score"],
+                    source=rec["source"],
+                    reason=rec["reason"]
+                ))
+
+        # 获取推荐位信息
+        slot = session.exec(
+            select(RecommendationSlot).where(RecommendationSlot.slot_name == slot_name)
+        ).first()
+
+        slot_info = {
+            "slot_name": slot_name,
+            "display_title": slot.display_title if slot else slot_name
+        }
+
+        return RecommendationsListResponse(
+            recommendations=result,
+            slot_info=slot_info
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get recommendations")
+
+
+@app.post("/recommendations/click")
+async def track_recommendation_click(
+    request_body: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """追踪用户对推荐的点击"""
+    try:
+        video_id = request_body.get("video_id")
+        slot_name = request_body.get("slot_name")
+        impression_rank = request_body.get("impression_rank", 0)
+
+        video_uuid = UUID(video_id)
+
+        # 更新推荐日志
+        log = session.exec(
+            select(RecommendationLog).where(
+                RecommendationLog.user_id == current_user.id,
+                RecommendationLog.video_id == video_uuid,
+                RecommendationLog.slot_name == slot_name,
+                RecommendationLog.impression_rank == impression_rank
+            )
+        ).first()
+
+        if log:
+            log.clicked = True
+            log.clicked_at = datetime.utcnow()
+            session.add(log)
+        else:
+            # 创建新的日志记录
+            new_log = RecommendationLog(
+                user_id=current_user.id,
+                video_id=video_uuid,
+                recommendation_source="unknown",
+                slot_name=slot_name,
+                impression_rank=impression_rank,
+                clicked=True,
+                clicked_at=datetime.utcnow()
+            )
+            session.add(new_log)
+
+        session.commit()
+        return {"status": "ok"}
+
+    except Exception as e:
+        logger.error(f"Error tracking click: {e}")
+        raise HTTPException(status_code=500, detail="Failed to track click")
+
+
+@app.post("/recommendations/watch")
+async def track_recommendation_watch(
+    request_body: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """追踪用户对推荐的观看"""
+    try:
+        video_id = request_body.get("video_id")
+        watch_duration = request_body.get("watch_duration", 0)
+
+        video_uuid = UUID(video_id)
+
+        # 查找最新的推荐日志
+        log = session.exec(
+            select(RecommendationLog).where(
+                RecommendationLog.user_id == current_user.id,
+                RecommendationLog.video_id == video_uuid
+            ).order_by(desc(RecommendationLog.created_at))
+        ).first()
+
+        if log:
+            log.watched = True
+            log.watched_duration = watch_duration
+            session.add(log)
+        else:
+            # 创建新的日志记录（无推荐位信息）
+            new_log = RecommendationLog(
+                user_id=current_user.id,
+                video_id=video_uuid,
+                recommendation_source="direct",
+                slot_name="",
+                impression_rank=0,
+                watched=True,
+                watched_duration=watch_duration
+            )
+            session.add(new_log)
+
+        session.commit()
+        return {"status": "ok"}
+
+    except Exception as e:
+        logger.error(f"Error tracking watch: {e}")
+        raise HTTPException(status_code=500, detail="Failed to track watch")
+
+
+# ==================== 管理员推荐系统 API ====================
+
+# 权限检查函数
+def check_admin_permission(current_user: User) -> bool:
+    """检查用户是否有管理员权限"""
+    return current_user.is_admin
+
+
+@app.get("/admin/recommendations", response_model=List[VideoRecommendationWithVideoRead])
+async def get_admin_recommendations(
+    slot_name: Optional[str] = Query(None),
+    recommendation_type: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员获取推荐列表"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        stmt = select(VideoRecommendation)
+
+        if slot_name:
+            stmt = stmt.where(VideoRecommendation.recommendation_type == slot_name)
+        if recommendation_type:
+            stmt = stmt.where(VideoRecommendation.recommendation_type == recommendation_type)
+
+        # 只取未过期的推荐
+        stmt = stmt.where(
+            (VideoRecommendation.expires_at == None) |
+            (VideoRecommendation.expires_at > datetime.utcnow())
+        ).order_by(desc(VideoRecommendation.created_at))
+
+        # 分页
+        total = session.exec(stmt).all()
+        start = (page - 1) * size
+        end = start + size
+        recommendations = total[start:end]
+
+        # 为每个推荐加载关联的视频
+        result = []
+        for rec in recommendations:
+            video = session.get(Video, rec.video_id)
+            rec_dict = {
+                "id": rec.id,
+                "video_id": rec.video_id,
+                "video": VideoRead.from_orm(video) if video else None,
+                "recommendation_type": rec.recommendation_type,
+                "slot_position": rec.slot_position,
+                "priority": rec.priority,
+                "reason": rec.reason,
+                "enabled": rec.enabled,
+                "expires_at": rec.expires_at,
+                "created_at": rec.created_at,
+                "updated_at": rec.updated_at,
+                "created_by": rec.created_by
+            }
+            result.append(VideoRecommendationWithVideoRead(**rec_dict))
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error getting admin recommendations: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get recommendations")
+
+
+@app.post("/admin/recommendations", response_model=VideoRecommendationRead, status_code=201)
+async def create_recommendation(
+    request: VideoRecommendationCreate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员创建推荐"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        # 检查视频是否存在
+        video = session.get(Video, request.video_id)
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        # 创建推荐
+        recommendation = VideoRecommendation(
+            video_id=request.video_id,
+            recommendation_type=request.recommendation_type,
+            slot_position=request.slot_position,
+            priority=request.priority,
+            reason=request.reason,
+            expires_at=request.expires_at,
+            created_by=current_user.id
+        )
+
+        session.add(recommendation)
+        session.commit()
+        session.refresh(recommendation)
+
+        # 记录管理日志
+        admin_log = AdminLog(
+            admin_id=current_user.id,
+            action="create_recommendation",
+            target_id=str(recommendation.id),
+            details=f"Created recommendation for video {request.video_id}"
+        )
+        session.add(admin_log)
+        session.commit()
+
+        return recommendation
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating recommendation: {e}")
+        session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create recommendation")
+
+
+@app.put("/admin/recommendations/{rec_id}", response_model=VideoRecommendationRead)
+async def update_recommendation(
+    rec_id: str,
+    request: VideoRecommendationUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员更新推荐"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        rec_uuid = UUID(rec_id)
+        recommendation = session.get(VideoRecommendation, rec_uuid)
+
+        if not recommendation:
+            raise HTTPException(status_code=404, detail="Recommendation not found")
+
+        # 更新字段
+        update_data = request.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(recommendation, field, value)
+
+        recommendation.updated_at = datetime.utcnow()
+        session.add(recommendation)
+        session.commit()
+        session.refresh(recommendation)
+
+        # 记录管理日志
+        admin_log = AdminLog(
+            admin_id=current_user.id,
+            action="update_recommendation",
+            target_id=str(rec_id),
+            details=f"Updated fields: {', '.join(update_data.keys())}"
+        )
+        session.add(admin_log)
+        session.commit()
+
+        return recommendation
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating recommendation: {e}")
+        session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update recommendation")
+
+
+@app.delete("/admin/recommendations/{rec_id}", status_code=204)
+async def delete_recommendation(
+    rec_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员删除推荐"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        rec_uuid = UUID(rec_id)
+        recommendation = session.get(VideoRecommendation, rec_uuid)
+
+        if not recommendation:
+            raise HTTPException(status_code=404, detail="Recommendation not found")
+
+        session.delete(recommendation)
+        session.commit()
+
+        # 记录管理日志
+        admin_log = AdminLog(
+            admin_id=current_user.id,
+            action="delete_recommendation",
+            target_id=str(rec_id),
+            details=f"Deleted recommendation for video {recommendation.video_id}"
+        )
+        session.add(admin_log)
+        session.commit()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting recommendation: {e}")
+        session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete recommendation")
+
+
+@app.get("/admin/recommendation-slots", response_model=List[RecommendationSlotRead])
+async def get_recommendation_slots(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员获取推荐位列表"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        slots = session.exec(select(RecommendationSlot).order_by(RecommendationSlot.created_at)).all()
+        return slots
+
+    except Exception as e:
+        logger.error(f"Error getting recommendation slots: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get recommendation slots")
+
+
+@app.post("/admin/recommendation-slots", response_model=RecommendationSlotRead, status_code=201)
+async def create_recommendation_slot(
+    request: RecommendationSlotCreate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员创建推荐位"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        # 检查slot_name是否已存在
+        existing = session.exec(
+            select(RecommendationSlot).where(RecommendationSlot.slot_name == request.slot_name)
+        ).first()
+
+        if existing:
+            raise HTTPException(status_code=400, detail="Slot name already exists")
+
+        slot = RecommendationSlot(**request.dict())
+        session.add(slot)
+        session.commit()
+        session.refresh(slot)
+
+        # 记录管理日志
+        admin_log = AdminLog(
+            admin_id=current_user.id,
+            action="create_recommendation_slot",
+            target_id=str(slot.id),
+            details=f"Created recommendation slot: {request.slot_name}"
+        )
+        session.add(admin_log)
+        session.commit()
+
+        return slot
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating recommendation slot: {e}")
+        session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create recommendation slot")
+
+
+@app.put("/admin/recommendation-slots/{slot_id}", response_model=RecommendationSlotRead)
+async def update_recommendation_slot(
+    slot_id: int,
+    request: RecommendationSlotUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员更新推荐位"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        slot = session.get(RecommendationSlot, slot_id)
+
+        if not slot:
+            raise HTTPException(status_code=404, detail="Recommendation slot not found")
+
+        # 更新字段
+        update_data = request.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(slot, field, value)
+
+        slot.updated_at = datetime.utcnow()
+        session.add(slot)
+        session.commit()
+        session.refresh(slot)
+
+        # 记录管理日志
+        admin_log = AdminLog(
+            admin_id=current_user.id,
+            action="update_recommendation_slot",
+            target_id=str(slot_id),
+            details=f"Updated fields: {', '.join(update_data.keys())}"
+        )
+        session.add(admin_log)
+        session.commit()
+
+        return slot
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating recommendation slot: {e}")
+        session.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update recommendation slot")
+
+
+@app.get("/admin/recommendations/analytics")
+async def get_recommendation_analytics(
+    slot_name: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员获取推荐分析数据"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        # 设置默认日期范围
+        if not date_to:
+            date_to = datetime.utcnow()
+        if not date_from:
+            date_from = date_to - timedelta(days=7)
+
+        # 查询日志
+        stmt = select(RecommendationLog).where(
+            RecommendationLog.created_at >= date_from,
+            RecommendationLog.created_at <= date_to
+        )
+
+        if slot_name:
+            stmt = stmt.where(RecommendationLog.slot_name == slot_name)
+
+        logs = session.exec(stmt).all()
+
+        # 计算指标
+        total_impressions = len(logs)
+        total_clicks = sum(1 for log in logs if log.clicked)
+        total_watched = sum(1 for log in logs if log.watched)
+
+        click_through_rate = total_clicks / total_impressions if total_impressions > 0 else 0
+        watch_rate = total_watched / total_clicks if total_clicks > 0 else 0
+
+        avg_watch_duration = 0
+        if total_watched > 0:
+            total_duration = sum(log.watched_duration or 0 for log in logs if log.watched)
+            avg_watch_duration = total_duration / total_watched
+
+        # 按推荐来源统计
+        by_source = {}
+        for log in logs:
+            if log.recommendation_source not in by_source:
+                by_source[log.recommendation_source] = {
+                    "impressions": 0,
+                    "clicks": 0,
+                    "watched": 0,
+                    "click_through_rate": 0.0,
+                    "watch_rate": 0.0
+                }
+
+            by_source[log.recommendation_source]["impressions"] += 1
+            if log.clicked:
+                by_source[log.recommendation_source]["clicks"] += 1
+            if log.watched:
+                by_source[log.recommendation_source]["watched"] += 1
+
+        # 计算每个来源的CTR和WR
+        for source, stats in by_source.items():
+            if stats["impressions"] > 0:
+                stats["click_through_rate"] = stats["clicks"] / stats["impressions"]
+            if stats["clicks"] > 0:
+                stats["watch_rate"] = stats["watched"] / stats["clicks"]
+
+        # 找到表现最好和最差的视频
+        video_stats = {}
+        for log in logs:
+            if log.video_id not in video_stats:
+                video_stats[log.video_id] = {
+                    "impressions": 0,
+                    "clicks": 0,
+                    "watched": 0
+                }
+            video_stats[log.video_id]["impressions"] += 1
+            if log.clicked:
+                video_stats[log.video_id]["clicks"] += 1
+            if log.watched:
+                video_stats[log.video_id]["watched"] += 1
+
+        # 按点击率排序
+        sorted_videos = sorted(
+            video_stats.items(),
+            key=lambda x: (x[1]["clicks"] / x[1]["impressions"]) if x[1]["impressions"] > 0 else 0,
+            reverse=True
+        )
+
+        top_performing = sorted_videos[:10]
+        worst_performing = sorted_videos[-10:]
+
+        return {
+            "user_engagement": {
+                "total_impressions": total_impressions,
+                "total_clicks": total_clicks,
+                "click_through_rate": round(click_through_rate, 4),
+                "total_watched": total_watched,
+                "watch_rate": round(watch_rate, 4),
+                "average_watch_duration": round(avg_watch_duration, 2),
+            },
+            "by_source": by_source,
+            "top_performing": [
+                {
+                    "video_id": str(vid),
+                    "impressions": stats["impressions"],
+                    "clicks": stats["clicks"],
+                    "ctr": round(stats["clicks"] / stats["impressions"], 4) if stats["impressions"] > 0 else 0
+                }
+                for vid, stats in top_performing
+            ],
+            "worst_performing": [
+                {
+                    "video_id": str(vid),
+                    "impressions": stats["impressions"],
+                    "clicks": stats["clicks"],
+                    "ctr": round(stats["clicks"] / stats["impressions"], 4) if stats["impressions"] > 0 else 0
+                }
+                for vid, stats in worst_performing
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting recommendation analytics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get analytics")
+
+
+@app.post("/admin/recommendations/recompute")
+async def recompute_recommendations(
+    user_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """管理员手动触发推荐分数计算"""
+    if not check_admin_permission(current_user):
+        raise HTTPException(status_code=403, detail="Admin permission required")
+
+    try:
+        # 如果指定了用户ID，只计算该用户
+        if user_id:
+            user_uuid = UUID(user_id)
+            from recommendation_engine import compute_user_recommendation_scores
+            result = await compute_user_recommendation_scores(session, user_uuid)
+            return {
+                "status": "completed",
+                "user_id": user_id,
+                "processed": result
+            }
+        else:
+            # 否则触发全局计算任务
+            from tasks import compute_all_recommendation_scores
+            task = compute_all_recommendation_scores.delay()
+            return {
+                "status": "queued",
+                "task_id": task.id
+            }
+
+    except Exception as e:
+        logger.error(f"Error recomputing recommendations: {e}")
+        raise HTTPException(status_code=500, detail="Failed to recompute recommendations")
+

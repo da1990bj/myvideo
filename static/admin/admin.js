@@ -31,6 +31,7 @@ function renderSidebar() {
         <h2 style="margin-top:0; color:#00a1d6; margin-bottom:30px;">MyVideo Admin</h2>
         <a href="/static/admin/index.html" class="admin-link">仪表盘</a>
         <a href="/static/admin/videos.html" class="admin-link">视频管理</a>
+        <a href="/static/admin/recommendations.html" class="admin-link">推荐管理</a>
         <a href="/static/admin/users.html" class="admin-link">用户管理</a>
         <a href="/static/admin/comments.html" class="admin-link">评论管理</a>
         <div style="height: 1px; background: #eee; margin: 10px 0;"></div>
