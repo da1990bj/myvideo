@@ -8,6 +8,8 @@ from sqlalchemy import func
 import shutil
 import os
 import random
+import json
+from pathlib import Path
 import subprocess
 import time
 import asyncio
@@ -711,6 +713,507 @@ def update_system_config(
     session.commit()
     return {"ok": True}
 
+# ==================== .env 文件配置管理 ====================
+
+@app.get("/admin/env-config")
+def get_env_config(
+    exclude: str = None,
+    user: User = Depends(PermissionChecker("*")),
+):
+    """
+    获取 .env 文件中的所有配置（带注释说明）
+    exclude: 逗号分隔的要排除的节名称，如 "文件存储目录,冷存储"
+    """
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return {}
+
+    exclude_sections = set(exclude.split(",")) if exclude else set()
+
+    result = {}
+    current_section = "通用"
+    sections = {
+        "基础配置": ["MYVIDEO_ROOT"],
+        "数据库": ["DATABASE_HOST", "DATABASE_PORT", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME", "DATABASE_ECHO"],
+        "Redis": ["REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD"],
+        "安全/JWT": ["SECRET_KEY", "ALGORITHM", "ACCESS_TOKEN_EXPIRE_MINUTES"],
+        "应用服务器": ["APP_HOST", "APP_PORT", "APP_DEBUG"],
+        "文件存储目录": ["STATIC_SUBDIR", "UPLOADS_SUBDIR", "PROCESSED_SUBDIR", "THUMBNAILS_SUBDIR", "AVATARS_SUBDIR", "DATA_SUBDIR"],
+        "URL路径前缀": ["THUMBNAILS_URL", "VIDEOS_URL", "AVATARS_URL"],
+        "CORS": ["CORS_ORIGINS", "CORS_CREDENTIALS", "CORS_METHODS", "CORS_HEADERS"],
+        "Celery": ["CELERY_BROKER_URL", "CELERY_RESULT_BACKEND"],
+        "日志": ["LOG_LEVEL", "LOG_FILE"],
+        "敏感词": ["SENSITIVE_WORDS_FILE"],
+        "冷存储": ["COLD_STORAGE_ENABLED", "COLD_STORAGE_TRIGGER_DAYS", "COLD_STORAGE_TRIGGER_VIEWS", "COLD_STORAGE_PATH_ROOT"],
+        "存储迁移": ["STORAGE_MIGRATION_DELAY"],
+    }
+
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                # 检查是否是段落注释
+                if '基础配置' in line: current_section = "基础配置"
+                elif '数据库' in line: current_section = "数据库"
+                elif 'Redis' in line: current_section = "Redis"
+                elif '安全' in line or 'JWT' in line: current_section = "安全/JWT"
+                elif '应用服务器' in line: current_section = "应用服务器"
+                elif '文件存储' in line or '目录' in line: current_section = "文件存储目录"
+                elif 'URL' in line: current_section = "URL路径前缀"
+                elif 'CORS' in line: current_section = "CORS"
+                elif 'Celery' in line: current_section = "Celery"
+                elif '日志' in line: current_section = "日志"
+                elif '敏感词' in line: current_section = "敏感词"
+                elif '冷存储' in line: current_section = "冷存储"
+                elif '存储迁移' in line: current_section = "存储迁移"
+                continue
+
+            if '=' in line:
+                key = line.split('=')[0].strip()
+                value = line.split('=', 1)[1].strip()
+
+                # 查找该 key 所属的段落
+                key_section = current_section
+                for section, keys in sections.items():
+                    if key in keys:
+                        key_section = section
+                        break
+
+                # 跳过要排除的节
+                if key_section in exclude_sections:
+                    continue
+
+                if key_section not in result:
+                    result[key_section] = {}
+                result[key_section][key] = value
+
+    return result
+
+@app.put("/admin/env-config")
+def update_env_config(
+    updates: dict = Body(...),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """
+    更新 .env 文件中的配置
+    """
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        raise HTTPException(status_code=404, detail=".env file not found")
+
+    # 读取现有配置
+    lines = []
+    with open(env_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    # 更新配置
+    updated_keys = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if '=' in stripped:
+            key = stripped.split('=')[0].strip()
+            if key in updates:
+                # 保留注释，处理布尔值
+                value = updates[key]
+                if isinstance(value, bool):
+                    value = 'true' if value else 'false'
+                new_lines.append(f"{key}={value}\n")
+                updated_keys.add(key)
+                continue
+        new_lines.append(line)
+
+    # 添加新配置（如果有不存在的）
+    for key, value in updates.items():
+        if key not in updated_keys:
+            if isinstance(value, bool):
+                value = 'true' if value else 'false'
+            new_lines.append(f"{key}={value}\n")
+
+    # 写回文件
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.writelines(new_lines)
+
+    # 记录操作日志
+    log_admin_action(session, user.id, "update_env_config", None, f"Updated keys: {list(updates.keys())}")
+
+    return {"ok": True, "updated": list(updates.keys())}
+
+# ==================== 存储目录配置 ====================
+
+@app.get("/admin/storage/config")
+def get_storage_config(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """获取当前存储目录配置"""
+    return {
+        "uploads_dir": str(settings.UPLOADS_DIR),
+        "processed_dir": str(settings.PROCESSED_DIR),
+        "thumbnails_dir": str(settings.THUMBNAILS_DIR),
+        "cold_storage_enabled": settings.COLD_STORAGE_ENABLED,
+        "cold_storage_dir": str(settings.COLD_STORAGE_PATH) if settings.COLD_STORAGE_ENABLED else None,
+    }
+
+@app.put("/admin/storage/config")
+def update_storage_config(
+    config: dict = Body(...),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """
+    更新存储目录配置
+    注意：此接口仅更新 SystemConfig，实际目录变更需要调用 /admin/storage/migrate 来迁移数据
+    """
+    storage_keys = ["storage_uploads_dir", "storage_processed_dir", "storage_thumbnails_dir"]
+
+    for key in storage_keys:
+        if key in config:
+            # 验证目录是否可写
+            test_path = Path(config[key])
+            try:
+                test_path.mkdir(parents=True, exist_ok=True)
+                # 写入配置
+                conf = session.get(SystemConfig, key)
+                if conf:
+                    conf.value = config[key]
+                    conf.updated_at = datetime.utcnow()
+                else:
+                    conf = SystemConfig(key=key, value=config[key])
+                    session.add(conf)
+                log_admin_action(session, user.id, "update_storage_config", key, f"Set to {config[key]}")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Directory {config[key]} is not writable: {e}")
+
+    session.commit()
+    return {"ok": True}
+
+# ==================== 菜单顺序管理 ====================
+
+@app.get("/admin/menu-order")
+def get_menu_order(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """获取后台菜单顺序"""
+    conf = session.get(SystemConfig, "admin_menu_order")
+    if conf and conf.value:
+        try:
+            return {"order": json.loads(conf.value)}
+        except:
+            return {"order": None}
+    return {"order": None}
+
+@app.put("/admin/menu-order")
+def update_menu_order(
+    order: List[dict] = Body(...),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """保存后台菜单顺序"""
+    conf = session.get(SystemConfig, "admin_menu_order")
+    if conf:
+        conf.value = json.dumps(order)
+        conf.updated_at = datetime.utcnow()
+    else:
+        conf = SystemConfig(key="admin_menu_order", value=json.dumps(order))
+        session.add(conf)
+    session.commit()
+    return {"ok": True}
+
+@app.get("/admin/storage/usage")
+def get_storage_usage(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """获取各存储目录的磁盘使用情况"""
+    import shutil
+
+    def get_dir_size(path):
+        """计算目录大小（字节）"""
+        if not path.exists():
+            return 0
+        total = 0
+        for entry in path.rglob("*"):
+            if entry.is_file():
+                total += entry.stat().st_size
+        return total
+
+    def format_size(size_bytes):
+        """格式化文件大小"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024
+        return f"{size_bytes:.2f} PB"
+
+    def get_disk_usage(path):
+        """获取磁盘使用信息"""
+        usage = shutil.disk_usage(path)
+        return {
+            "total": format_size(usage.total),
+            "used": format_size(usage.used),
+            "free": format_size(usage.free),
+            "percent": round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0
+        }
+
+    base_dir = settings.BASE_DIR
+
+    return {
+        "uploads": {
+            "path": str(settings.UPLOADS_DIR),
+            "size": format_size(get_dir_size(settings.UPLOADS_DIR)),
+            "disk": get_disk_usage(base_dir)
+        },
+        "processed": {
+            "path": str(settings.PROCESSED_DIR),
+            "size": format_size(get_dir_size(settings.PROCESSED_DIR)),
+            "disk": get_disk_usage(base_dir)
+        },
+        "thumbnails": {
+            "path": str(settings.THUMBNAILS_DIR),
+            "size": format_size(get_dir_size(settings.THUMBNAILS_DIR)),
+            "disk": get_disk_usage(base_dir)
+        },
+        "cold_storage": {
+            "path": str(settings.COLD_STORAGE_PATH),
+            "size": format_size(get_dir_size(settings.COLD_STORAGE_PATH)) if settings.COLD_STORAGE_ENABLED else None,
+            "disk": get_disk_usage(base_dir) if settings.COLD_STORAGE_ENABLED else None,
+            "enabled": settings.COLD_STORAGE_ENABLED
+        }
+    }
+
+@app.post("/admin/storage/migrate")
+def migrate_storage(
+    new_dirs: dict = Body(...),
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """
+    执行存储目录迁移任务
+    将视频文件从当前目录迁移到新目录
+    """
+    from tasks import migrate_storage_task
+
+    old_dirs = {
+        "uploads": str(settings.UPLOADS_DIR),
+        "processed": str(settings.PROCESSED_DIR),
+        "thumbnails": str(settings.THUMBNAILS_DIR),
+    }
+
+    # 验证新目录可写
+    for key, path in new_dirs.items():
+        if path:
+            test_path = Path(path)
+            try:
+                test_path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Directory {path} is not writable: {e}")
+
+    # 异步执行迁移任务
+    task = migrate_storage_task.delay(old_dirs, new_dirs)
+
+    log_admin_action(session, user.id, "migrate_storage", None, f"Migrating from {old_dirs} to {new_dirs}")
+
+    return {"ok": True, "task_id": task.id, "message": "Migration task started"}
+
+@app.get("/admin/storage/migrate/{task_id}")
+def get_migration_status(
+    task_id: str,
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """
+    获取存储迁移任务状态
+    """
+    from tasks import migrate_storage_task
+
+    task = migrate_storage_task.AsyncResult(task_id)
+
+    if task.state == 'PENDING':
+        return {
+            "task_id": task_id,
+            "state": "PENDING",
+            "status": "任务等待中..."
+        }
+    elif task.state == 'PROGRESS':
+        return {
+            "task_id": task_id,
+            "state": "PROGRESS",
+            "status": task.info.get('status', '迁移中...'),
+            "current": task.info.get('current', 0),
+            "total": task.info.get('total', 0),
+            "migrated": task.info.get('migrated', 0),
+            "failed": task.info.get('failed', 0)
+        }
+    elif task.state == 'SUCCESS':
+        return {
+            "task_id": task_id,
+            "state": "SUCCESS",
+            "status": "迁移完成",
+            "result": task.result
+        }
+    elif task.state == 'FAILURE':
+        return {
+            "task_id": task_id,
+            "state": "FAILURE",
+            "status": "迁移失败",
+            "error": str(task.info)
+        }
+    else:
+        return {
+            "task_id": task_id,
+            "state": task.state,
+            "status": "未知状态"
+        }
+
+@app.get("/admin/storage/orphans")
+def get_orphan_files(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """
+    扫描并返回孤立文件（磁盘存在但数据库中已删除）
+    """
+    # 获取数据库中所有视频的文件路径
+    videos = session.exec(select(Video)).all()
+
+    db_original_paths = set()
+    db_processed_dirs = set()
+    db_thumbnail_paths = set()
+
+    for v in videos:
+        if v.original_file_path:
+            db_original_paths.add(Path(v.original_file_path).name)
+        if v.processed_file_path:
+            db_processed_dirs.add(Path(v.processed_file_path).parent.name)
+        if v.thumbnail_path:
+            db_thumbnail_paths.add(Path(v.thumbnail_path).name)
+
+    orphans = {
+        "uploads": [],      # 孤立原始文件
+        "processed": [],     # 孤立转码目录
+        "thumbnails": []    # 孤立缩略图
+    }
+
+    # 扫描原始文件目录
+    if settings.UPLOADS_DIR.exists():
+        for f in settings.UPLOADS_DIR.iterdir():
+            if f.is_file() and f.name not in db_original_paths:
+                orphans["uploads"].append({
+                    "name": f.name,
+                    "path": str(f),
+                    "size": f.stat().st_size
+                })
+
+    # 扫描转码文件目录
+    if settings.PROCESSED_DIR.exists():
+        for d in settings.PROCESSED_DIR.iterdir():
+            if d.is_dir() and d.name not in db_processed_dirs:
+                total_size = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+                orphans["processed"].append({
+                    "name": d.name,
+                    "path": str(d),
+                    "size": total_size
+                })
+
+    # 扫描缩略图目录
+    if settings.THUMBNAILS_DIR.exists():
+        for f in settings.THUMBNAILS_DIR.iterdir():
+            if f.is_file() and f.suffix in ['.jpg', '.jpeg', '.png', '.gif'] and f.name not in db_thumbnail_paths:
+                orphans["thumbnails"].append({
+                    "name": f.name,
+                    "path": str(f),
+                    "size": f.stat().st_size
+                })
+
+    # 计算总大小
+    total_size = sum(o["size"] for o in orphans["uploads"]) + \
+                  sum(o["size"] for o in orphans["processed"]) + \
+                  sum(o["size"] for o in orphans["thumbnails"])
+
+    return {
+        "files": orphans,
+        "total_count": len(orphans["uploads"]) + len(orphans["processed"]) + len(orphans["thumbnails"]),
+        "total_size": total_size
+    }
+
+@app.post("/admin/storage/cleanup")
+def cleanup_orphan_files(
+    user: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """
+    清理孤立文件（磁盘存在但数据库中已删除）
+    """
+    # 获取数据库中所有视频的文件路径
+    videos = session.exec(select(Video)).all()
+
+    db_original_paths = set()
+    db_processed_dirs = set()
+    db_thumbnail_paths = set()
+
+    for v in videos:
+        if v.original_file_path:
+            db_original_paths.add(Path(v.original_file_path).name)
+        if v.processed_file_path:
+            db_processed_dirs.add(Path(v.processed_file_path).parent.name)
+        if v.thumbnail_path:
+            db_thumbnail_paths.add(Path(v.thumbnail_path).name)
+
+    deleted_count = 0
+    freed_size = 0
+    errors = []
+
+    # 清理孤立原始文件
+    if settings.UPLOADS_DIR.exists():
+        for f in settings.UPLOADS_DIR.iterdir():
+            if f.is_file() and f.name not in db_original_paths:
+                try:
+                    size = f.stat().st_size
+                    f.unlink()
+                    deleted_count += 1
+                    freed_size += size
+                    logger.info(f"Deleted orphan upload file: {f}")
+                except Exception as e:
+                    errors.append(f"Failed to delete {f}: {e}")
+
+    # 清理孤立转码目录
+    if settings.PROCESSED_DIR.exists():
+        for d in settings.PROCESSED_DIR.iterdir():
+            if d.is_dir() and d.name not in db_processed_dirs:
+                try:
+                    size = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+                    import shutil
+                    shutil.rmtree(d)
+                    deleted_count += 1
+                    freed_size += size
+                    logger.info(f"Deleted orphan processed dir: {d}")
+                except Exception as e:
+                    errors.append(f"Failed to delete {d}: {e}")
+
+    # 清理孤立缩略图
+    if settings.THUMBNAILS_DIR.exists():
+        for f in settings.THUMBNAILS_DIR.iterdir():
+            if f.is_file() and f.suffix in ['.jpg', '.jpeg', '.png', '.gif'] and f.name not in db_thumbnail_paths:
+                try:
+                    size = f.stat().st_size
+                    f.unlink()
+                    deleted_count += 1
+                    freed_size += size
+                    logger.info(f"Deleted orphan thumbnail: {f}")
+                except Exception as e:
+                    errors.append(f"Failed to delete {f}: {e}")
+
+    log_admin_action(session, user.id, "cleanup_orphans", None, f"Deleted {deleted_count} orphan files, freed {freed_size} bytes")
+
+    return {
+        "deleted_count": deleted_count,
+        "freed_size": freed_size,
+        "errors": errors[:10]  # 最多返回10个错误
+    }
+
 @app.get("/admin/logs")
 def get_admin_logs(
     page: int = 1, size: int = 20,
@@ -822,6 +1325,318 @@ def retry_transcode(
     transcode_video_task.delay(str(video_id))
 
     return {"ok": True, "message": "Transcode task resubmitted"}
+
+# ==================== Cold Storage APIs ====================
+
+def get_dir_size(path: Path) -> int:
+    """递归计算目录大小"""
+    total = 0
+    if path.exists():
+        for entry in path.rglob('*'):
+            if entry.is_file():
+                total += entry.stat().st_size
+    return total
+
+def count_files(path: Path) -> int:
+    """计算文件数量"""
+    if path.exists():
+        return sum(1 for entry in path.rglob('*') if entry.is_file())
+    return 0
+
+@app.get("/admin/cold-storage/stats")
+def get_cold_storage_stats(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """获取冷存储统计"""
+    from config import settings
+    from datetime import datetime, timedelta
+
+    # 统计冷存储视频数量
+    cold_count = session.exec(select(func.count()).select_from(Video).where(Video.is_cold == True)).one()
+
+    # 统计符合条件的可迁移视频数量
+    days_ago = datetime.utcnow() - timedelta(days=settings.COLD_STORAGE_TRIGGER_DAYS)
+    candidates_count = session.exec(
+        select(func.count()).select_from(Video).where(
+            Video.is_cold == False,
+            Video.created_at < days_ago,
+            Video.views < settings.COLD_STORAGE_TRIGGER_VIEWS,
+            Video.status == "completed"
+        )
+    ).one()
+
+    # 统计主存储视频数量
+    active_count = session.exec(select(func.count()).select_from(Video).where(Video.is_cold == False)).one()
+
+    # 获取冷存储中的视频列表
+    cold_videos_query = session.exec(
+        select(Video).where(Video.is_cold == True).order_by(desc(Video.cold_stored_at)).limit(100)
+    ).all()
+
+    cold_videos_list = []
+    for v in cold_videos_query:
+        owner = session.get(User, v.user_id)
+        cold_videos_list.append({
+            "id": str(v.id),
+            "title": v.title,
+            "owner": owner.username if owner else "Unknown",
+            "views": v.views,
+            "thumbnail_path": v.thumbnail_path,
+            "cold_stored_at": v.cold_stored_at.isoformat() if v.cold_stored_at else None
+        })
+
+    return {
+        "config": {
+            "enabled": settings.COLD_STORAGE_ENABLED,
+            "directory": str(settings.COLD_STORAGE_PATH) if settings.COLD_STORAGE_ENABLED else None,
+            "trigger_days": settings.COLD_STORAGE_TRIGGER_DAYS,
+            "trigger_views": settings.COLD_STORAGE_TRIGGER_VIEWS,
+        },
+        "cold_count": cold_count,
+        "candidates_count": candidates_count,
+        "active_count": active_count,
+        "cold_videos": cold_videos_list,
+    }
+
+@app.get("/admin/cold-storage/candidates")
+def get_cold_storage_candidates(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """获取符合冷存储迁移条件的视频"""
+    from config import settings
+    from datetime import datetime, timedelta
+
+    days_ago = datetime.utcnow() - timedelta(days=settings.COLD_STORAGE_TRIGGER_DAYS)
+
+    # 查询符合迁移条件的视频：超过N天 + 播放量低于阈值 + 未在冷存储
+    candidates = session.exec(
+        select(Video).where(
+            Video.is_cold == False,
+            Video.created_at <= days_ago,
+            Video.views < settings.COLD_STORAGE_TRIGGER_VIEWS
+        ).order_by(Video.views.asc())
+    ).all()
+
+    result = []
+    for v in candidates:
+        owner = session.get(User, v.user_id)
+        result.append({
+            "id": str(v.id),
+            "title": v.title,
+            "owner": owner.username if owner else "Unknown",
+            "views": v.views,
+            "complete_views": v.complete_views,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+            "duration": v.duration,
+        })
+
+    return {"candidates": result, "count": len(result)}
+
+@app.post("/admin/cold-storage/migrate/{video_id}")
+def migrate_video_to_cold(
+    video_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """迁移单个视频到冷存储"""
+    from config import settings
+    from datetime import datetime
+    import shutil
+
+    if not settings.COLD_STORAGE_ENABLED:
+        raise HTTPException(status_code=400, detail="Cold storage is not enabled")
+
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.is_cold:
+        raise HTTPException(status_code=400, detail="Video is already in cold storage")
+
+    try:
+        # 1. 复制原文件到冷存储
+        if video.original_file_path:
+            src = settings.fs_path(video.original_file_path)
+            dst_dir = settings.COLD_STORAGE_UPLOADS_DIR / src.parent.name
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            dst = dst_dir / src.name
+            if src.exists():
+                shutil.copy2(src, dst)
+                logger.info(f"Copied original file to cold storage: {src} -> {dst}")
+
+        if video.processed_file_path:
+            src = settings.fs_path(video.processed_file_path)
+            src_dir = src.parent  # /data/myvideo/static/videos/processed/{video_id}
+            dst_dir = settings.COLD_STORAGE_PROCESSED_DIR / src_dir.name
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            if src_dir.exists():
+                for f in src_dir.rglob('*'):
+                    if f.is_file():
+                        rel_path = f.relative_to(src_dir)
+                        (dst_dir / rel_path).parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(f, dst_dir / rel_path)
+                logger.info(f"Copied processed files to cold storage: {src_dir} -> {dst_dir}")
+
+        # 2. 删除主存储文件
+        if video.original_file_path:
+            src = settings.fs_path(video.original_file_path)
+            if src.exists():
+                src.unlink()
+                logger.info(f"Deleted original file from main storage: {src}")
+
+        if video.processed_file_path:
+            src_dir = settings.fs_path(video.processed_file_path).parent
+            if src_dir.exists() and src_dir.is_dir():
+                shutil.rmtree(src_dir)
+                logger.info(f"Deleted processed dir from main storage: {src_dir}")
+
+        # 3. 更新数据库
+        video.is_cold = True
+        video.cold_stored_at = datetime.utcnow()
+        session.commit()
+
+        return {"ok": True, "message": f"Video {video_id} migrated to cold storage"}
+
+    except Exception as e:
+        logger.error(f"Failed to migrate video {video_id} to cold storage: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+@app.post("/admin/cold-storage/restore/{video_id}")
+def restore_video_from_cold(
+    video_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """从冷存储恢复视频到主存储"""
+    from config import settings
+    import shutil
+
+    if not settings.COLD_STORAGE_ENABLED:
+        raise HTTPException(status_code=400, detail="Cold storage is not enabled")
+
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if not video.is_cold:
+        raise HTTPException(status_code=400, detail="Video is not in cold storage")
+
+    try:
+        # 1. 复制文件回主存储
+        if video.original_file_path:
+            # 冷存储路径: cold_storage/videos/uploads/{uuid}.mp4
+            src = settings.COLD_STORAGE_UPLOADS_DIR / (video.original_file_path.split('/')[-1])
+            dst = settings.fs_path(video.original_file_path)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if src.exists():
+                shutil.copy2(src, dst)
+                logger.info(f"Restored original file: {src} -> {dst}")
+
+        if video.processed_file_path:
+            src_dir_name = video.processed_file_path.split('/processed/')[-1].split('/')[0] if '/processed/' in video.processed_file_path else str(video_id)
+            src_dir = settings.COLD_STORAGE_PROCESSED_DIR / src_dir_name
+            dst_dir = settings.fs_path(video.processed_file_path).parent
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            if src_dir.exists():
+                for f in src_dir.rglob('*'):
+                    if f.is_file():
+                        rel_path = f.relative_to(src_dir)
+                        (dst_dir / rel_path).parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(f, dst_dir / rel_path)
+                logger.info(f"Restored processed files: {src_dir} -> {dst_dir}")
+
+        # 2. 删除冷存储文件
+        if video.original_file_path:
+            src = settings.COLD_STORAGE_UPLOADS_DIR / (video.original_file_path.split('/')[-1])
+            if src.exists():
+                src.unlink()
+                logger.info(f"Deleted from cold storage: {src}")
+
+        if video.processed_file_path:
+            src_dir_name = video.processed_file_path.split('/processed/')[-1].split('/')[0] if '/processed/' in video.processed_file_path else str(video_id)
+            src_dir = settings.COLD_STORAGE_PROCESSED_DIR / src_dir_name
+            if src_dir.exists():
+                shutil.rmtree(src_dir)
+                logger.info(f"Deleted processed dir from cold storage: {src_dir}")
+
+        # 3. 更新数据库
+        video.is_cold = False
+        video.cold_stored_at = None
+        session.commit()
+
+        return {"ok": True, "message": f"Video {video_id} restored from cold storage"}
+
+    except Exception as e:
+        logger.error(f"Failed to restore video {video_id} from cold storage: {e}")
+        raise HTTPException(status_code=500, detail=f"Restore failed: {str(e)}")
+
+@app.post("/admin/cold-storage/migrate-all")
+def migrate_all_candidates(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """批量迁移所有符合条件的视频到冷存储"""
+    from config import settings
+    from datetime import datetime, timedelta
+
+    if not settings.COLD_STORAGE_ENABLED:
+        raise HTTPException(status_code=400, detail="Cold storage is not enabled")
+
+    days_ago = datetime.utcnow() - timedelta(days=settings.COLD_STORAGE_TRIGGER_DAYS)
+
+    candidates = session.exec(
+        select(Video).where(
+            Video.is_cold == False,
+            Video.created_at <= days_ago,
+            Video.views < settings.COLD_STORAGE_TRIGGER_VIEWS
+        )
+    ).all()
+
+    migrated = 0
+    failed = []
+
+    for video in candidates:
+        try:
+            # 迁移逻辑（复用上面的代码）
+            import shutil
+
+            if video.original_file_path:
+                src = settings.fs_path(video.original_file_path)
+                dst_dir = settings.COLD_STORAGE_UPLOADS_DIR / src.parent.name
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                dst = dst_dir / src.name
+                if src.exists():
+                    shutil.copy2(src, dst)
+                    src.unlink()
+
+            if video.processed_file_path:
+                src = settings.fs_path(video.processed_file_path)
+                src_dir = src.parent
+                dst_dir = settings.COLD_STORAGE_PROCESSED_DIR / src_dir.name
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                if src_dir.exists():
+                    for f in src_dir.rglob('*'):
+                        if f.is_file():
+                            rel_path = f.relative_to(src_dir)
+                            (dst_dir / rel_path).parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(f, dst_dir / rel_path)
+                    shutil.rmtree(src_dir)
+
+            video.is_cold = True
+            video.cold_stored_at = datetime.utcnow()
+            session.commit()
+            migrated += 1
+
+        except Exception as e:
+            failed.append({"video_id": str(video.id), "error": str(e)})
+            logger.error(f"Failed to migrate video {video.id}: {e}")
+
+    return {
+        "ok": True,
+        "migrated": migrated,
+        "failed": len(failed),
+        "failed_details": failed
+    }
 
 @app.get("/admin/users", response_model=List[UserRead])
 def get_all_users(
@@ -1564,6 +2379,38 @@ def get_my_videos(current_user: User = Depends(get_current_user), session: Sessi
 def delete_video(video_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if not video or video.user_id != current_user.id: raise HTTPException(status_code=404)
+
+    # 清理原始视频文件
+    if video.original_file_path:
+        original_path = settings.fs_path(video.original_file_path)
+        if original_path.exists():
+            try:
+                original_path.unlink()
+                logger.info(f"Deleted original file: {original_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete original file {original_path}: {e}")
+
+    # 清理转码文件目录
+    if video.processed_file_path:
+        processed_path = settings.fs_path(video.processed_file_path)
+        if processed_path.parent.exists():
+            try:
+                import shutil
+                shutil.rmtree(processed_path.parent)
+                logger.info(f"Deleted processed directory: {processed_path.parent}")
+            except Exception as e:
+                logger.warning(f"Failed to delete processed directory {processed_path.parent}: {e}")
+
+    # 清理缩略图
+    if video.thumbnail_path:
+        thumb_path = settings.fs_path(video.thumbnail_path)
+        if thumb_path.exists():
+            try:
+                thumb_path.unlink()
+                logger.info(f"Deleted thumbnail: {thumb_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete thumbnail {thumb_path}: {e}")
+
     session.delete(video)
     session.commit()
     return {"ok": True}

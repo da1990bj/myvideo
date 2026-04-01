@@ -6,6 +6,8 @@ import math
 import json
 import asyncio
 import logging
+import shutil
+from pathlib import Path
 from sqlmodel import Session, select
 from database import engine
 from data_models import Video
@@ -331,6 +333,7 @@ def transcode_video_task(self, video_id: str):
     return "Success"
 
 import random
+from datetime import datetime, timedelta
 
 @celery_app.task(bind=True)
 def regenerate_thumbnail_task(self, video_id: str):
@@ -436,20 +439,236 @@ def compute_all_recommendation_scores(self):
         return {"status": "error", "message": str(e)}
 
 
+# ==================== 存储迁移任务 ====================
+
+@celery_app.task(bind=True)
+def migrate_storage_task(self, old_dirs: dict, new_dirs: dict):
+    """
+    迁移视频文件到新目录
+
+    Args:
+        old_dirs: {"uploads": "/old/path", "processed": "/old/path", "thumbnails": "/old/path"}
+        new_dirs: {"uploads": "/new/path", "processed": "/new/path", "thumbnails": "/new/path"}
+    """
+    from time import sleep
+
+    logger.info(f"Starting storage migration: {old_dirs} -> {new_dirs}")
+
+    # 获取迁移间隔配置
+    migration_delay = getattr(settings, 'STORAGE_MIGRATION_DELAY', 0.5)
+    logger.info(f"Migration delay between files: {migration_delay} seconds")
+
+    migrated_count = 0
+    failed_count = 0
+    errors = []
+
+    try:
+        with Session(engine) as session:
+            videos = session.exec(select(Video)).all()
+            total = len(videos)
+            logger.info(f"Found {total} videos to check for migration")
+
+            for idx, video in enumerate(videos):
+                try:
+                    video_changed = False
+
+                    # 迁移原始文件
+                    if video.original_file_path and old_dirs.get("uploads") and new_dirs.get("uploads"):
+                        old_path_str = video.original_file_path
+                        if old_dirs["uploads"] in old_path_str:
+                            new_path_str = old_path_str.replace(old_dirs["uploads"], new_dirs["uploads"])
+                            old_path = Path(old_path_str)
+                            new_path = Path(new_path_str)
+
+                            if old_path.exists():
+                                new_path.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.move(str(old_path), str(new_path))
+                                video.original_file_path = new_path_str
+                                video_changed = True
+                                logger.info(f"Migrated original file: {old_path} -> {new_path}")
+
+                    # 迁移转码文件目录
+                    if video.processed_file_path and old_dirs.get("processed") and new_dirs.get("processed"):
+                        old_path_str = video.processed_file_path
+                        if old_dirs["processed"] in old_path_str:
+                            new_path_str = old_path_str.replace(old_dirs["processed"], new_dirs["processed"])
+                            old_dir = Path(old_path_str).parent
+                            new_dir = Path(new_path_str).parent
+
+                            if old_dir.exists() and old_dir != new_dir:
+                                new_dir.mkdir(parents=True, exist_ok=True)
+                                # 移动整个目录
+                                for item in old_dir.iterdir():
+                                    shutil.move(str(item), str(new_dir / item.name))
+                                # 删除旧目录
+                                try:
+                                    old_dir.rmdir()
+                                except OSError:
+                                    pass  # 目录非空，忽略
+                                video.processed_file_path = new_path_str
+                                video_changed = True
+                                logger.info(f"Migrated processed directory: {old_dir} -> {new_dir}")
+
+                    # 迁移缩略图
+                    if video.thumbnail_path and old_dirs.get("thumbnails") and new_dirs.get("thumbnails"):
+                        old_path_str = video.thumbnail_path
+                        if old_dirs["thumbnails"] in old_path_str:
+                            new_path_str = old_path_str.replace(old_dirs["thumbnails"], new_dirs["thumbnails"])
+                            old_path = Path(old_path_str)
+                            new_path = Path(new_path_str)
+
+                            if old_path.exists():
+                                new_path.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.move(str(old_path), str(new_path))
+                                video.thumbnail_path = new_path_str
+                                video_changed = True
+                                logger.info(f"Migrated thumbnail: {old_path} -> {new_path}")
+
+                    if video_changed:
+                        session.add(video)
+                        session.commit()
+                        migrated_count += 1
+
+                    # 控制迁移速度
+                    if migration_delay > 0:
+                        sleep(migration_delay)
+
+                    # 更新任务进度
+                    if (idx + 1) % 5 == 0:
+                        self.update_state(
+                            state='PROGRESS',
+                            meta={
+                                'current': idx + 1,
+                                'total': total,
+                                'migrated': migrated_count,
+                                'failed': failed_count,
+                                'status': f'正在迁移: {idx + 1}/{total}'
+                            }
+                        )
+
+                except Exception as e:
+                    failed_count += 1
+                    error_msg = f"Video {video.id}: {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(f"Failed to migrate video {video.id}: {e}")
+                    session.rollback()
+
+            logger.info(f"Storage migration complete. Migrated: {migrated_count}, Failed: {failed_count}")
+            return {
+                "status": "completed",
+                "migrated": migrated_count,
+                "failed": failed_count,
+                "errors": errors[:100]
+            }
+
+    except Exception as e:
+        logger.error(f"Critical error in storage migration: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ==================== 冷存储迁移定时任务 ====================
+def cold_storage_migration_task(self):
+    """
+    定时检查并迁移冷存储视频
+
+    条件：created_at 超过 COLD_STORAGE_TRIGGER_DAYS 天 AND views < COLD_STORAGE_TRIGGER_VIEWS
+    """
+    if not settings.COLD_STORAGE_ENABLED:
+        logger.info("Cold storage is disabled, skipping migration check")
+        return {"status": "skipped", "reason": "cold_storage_disabled"}
+
+    logger.info("Starting cold storage migration check...")
+
+    try:
+        with Session(engine) as session:
+            # 计算时间阈值
+            days_threshold = settings.COLD_STORAGE_TRIGGER_DAYS
+            views_threshold = settings.COLD_STORAGE_TRIGGER_VIEWS
+            cutoff_date = datetime.utcnow() - timedelta(days=days_threshold)
+
+            # 查询符合条件的视频：非冷存储、超期、低播放量
+            candidates = session.exec(
+                select(Video).where(
+                    Video.is_cold == False,
+                    Video.created_at < cutoff_date,
+                    Video.views < views_threshold,
+                    Video.status == "completed"  # 只迁移已完成视频
+                )
+            ).all()
+
+            migrated_count = 0
+            failed_count = 0
+
+            for video in candidates:
+                try:
+                    # 获取原始文件路径
+                    original_path = settings.fs_path(video.original_file_path)
+                    processed_path = settings.fs_path(video.processed_file_path) if video.processed_file_path else None
+
+                    # 复制到冷存储
+                    if original_path.exists():
+                        cold_upload_dir = settings.COLD_STORAGE_UPLOADS_DIR
+                        cold_upload_dir.mkdir(parents=True, exist_ok=True)
+
+                        import shutil
+                        cold_file_path = cold_upload_dir / original_path.name
+                        shutil.copy2(original_path, cold_file_path)
+
+                        # 删除主存储文件（移走后删除）
+                        original_path.unlink()
+                        logger.info(f"Migrated original file for video {video.id} to {cold_file_path}")
+
+                    # 处理转码文件
+                    if processed_path and processed_path.exists():
+                        cold_processed_dir = settings.COLD_STORAGE_PROCESSED_DIR
+                        cold_processed_dir.mkdir(parents=True, exist_ok=True)
+
+                        import shutil
+                        cold_processed_file = cold_processed_dir / processed_path.name
+                        shutil.copy2(processed_path, cold_processed_file)
+                        processed_path.unlink()
+                        logger.info(f"Migrated processed file for video {video.id} to {cold_processed_file}")
+
+                    # 更新数据库
+                    video.is_cold = True
+                    video.cold_stored_at = datetime.utcnow()
+                    session.add(video)
+                    session.commit()
+
+                    migrated_count += 1
+                    logger.info(f"Video {video.id} migrated to cold storage")
+
+                except Exception as e:
+                    failed_count += 1
+                    logger.error(f"Failed to migrate video {video.id}: {e}")
+                    # 回滚事务
+                    session.rollback()
+
+            logger.info(f"Cold storage migration complete. Migrated: {migrated_count}, Failed: {failed_count}")
+            return {
+                "status": "completed",
+                "migrated": migrated_count,
+                "failed": failed_count,
+                "candidates_checked": len(candidates)
+            }
+
+    except Exception as e:
+        logger.error(f"Critical error in cold storage migration: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 # Celery Beat 定时任务配置
+from celery.schedules import crontab
+
 celery_app.conf.beat_schedule = {
     'compute-recommendations-daily': {
         'task': 'tasks.compute_all_recommendation_scores',
-        'schedule': 3600 * 24,  # 每24小时执行一次（可使用crontab更精确控制）
+        'schedule': crontab(hour=2, minute=0),  # 每天凌晨2点执行
+        'options': {'queue': 'default'}
+    },
+    'cold-storage-migration-daily': {
+        'task': 'tasks.cold_storage_migration_task',
+        'schedule': crontab(hour=1, minute=0),  # 每天凌晨1点执行冷存储检查
         'options': {'queue': 'default'}
     },
 }
-
-# 如果需要更精确的时间控制，可以使用 crontab：
-# from celery.schedules import crontab
-# celery_app.conf.beat_schedule = {
-#     'compute-recommendations-daily': {
-#         'task': 'tasks.compute_all_recommendation_scores',
-#         'schedule': crontab(hour=2, minute=0),  # 每天凌晨2点执行
-#     },
-# }

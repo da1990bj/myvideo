@@ -100,6 +100,10 @@ class Video(SQLModel, table=True):
     duration: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Cold storage fields
+    is_cold: bool = Field(default=False, index=True)  # Video is in cold storage
+    cold_stored_at: Optional[datetime] = None  # When video was moved to cold storage
+
     # tags: List[str] = Field(default=[], sa_column=Column(JSON)) # Removed
     tags_rel: List[Tag] = Relationship(back_populates="videos", link_model=VideoTag)
 
@@ -386,6 +390,8 @@ class VideoRead(SQLModel):
     is_liked: bool = False
     is_favorited: bool = False
     created_at: datetime
+    is_cold: bool = False
+    cold_stored_at: Optional[datetime] = None
     tags: List[str] = []
     owner: Optional[UserRead] = None
     category: Optional[Category] = None

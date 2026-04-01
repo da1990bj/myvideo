@@ -1,8 +1,7 @@
 """
 MyVideo Configuration Module
 
-All application settings are centralized here.
-Supports environment variables with sensible defaults for local development.
+所有配置值都在 .env 文件中定义，此模块负责读取和提供类型安全的访问接口。
 
 Usage:
     from app.config import settings
@@ -11,16 +10,10 @@ Usage:
     settings.DATABASE_URL
 
     # Paths
-    settings.BASE_DIR           # /data/myvideo (project root)
-    settings.STATIC_DIR         # /data/myvideo/static
-    settings.UPLOADS_DIR        # /data/myvideo/static/videos/uploads
-
-    # Helpers
-    settings.fs_path("/static/thumbnails/image.jpg")  # -> Path
-    settings.url_path("thumbnails/image.jpg")         # -> "/static/thumbnails/image.jpg"
+    settings.BASE_DIR           # 项目根目录
+    settings.UPLOADS_DIR         # 视频上传目录
 """
 
-import os
 import logging
 from pathlib import Path
 from typing import Optional
@@ -32,190 +25,194 @@ logger = logging.getLogger(__name__)
 
 class MyVideoSettings(BaseSettings):
     """
-    Centralized settings for MyVideo application.
+    配置读取器 - 所有配置值从 .env 文件读取
 
-    All settings can be overridden via environment variables.
-    Sensible defaults are provided for local development.
+    注意：不再有硬编码默认值，所有配置必须在 .env 中显式定义
     """
 
-    # Determine .env file location relative to this config file (project root)
-    _env_file_path = Path(__file__).resolve().parent.parent / ".env"
-
     model_config = SettingsConfigDict(
-        env_file=str(_env_file_path) if _env_file_path.exists() else ".env",
+        env_file=str(Path(__file__).resolve().parent.parent / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"  # Allow extra env vars without error
+        extra="ignore"
     )
 
-    # ==================== Project Paths ====================
-    # Project root directory (detected automatically from this file's location)
-    # Override via MYVIDEO_ROOT env var (useful for testing, containers)
-    MYVIDEO_ROOT: Optional[str] = None
+    # ==================== 基础配置 ====================
+    MYVIDEO_ROOT: str
 
-    @property
-    def BASE_DIR(self) -> Path:
-        """Project root directory."""
-        if self.MYVIDEO_ROOT:
-            return Path(self.MYVIDEO_ROOT)
-        # This file is at /data/myvideo/app/config.py
-        # Project root is /data/myvideo (parent.parent)
-        return Path(__file__).resolve().parent.parent
+    # ==================== 数据库 ====================
+    DATABASE_HOST: str
+    DATABASE_PORT: int
+    DATABASE_USER: str
+    DATABASE_PASSWORD: str
+    DATABASE_NAME: str
+    DATABASE_ECHO: bool = False
 
-    # ==================== Static Files Paths ====================
-    @property
-    def STATIC_DIR(self) -> Path:
-        """Static files directory."""
-        return self.BASE_DIR / "static"
-
-    @property
-    def UPLOADS_DIR(self) -> Path:
-        """Video uploads directory."""
-        return self.STATIC_DIR / "videos" / "uploads"
-
-    @property
-    def PROCESSED_DIR(self) -> Path:
-        """Processed (transcoded) videos directory."""
-        return self.STATIC_DIR / "videos" / "processed"
-
-    @property
-    def THUMBNAILS_DIR(self) -> Path:
-        """Thumbnails directory."""
-        return self.STATIC_DIR / "thumbnails"
-
-    @property
-    def THUMBNAILS_TEMP_DIR(self) -> Path:
-        """Temporary thumbnails directory."""
-        return self.THUMBNAILS_DIR / "temp"
-
-    @property
-    def AVATARS_DIR(self) -> Path:
-        """User avatars directory."""
-        return self.STATIC_DIR / "avatars"
-
-    @property
-    def DATA_DIR(self) -> Path:
-        """Data directory (sensitive words, etc)."""
-        return self.BASE_DIR / "data"
-
-    # ==================== Static Files URLs ====================
-    # These are URL paths served by the static files middleware
-    THUMBNAILS_URL: str = "/static/thumbnails"
-    VIDEOS_URL: str = "/static/videos"
-    AVATARS_URL: str = "/static/avatars"
-
-    # ==================== Database ====================
-    DATABASE_HOST: str = "localhost"
-    DATABASE_PORT: int = 5432
-    DATABASE_USER: str = "myvideo"
-    DATABASE_PASSWORD: str = "myvideo_password"
-    DATABASE_NAME: str = "myvideo_db"
-
-    @property
-    def DATABASE_URL(self) -> str:
-        """PostgreSQL connection URL."""
-        return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
-
-    DATABASE_ECHO: bool = True  # Log SQL statements (development)
-
-    # ==================== Redis / Celery ====================
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
+    # ==================== Redis ====================
+    REDIS_HOST: str
+    REDIS_PORT: int
     REDIS_DB: int = 0
     REDIS_PASSWORD: Optional[str] = None
 
-    @property
-    def REDIS_URL(self) -> str:
-        """Redis connection URL."""
-        if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-
-    # ==================== Security / JWT ====================
-    SECRET_KEY: str = "myvideo_secret_key_change_me_in_prod"
+    # ==================== 安全 / JWT ====================
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # ==================== FFmpeg ====================
-    FFMPEG_PATH: str = "ffmpeg"  # Assume in PATH by default
-    FFPROBE_PATH: str = "ffprobe"
-
-    # ==================== Application ====================
+    # ==================== 应用服务器 ====================
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     APP_DEBUG: bool = False
 
+    # ==================== 文件存储目录 ====================
+    STATIC_SUBDIR: str = "static"
+    UPLOADS_SUBDIR: str = "static/videos/uploads"
+    PROCESSED_SUBDIR: str = "static/videos/processed"
+    THUMBNAILS_SUBDIR: str = "static/thumbnails"
+    AVATARS_SUBDIR: str = "static/avatars"
+    DATA_SUBDIR: str = "data"
+
+    # ==================== URL 路径前缀 ====================
+    THUMBNAILS_URL: str = "/static/thumbnails"
+    VIDEOS_URL: str = "/static/videos"
+    AVATARS_URL: str = "/static/avatars"
+
     # ==================== CORS ====================
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: str = "*"
     CORS_CREDENTIALS: bool = True
-    CORS_METHODS: list[str] = ["*"]
-    CORS_HEADERS: list[str] = ["*"]
+    CORS_METHODS: str = "*"
+    CORS_HEADERS: str = "*"
 
     # ==================== Celery ====================
-    CELERY_BROKER_URL: str = ""  # Falls back to REDIS_URL if empty
-    CELERY_RESULT_BACKEND: str = ""  # Falls back to REDIS_URL if empty
+    CELERY_BROKER_URL: str = ""
+    CELERY_RESULT_BACKEND: str = ""
+
+    # ==================== 日志 ====================
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: Optional[str] = None
+
+    # ==================== 敏感词 ====================
+    SENSITIVE_WORDS_FILE: Optional[str] = None
+
+    # ==================== 冷存储 ====================
+    COLD_STORAGE_ENABLED: bool = False
+    COLD_STORAGE_TRIGGER_DAYS: int = 180
+    COLD_STORAGE_TRIGGER_VIEWS: int = 10
+    COLD_STORAGE_PATH_ROOT: str = "/data/myvideo/cold_storage"
+
+    # ==================== 存储迁移 ====================
+    # 迁移间隔时间（秒），控制迁移速度，避免 CPU/磁盘 占用过高
+    # 值越大速度越慢，0 表示不限制
+    STORAGE_MIGRATION_DELAY: float = 0.5
+
+    # ==================== 计算属性 ====================
+
+    @property
+    def BASE_DIR(self) -> Path:
+        """项目根目录"""
+        return Path(self.MYVIDEO_ROOT)
+
+    @property
+    def STATIC_DIR(self) -> Path:
+        """静态文件目录"""
+        return self.BASE_DIR / self.STATIC_SUBDIR
+
+    @property
+    def UPLOADS_DIR(self) -> Path:
+        """视频上传目录"""
+        return self.BASE_DIR / self.UPLOADS_SUBDIR
+
+    @property
+    def PROCESSED_DIR(self) -> Path:
+        """转码视频目录"""
+        return self.BASE_DIR / self.PROCESSED_SUBDIR
+
+    @property
+    def THUMBNAILS_DIR(self) -> Path:
+        """缩略图目录"""
+        return self.BASE_DIR / self.THUMBNAILS_SUBDIR
+
+    @property
+    def THUMBNAILS_TEMP_DIR(self) -> Path:
+        """临时缩略图目录"""
+        return self.THUMBNAILS_DIR / "temp"
+
+    @property
+    def AVATARS_DIR(self) -> Path:
+        """头像目录"""
+        return self.BASE_DIR / self.AVATARS_SUBDIR
+
+    @property
+    def DATA_DIR(self) -> Path:
+        """数据目录"""
+        return self.BASE_DIR / self.DATA_SUBDIR
+
+    @property
+    def DATABASE_URL(self) -> str:
+        """PostgreSQL 连接 URL"""
+        return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+
+    @property
+    def REDIS_URL(self) -> str:
+        """Redis 连接 URL"""
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     @property
     def CELERY_BROKER(self) -> str:
+        """Celery 消息代理"""
         return self.CELERY_BROKER_URL or self.REDIS_URL
 
     @property
     def CELERY_BACKEND(self) -> str:
+        """Celery 结果后端"""
         return self.CELERY_RESULT_BACKEND or self.REDIS_URL
 
-    # ==================== Logging ====================
-    LOG_LEVEL: str = "INFO"
-    LOG_FILE: Optional[str] = None  # Defaults to BASE_DIR / "server.log"
-
     @property
-    def LOG_FILE_PATH(self) -> Optional[Path]:
+    def LOG_FILE_PATH(self) -> Path:
+        """日志文件路径"""
         if self.LOG_FILE:
             return Path(self.LOG_FILE)
         return self.BASE_DIR / "server.log"
 
-    # ==================== Sensitive Words ====================
-    SENSITIVE_WORDS_FILE: Optional[str] = None
-
     @property
     def SENSITIVE_WORDS_PATH(self) -> Path:
+        """敏感词文件路径"""
         if self.SENSITIVE_WORDS_FILE:
             return Path(self.SENSITIVE_WORDS_FILE)
         return self.DATA_DIR / "sensitive_words.txt"
 
-    # ==================== Helper Methods ====================
+    @property
+    def COLD_STORAGE_PATH(self) -> Path:
+        """冷存储根目录"""
+        return Path(self.COLD_STORAGE_PATH_ROOT)
+
+    @property
+    def COLD_STORAGE_UPLOADS_DIR(self) -> Path:
+        """冷存储 - 原始视频"""
+        return self.COLD_STORAGE_PATH / "videos" / "uploads"
+
+    @property
+    def COLD_STORAGE_PROCESSED_DIR(self) -> Path:
+        """冷存储 - 转码视频"""
+        return self.COLD_STORAGE_PATH / "videos" / "processed"
+
+    # ==================== 工具方法 ====================
 
     def fs_path(self, url_path: str) -> Path:
-        """
-        Convert a URL path to a filesystem path.
-
-        Args:
-            url_path: URL path like "/static/thumbnails/image.jpg"
-
-        Returns:
-            Absolute filesystem path like "/data/myvideo/static/thumbnails/image.jpg"
-        """
-        # Remove leading slash and split
+        """将 URL 路径转换为文件系统路径"""
         parts = url_path.lstrip("/").split("/", 1)
         if len(parts) < 2:
             return self.BASE_DIR
-        # parts[0] should be "static"
         if parts[0] == "static":
             return self.BASE_DIR / "static" / parts[1]
         return self.BASE_DIR / url_path.lstrip("/")
 
     def url_path(self, relative_path: str) -> str:
-        """
-        Convert a relative path to a URL path.
-
-        Args:
-            relative_path: Path like "thumbnails/image.jpg"
-
-        Returns:
-            URL path like "/static/thumbnails/image.jpg"
-        """
+        """将相对路径转换为 URL 路径"""
         if relative_path.startswith("/"):
             return relative_path
-        # Determine which static subdirectory
         if relative_path.startswith("thumbnails"):
             return f"{self.THUMBNAILS_URL}/{relative_path.replace('thumbnails/', '')}"
         elif relative_path.startswith("videos"):
@@ -225,7 +222,7 @@ class MyVideoSettings(BaseSettings):
         return f"/static/{relative_path}"
 
     def ensure_dirs(self) -> None:
-        """Create all necessary directories."""
+        """确保所有必要目录存在"""
         dirs = [
             self.UPLOADS_DIR,
             self.PROCESSED_DIR,
@@ -234,6 +231,11 @@ class MyVideoSettings(BaseSettings):
             self.AVATARS_DIR,
             self.DATA_DIR,
         ]
+        if self.COLD_STORAGE_ENABLED:
+            dirs.extend([
+                self.COLD_STORAGE_UPLOADS_DIR,
+                self.COLD_STORAGE_PROCESSED_DIR,
+            ])
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
             logger.debug(f"Ensured directory exists: {d}")
@@ -241,10 +243,9 @@ class MyVideoSettings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> MyVideoSettings:
-    """Get cached settings instance."""
+    """获取配置单例"""
     return MyVideoSettings()
 
 
-# Module-level singleton for convenience
-# Usage: from app.config import settings
+# 模块级单例
 settings = get_settings()

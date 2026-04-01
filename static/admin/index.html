@@ -20,6 +20,7 @@
     <div style="padding: 20px;">
         <h1>仪表盘</h1>
         <div class="refresh-info">
+            <span id="ws-status" style="color: #888; margin-right: 10px;"></span>
             上次更新：<span id="last-update-time">加载中...</span>
             <button onclick="loadStats()">刷新</button>
         </div>
@@ -103,10 +104,16 @@
 
             socket.on('connect', () => {
                 console.log('✅ Admin dashboard WebSocket connected');
+                const wsEl = document.getElementById("ws-status");
+                if (wsEl) wsEl.textContent = '● WebSocket 已连接';
+                if (wsEl) wsEl.style.color = '#2f9e44';
             });
 
             socket.on('disconnect', () => {
                 console.log('⚠️ Admin dashboard WebSocket disconnected');
+                const wsEl = document.getElementById("ws-status");
+                if (wsEl) wsEl.textContent = '● WebSocket 已断开';
+                if (wsEl) wsEl.style.color = '#f04c49';
             });
 
             // 监听数据更新事件（目前用轮询保底）
@@ -122,6 +129,12 @@
             connectWebSocket();
             // 每 30 秒保底刷新一次
             setInterval(loadStats, 30000);
+            // 设置 WebSocket 等待状态
+            const wsEl = document.getElementById("ws-status");
+            if (wsEl) {
+                wsEl.textContent = '● WebSocket 连接中...';
+                wsEl.style.color = '#f08c00';
+            }
         });
     </script>
 </body>

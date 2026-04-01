@@ -1,58 +1,260 @@
 // Admin Shared Logic
 
-document.addEventListener("DOMContentLoaded", async () => {
-    const token = localStorage.getItem("access_token");
-    if (!token) return location.href = "/static/login.html";
+// 默认菜单配置
+const DEFAULT_MENU = [
+    { id: 'index', href: '/static/admin/index.html', text: '仪表盘' },
+    { id: 'transcode', href: '/static/admin/transcode.html', text: '转码队列' },
+    { id: 'videos', href: '/static/admin/videos.html', text: '视频管理' },
+    { id: 'recommendations', href: '/static/admin/recommendations.html', text: '推荐管理' },
+    { id: 'users', href: '/static/admin/users.html', text: '用户管理' },
+    { id: 'comments', href: '/static/admin/comments.html', text: '评论管理' },
+    { id: 'divider1', type: 'divider' },
+    { id: 'roles', href: '/static/admin/roles.html', text: '角色权限' },
+    { id: 'settings', href: '/static/admin/settings.html', text: '系统设置' },
+    { id: 'logs', href: '/static/admin/logs.html', text: '操作日志' },
+    { id: 'divider2', type: 'divider' },
+    { id: 'back', href: '/static/index.html', text: '返回前台', style: 'margin-top:20px; color:#666;' },
+];
 
-    // Verify Admin Access
+let currentMenu = [...DEFAULT_MENU];
+let apiMenuLoaded = false;
+
+// 从 API 加载菜单顺序
+async function loadMenuOrderFromAPI() {
+    try {
+        const token = localStorage.getItem('access_token');
+        console.log('[Admin] Fetching menu order from API...');
+        const res = await fetch('/admin/menu-order', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        console.log('[Admin] Menu order API response:', res.status);
+        if (res.ok) {
+            const data = await res.json();
+            console.log('[Admin] Menu order data:', data);
+            if (data.order && Array.isArray(data.order)) {
+                // 合并：使用保存的顺序，但保留新增的菜单项
+                const savedIds = data.order.map(item => item.id);
+                const newItems = DEFAULT_MENU.filter(item => !savedIds.includes(item.id));
+                currentMenu = [...data.order, ...newItems];
+                apiMenuLoaded = true;
+                console.log('[Admin] Menu order updated from API');
+            } else {
+                console.log('[Admin] No saved menu order, using default');
+            }
+        }
+    } catch (e) {
+        console.warn('[Admin] Failed to load menu order from API:', e);
+    }
+    return currentMenu;
+}
+
+// 保存菜单顺序到 API
+async function saveMenuOrderToAPI(menu) {
+    try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch('/admin/menu-order', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(menu)
+        });
+        if (!res.ok) {
+            console.warn('Failed to save menu order to API');
+        }
+    } catch (e) {
+        console.warn('Failed to save menu order to API:', e);
+    }
+}
+
+// 渲染单个菜单项
+function renderMenuItem(item) {
+    if (item.type === 'divider') {
+        return '<div style="height: 1px; background: #eee; margin: 10px 0;"></div>';
+    }
+    const isActive = window.location.pathname === item.href;
+    const activeStyle = isActive ? 'background: #e3f2fd; color: #00a1d6; font-weight: 500;' : '';
+    const dragHandle = '<span class="drag-handle" style="float:left; opacity:0.3; cursor:grab; margin-right:8px;">&#9776;</span>';
+    return `
+        <a href="${item.href}"
+           class="admin-link"
+           data-id="${item.id}"
+           draggable="true"
+           style="${activeStyle}${item.style || ''}">
+            ${dragHandle}${item.text}
+        </a>
+    `;
+}
+
+// 渲染侧边栏
+function renderSidebar(menu) {
+    const menuHtml = menu.map(renderMenuItem).join('');
+
+    const html = `
+    <div id="admin-sidebar">
+        <h2 style="margin-top:0; color:#00a1d6; margin-bottom:30px;">MyVideo Admin</h2>
+        <div id="menu-container">
+            ${menuHtml}
+        </div>
+    </div>
+    <style>
+        #admin-sidebar { width: 240px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; padding: 20px; overflow-y: auto; z-index: 100; }
+        .admin-link { display: block; padding: 12px; color: #333; text-decoration: none; border-radius: 4px; margin-bottom: 4px; transition: all 0.2s; cursor: pointer; user-select: none; }
+        .admin-link:hover { background: #f4f5f7; color: #00a1d6; }
+        .admin-link.dragging { opacity: 0.5; background: #e3f2fd; }
+        .admin-link.drag-over { border-top: 2px solid #00a1d6; }
+        .admin-link.drag-over-next { border-bottom: 2px solid #00a1d6; }
+        .drag-handle:hover { opacity: 1 !important; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding-left: 280px; background-color: #f4f5f7; }
+        .container, .content { padding: 20px; max-width: 100%; }
+        #menu-container { min-height: 50px; }
+    </style>
+    `;
+
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    document.body.appendChild(div);
+
+    initDragAndDrop();
+}
+
+// 获取当前菜单顺序
+function getCurrentMenuOrder() {
+    const container = document.getElementById('menu-container');
+    const items = container.querySelectorAll('.admin-link');
+    const menu = [];
+
+    const defaultMenuMap = {};
+    DEFAULT_MENU.forEach(item => defaultMenuMap[item.id] = item);
+
+    items.forEach(item => {
+        const id = item.dataset.id;
+        if (id && defaultMenuMap[id]) {
+            menu.push(defaultMenuMap[id]);
+        }
+    });
+
+    return menu;
+}
+
+// 初始化拖拽功能
+function initDragAndDrop() {
+    const container = document.getElementById('menu-container');
+    const items = container.querySelectorAll('.admin-link');
+
+    let draggedItem = null;
+
+    items.forEach(item => {
+        // 拖拽开始
+        item.addEventListener('dragstart', (e) => {
+            draggedItem = item;
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', item.dataset.id);
+        });
+
+        // 拖拽结束
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            items.forEach(i => {
+                i.classList.remove('drag-over');
+                i.classList.remove('drag-over-next');
+            });
+            draggedItem = null;
+
+            // 保存新顺序
+            const menu = getCurrentMenuOrder();
+            currentMenu = menu;
+            saveMenuOrderToAPI(menu);
+        });
+
+        // 拖拽经过
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            if (item === draggedItem) return;
+
+            const rect = item.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+
+            items.forEach(i => i.classList.remove('drag-over', 'drag-over-next'));
+
+            if (e.clientY < midY) {
+                item.classList.add('drag-over');
+            } else {
+                item.classList.add('drag-over-next');
+            }
+        });
+
+        // 拖拽离开
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over', 'drag-over-next');
+        });
+
+        // 放置
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+
+            if (item === draggedItem) return;
+
+            const rect = item.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            const insertBefore = e.clientY < midY;
+
+            draggedItem.remove();
+
+            if (insertBefore) {
+                container.insertBefore(draggedItem, item);
+            } else {
+                container.insertBefore(draggedItem, item.nextSibling);
+            }
+        });
+    });
+}
+
+// 初始化
+async function initAdmin() {
+    console.log('[Admin] Initializing admin panel...');
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+        console.log('[Admin] No token found, redirecting to login');
+        location.href = "/static/login.html";
+        return;
+    }
+
     try {
         const res = await fetch("/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
+        console.log('[Admin] /users/me response:', res.status);
         if (res.ok) {
             const user = await res.json();
+            console.log('[Admin] User:', user.username, 'is_admin:', user.is_admin);
             if (!user.is_admin) {
                 alert("您没有管理员权限");
                 location.href = "/static/index.html";
                 return;
             }
-            renderSidebar();
+
+            // 先加载菜单顺序，再渲染侧边栏
+            console.log('[Admin] Loading menu order...');
+            await loadMenuOrderFromAPI();
+            console.log('[Admin] Current menu:', currentMenu.length, 'items');
+            renderSidebar(currentMenu);
+            console.log('[Admin] Sidebar rendered successfully');
         } else {
+            console.log('[Admin] Not ok response, redirecting to login');
             location.href = "/static/login.html";
         }
     } catch(e) {
-        location.href = "/static/index.html";
+        console.error('[Admin] Error:', e);
+        location.href = "/static/login.html";
     }
-});
-
-function renderSidebar() {
-    const html = `
-    <div style="width: 240px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; padding: 20px; overflow-y: auto;">
-        <h2 style="margin-top:0; color:#00a1d6; margin-bottom:30px;">MyVideo Admin</h2>
-        <a href="/static/admin/index.html" class="admin-link">仪表盘</a>
-        <a href="/static/admin/transcode.html" class="admin-link">转码队列</a>
-        <a href="/static/admin/videos.html" class="admin-link">视频管理</a>
-        <a href="/static/admin/recommendations.html" class="admin-link">推荐管理</a>
-        <a href="/static/admin/users.html" class="admin-link">用户管理</a>
-        <a href="/static/admin/comments.html" class="admin-link">评论管理</a>
-        <div style="height: 1px; background: #eee; margin: 10px 0;"></div>
-        <a href="/static/admin/roles.html" class="admin-link">角色权限</a>
-        <a href="/static/admin/settings.html" class="admin-link">系统设置</a>
-        <a href="/static/admin/logs.html" class="admin-link">操作日志</a>
-        <div style="height: 1px; background: #eee; margin: 10px 0;"></div>
-        <a href="/static/index.html" class="admin-link" style="margin-top:20px; color:#666;">返回前台</a>
-    </div>
-    <style>
-        .admin-link { display: block; padding: 12px; color: #333; text-decoration: none; border-radius: 4px; margin-bottom: 4px; transition: all 0.2s; }
-        .admin-link:hover { background: #f4f5f7; color: #00a1d6; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding-left: 280px; background-color: #f4f5f7; }
-        .container, .content { padding: 20px; max-width: 100%; }
-    </style>
-    `;
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    document.body.appendChild(div);
 }
+
+document.addEventListener("DOMContentLoaded", initAdmin);
 
 // 权限映射表 - 中文翻译和说明
 const PERMISSIONS_MAP = {
