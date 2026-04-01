@@ -739,6 +739,85 @@ def get_admin_stats(
     comments = session.exec(select(func.count()).select_from(Comment)).one()
     return {"users": users, "videos": videos, "comments": comments}
 
+@app.get("/admin/transcode/queue")
+def get_transcode_queue(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    获取转码队列状态
+    返回待处理、转码中、已完成、失败的视频列表及统计
+    """
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 查询各状态视频
+    pending = session.exec(select(Video).where(Video.status == "pending").order_by(Video.created_at)).all()
+    processing = session.exec(select(Video).where(Video.status == "processing").order_by(Video.created_at)).all()
+    today_completed = session.exec(select(Video).where(
+        Video.status == "completed",
+        Video.created_at >= today
+    )).all()
+    failed = session.exec(select(Video).where(Video.status == "failed").order_by(desc(Video.created_at)).limit(20)).all()
+
+    # 构建返回数据
+    def video_info(v, include_progress=True):
+        info = {
+            "id": str(v.id),
+            "title": v.title,
+            "thumbnail_path": v.thumbnail_path,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+        }
+        # 获取作者信息
+        owner = session.get(User, v.user_id)
+        info["owner"] = owner.username if owner else "Unknown"
+        if include_progress:
+            info["progress"] = v.progress or 0
+        return info
+
+    pending_list = [video_info(v, False) for v in pending]
+    processing_list = [video_info(v, True) for v in processing]
+    completed_list = [video_info(v, False) for v in today_completed]
+    failed_list = [video_info(v, True) for v in failed]
+
+    return {
+        "pending": pending_list,
+        "processing": processing_list,
+        "completed_recent": completed_list,
+        "failed": failed_list,
+        "stats": {
+            "pending_count": len(pending),
+            "processing_count": len(processing),
+            "completed_today": len(today_completed),
+            "failed_count": len(failed)
+        }
+    }
+
+@app.post("/admin/transcode/{video_id}/retry")
+def retry_transcode(
+    video_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    重试失败的转码任务
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.status != "failed":
+        raise HTTPException(status_code=400, detail="Only failed videos can be retried")
+
+    # 重置状态
+    video.status = "pending"
+    video.progress = 0
+    session.commit()
+
+    # 重新提交转码任务
+    from tasks import transcode_video_task
+    transcode_video_task.delay(str(video_id))
+
+    return {"ok": True, "message": "Transcode task resubmitted"}
+
 @app.get("/admin/users", response_model=List[UserRead])
 def get_all_users(
     page: int = 1, size: int = 20,

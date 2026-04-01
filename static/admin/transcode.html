@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 转码队列</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .container { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #333; }
+        h2 { margin-top: 30px; margin-bottom: 15px; color: #555; font-size: 18px; border-left: 4px solid #00a1d6; padding-left: 12px; }
+
+        /* 统计卡片 */
+        .stats-row { display: flex; gap: 15px; flex-wrap: wrap; }
+        .stat-card {
+            background: #fff; padding: 20px 30px; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); min-width: 140px; text-align: center;
+        }
+        .stat-card .label { color: #888; font-size: 13px; margin-bottom: 8px; }
+        .stat-card .num { font-size: 32px; font-weight: bold; color: #00a1d6; }
+        .stat-card.pending .num { color: #f08c00; }
+        .stat-card.processing .num { color: #00a1d6; }
+        .stat-card.completed .num { color: #2f9e44; }
+        .stat-card.failed .num { color: #f04c49; }
+
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; margin-top: 10px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 500; color: #555; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f9f9f9; }
+
+        /* 进度条 */
+        .progress-bar { background: #e9ecef; border-radius: 10px; height: 8px; overflow: hidden; display: inline-block; width: 120px; vertical-align: middle; margin-right: 8px; }
+        .progress-fill { background: linear-gradient(90deg, #00a1d6, #00c4e7); height: 100%; transition: width 0.3s ease; border-radius: 10px; }
+        .progress-text { font-size: 13px; color: #666; }
+
+        /* 缩略图 */
+        .thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 4px; background: #eee; }
+
+        /* 状态标签 */
+        .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .status-pending { background: #fff3e0; color: #f08c00; }
+        .status-processing { background: #e3f2fd; color: #00a1d6; }
+        .status-completed { background: #e8f5e9; color: #2f9e44; }
+        .status-failed { background: #ffebee; color: #f04c49; }
+
+        /* 按钮 */
+        .btn { padding: 6px 14px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; font-size: 13px; transition: all 0.2s; }
+        .btn:hover { background: #f5f5f5; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-danger:hover { background: #ffebee; }
+        .btn-retry { color: #00a1d6; border-color: #00a1d6; }
+        .btn-retry:hover { background: #e3f2fd; }
+
+        /* 空状态 */
+        .empty { text-align: center; padding: 40px; color: #999; }
+
+        /* 刷新提示 */
+        .refresh-info { color: #999; font-size: 12px; margin-bottom: 20px; }
+        .refresh-info button { padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .refresh-info button:hover { background: #008dbd; }
+
+        /* 时间 */
+        .time { color: #888; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div class="container">
+        <h1>转码队列监控</h1>
+        <div class="refresh-info">
+            上次更新：<span id="last-update-time">加载中...</span>
+            <button onclick="loadQueue()">刷新</button>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats-row">
+            <div class="stat-card pending">
+                <div class="label">待处理</div>
+                <div class="num" id="pending-count">-</div>
+            </div>
+            <div class="stat-card processing">
+                <div class="label">转码中</div>
+                <div class="num" id="processing-count">-</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="label">今日完成</div>
+                <div class="num" id="completed-count">-</div>
+            </div>
+            <div class="stat-card failed">
+                <div class="label">失败</div>
+                <div class="num" id="failed-count">-</div>
+            </div>
+        </div>
+
+        <!-- 转码中 -->
+        <h2>转码中</h2>
+        <div id="processing-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>缩略图</th>
+                        <th>标题</th>
+                        <th>作者</th>
+                        <th>进度</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="processing-list"></tbody>
+            </table>
+            <div class="empty" id="processing-empty" style="display:none">暂无正在转码的视频</div>
+        </div>
+
+        <!-- 排队中 -->
+        <h2>排队中 (<span id="pending-total">0</span>)</h2>
+        <div id="pending-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>缩略图</th>
+                        <th>标题</th>
+                        <th>作者</th>
+                        <th>提交时间</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="pending-list"></tbody>
+            </table>
+            <div class="empty" id="pending-empty" style="display:none">暂无待处理视频</div>
+        </div>
+
+        <!-- 最近完成 -->
+        <h2>最近完成</h2>
+        <div id="completed-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>缩略图</th>
+                        <th>标题</th>
+                        <th>作者</th>
+                        <th>完成时间</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="completed-list"></tbody>
+            </table>
+            <div class="empty" id="completed-empty" style="display:none">今日暂无完成的视频</div>
+        </div>
+
+        <!-- 失败记录 -->
+        <h2>失败记录</h2>
+        <div id="failed-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>缩略图</th>
+                        <th>标题</th>
+                        <th>作者</th>
+                        <th>失败时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="failed-list"></tbody>
+            </table>
+            <div class="empty" id="failed-empty" style="display:none">暂无失败记录</div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem("access_token");
+        const headers = { "Authorization": "Bearer " + token };
+
+        async function loadQueue() {
+            try {
+                const res = await fetch("/admin/transcode/queue", { headers });
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        alert("请先登录");
+                        location.href = "/static/login.html";
+                    }
+                    return;
+                }
+                const data = await res.json();
+
+                // 更新统计
+                document.getElementById("pending-count").textContent = data.stats.pending_count;
+                document.getElementById("processing-count").textContent = data.stats.processing_count;
+                document.getElementById("completed-count").textContent = data.stats.completed_today;
+                document.getElementById("failed-count").textContent = data.stats.failed_count;
+
+                // 转码中
+                renderProcessingList(data.processing);
+
+                // 排队中
+                document.getElementById("pending-total").textContent = data.pending.length;
+                renderPendingList(data.pending);
+
+                // 最近完成
+                renderCompletedList(data.completed_recent);
+
+                // 失败记录
+                renderFailedList(data.failed);
+
+                // 更新时间
+                const now = new Date();
+                document.getElementById("last-update-time").textContent =
+                    now.getHours().toString().padStart(2, '0') + ':' +
+                    now.getMinutes().toString().padStart(2, '0') + ':' +
+                    now.getSeconds().toString().padStart(2, '0');
+            } catch (err) {
+                console.error("Failed to load queue:", err);
+            }
+        }
+
+        function renderProcessingList(videos) {
+            const tbody = document.getElementById("processing-list");
+            const empty = document.getElementById("processing-empty");
+            tbody.innerHTML = "";
+
+            if (videos.length === 0) {
+                empty.style.display = "block";
+                return;
+            }
+            empty.style.display = "none";
+
+            videos.forEach(v => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
+                    <td>${escapeHtml(v.title)}</td>
+                    <td>${escapeHtml(v.owner)}</td>
+                    <td>
+                        <div class="progress-bar"><div class="progress-fill" style="width:${v.progress}%"></div></div>
+                        <span class="progress-text">${v.progress}%</span>
+                    </td>
+                    <td><span class="status-badge status-processing">转码中</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderPendingList(videos) {
+            const tbody = document.getElementById("pending-list");
+            const empty = document.getElementById("pending-empty");
+            tbody.innerHTML = "";
+
+            if (videos.length === 0) {
+                empty.style.display = "block";
+                return;
+            }
+            empty.style.display = "none";
+
+            videos.forEach(v => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
+                    <td>${escapeHtml(v.title)}</td>
+                    <td>${escapeHtml(v.owner)}</td>
+                    <td class="time">${formatTime(v.created_at)}</td>
+                    <td><span class="status-badge status-pending">等待中</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCompletedList(videos) {
+            const tbody = document.getElementById("completed-list");
+            const empty = document.getElementById("completed-empty");
+            tbody.innerHTML = "";
+
+            if (videos.length === 0) {
+                empty.style.display = "block";
+                return;
+            }
+            empty.style.display = "none";
+
+            videos.forEach(v => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
+                    <td>${escapeHtml(v.title)}</td>
+                    <td>${escapeHtml(v.owner)}</td>
+                    <td class="time">${formatTime(v.created_at)}</td>
+                    <td><span class="status-badge status-completed">已完成</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderFailedList(videos) {
+            const tbody = document.getElementById("failed-list");
+            const empty = document.getElementById("failed-empty");
+            tbody.innerHTML = "";
+
+            if (videos.length === 0) {
+                empty.style.display = "block";
+                return;
+            }
+            empty.style.display = "none";
+
+            videos.forEach(v => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
+                    <td>${escapeHtml(v.title)}</td>
+                    <td>${escapeHtml(v.owner)}</td>
+                    <td class="time">${formatTime(v.created_at)}</td>
+                    <td><button class="btn btn-retry" onclick="retryTranscode('${v.id}')">重试</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function retryTranscode(videoId) {
+            if (!confirm("确定要重新提交该视频的转码任务吗？")) return;
+
+            try {
+                const res = await fetch(`/admin/transcode/${videoId}/retry`, {
+                    method: "POST",
+                    headers
+                });
+                if (res.ok) {
+                    alert("已重新提交转码任务");
+                    loadQueue();
+                } else {
+                    const err = await res.json();
+                    alert("重试失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("重试失败: " + err.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return "-";
+            const d = new Date(isoString);
+            return d.getFullYear() + "-" +
+                (d.getMonth() + 1).toString().padStart(2, '0') + "-" +
+                d.getDate().toString().padStart(2, '0') + " " +
+                d.getHours().toString().padStart(2, '0') + ":" +
+                d.getMinutes().toString().padStart(2, '0');
+        }
+
+        // 页面加载
+        document.addEventListener("DOMContentLoaded", () => {
+            loadQueue();
+            // 每 5 秒自动刷新
+            setInterval(loadQueue, 5000);
+        });
+    </script>
+</body>
+</html>
