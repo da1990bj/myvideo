@@ -8,15 +8,17 @@ import logging
 import redis
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-import os
+from config import settings
 
 logger = logging.getLogger(__name__)
 
 class RecommendationCache:
     """推荐结果缓存管理器"""
 
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = None):
         """初始化缓存连接"""
+        # Use settings.REDIS_URL as default
+        redis_url = redis_url or settings.REDIS_URL
         try:
             self.redis_client = redis.from_url(redis_url, decode_responses=True)
             # 测试连接
@@ -232,8 +234,7 @@ def get_cache() -> RecommendationCache:
     """获取缓存实例（单例）"""
     global _cache_instance
     if _cache_instance is None:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        _cache_instance = RecommendationCache(redis_url)
+        _cache_instance = RecommendationCache(settings.REDIS_URL)
     return _cache_instance
 
 

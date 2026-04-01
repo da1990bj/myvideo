@@ -1,11 +1,23 @@
 #!/bin/bash
 
-# Configuration
-APP_DIR="/data/myvideo/app"
-PYTHON="/home/da/anaconda3/envs/myvideo/bin/python3.10"
-UVICORN_BIN="/home/da/anaconda3/envs/myvideo/bin/uvicorn"
-LOG_FILE="/data/myvideo/server.log"
-PID_FILE="/data/myvideo/app.pid"
+# Auto-detect project root from script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${SCRIPT_DIR}/app"
+
+# Python and uvicorn - use virtualenv if available, otherwise system Python
+if [ -f "${SCRIPT_DIR}/venv/bin/python3" ]; then
+    PYTHON="${SCRIPT_DIR}/venv/bin/python3"
+    UVICORN_BIN="${SCRIPT_DIR}/venv/bin/uvicorn"
+elif [ -f "/home/da/anaconda3/envs/myvideo/bin/python3.10" ]; then
+    PYTHON="/home/da/anaconda3/envs/myvideo/bin/python3.10"
+    UVICORN_BIN="/home/da/anaconda3/envs/myvideo/bin/uvicorn"
+else
+    PYTHON="python3"
+    UVICORN_BIN="uvicorn"
+fi
+
+LOG_FILE="${SCRIPT_DIR}/server.log"
+PID_FILE="${SCRIPT_DIR}/app.pid"
 
 start() {
     if [ -f "$PID_FILE" ]; then

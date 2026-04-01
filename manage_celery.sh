@@ -1,11 +1,23 @@
 #!/bin/bash
 
-# Configuration
-APP_DIR="/data/myvideo/app"
-PYTHON="/home/da/anaconda3/envs/myvideo/bin/python3.1"
-CELERY_BIN="/home/da/anaconda3/envs/myvideo/bin/celery"
-LOG_FILE="/data/myvideo/celery_worker.log"
-PID_FILE="/data/myvideo/celery.pid"
+# Auto-detect project root from script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${SCRIPT_DIR}/app"
+
+# Python and Celery - use virtualenv if available, otherwise system Python
+if [ -f "${SCRIPT_DIR}/venv/bin/python3" ]; then
+    PYTHON="${SCRIPT_DIR}/venv/bin/python3"
+    CELERY_BIN="${SCRIPT_DIR}/venv/bin/celery"
+elif [ -f "/home/da/anaconda3/envs/myvideo/bin/celery" ]; then
+    PYTHON="/home/da/anaconda3/envs/myvideo/bin/python3.10"
+    CELERY_BIN="/home/da/anaconda3/envs/myvideo/bin/celery"
+else
+    PYTHON="python3"
+    CELERY_BIN="celery"
+fi
+
+LOG_FILE="${SCRIPT_DIR}/celery_worker.log"
+PID_FILE="${SCRIPT_DIR}/celery.pid"
 
 start() {
     if [ -f "$PID_FILE" ]; then

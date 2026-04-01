@@ -1,11 +1,12 @@
 import re
 import os
+from config import settings
 
 # Load sensitive words
 SENSITIVE_WORDS = set()
-WORD_FILE = "/data/myvideo/data/sensitive_words.txt"
+WORD_FILE = settings.SENSITIVE_WORDS_PATH
 
-if os.path.exists(WORD_FILE):
+if WORD_FILE.exists():
     with open(WORD_FILE, "r", encoding="utf-8") as f:
         for line in f:
             w = line.strip().lower()

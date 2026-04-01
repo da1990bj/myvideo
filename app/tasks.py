@@ -9,14 +9,15 @@ import logging
 from sqlmodel import Session, select
 from database import engine
 from data_models import Video
+from config import settings
 
 logger = logging.getLogger(__name__)
 
 # 配置 Celery
 celery_app = Celery(
     "video_tasks",
-    broker="redis://localhost:6379/0",
-    backend="redis://localhost:6379/0"
+    broker=settings.CELERY_BROKER,
+    backend=settings.CELERY_BACKEND
 )
 
 celery_app.conf.update(
@@ -120,10 +121,9 @@ def transcode_video_task(self, video_id: str):
             os.makedirs(hls_dir, exist_ok=True)
             
             # 封面目录
-            thumb_dir = os.path.dirname(input_path).replace("videos/uploads", "thumbnails")
-            if "static" not in thumb_dir: thumb_dir = "/data/myvideo/static/thumbnails"
+            thumb_dir = settings.THUMBNAILS_DIR
             os.makedirs(thumb_dir, exist_ok=True)
-            thumb_path = os.path.join(thumb_dir, f"{video.id}.jpg")
+            thumb_path = str(thumb_dir / f"{video.id}.jpg")
 
             # 1. 获取总时长和分辨率
             probe = subprocess.run(
@@ -313,11 +313,12 @@ def regenerate_thumbnail_task(self, video_id: str):
             import time
             new_filename = f"{video.id}_{int(time.time())}.jpg"
             thumb_rel_path = f"/static/thumbnails/{new_filename}"
-            thumb_abs_path = f"/data/myvideo/static/thumbnails/{new_filename}"
-            
+            thumb_abs_path = str(settings.THUMBNAILS_DIR / new_filename)
+
             # 删除旧封面 (可选)
-            if video.thumbnail_path and os.path.exists(video.thumbnail_path.replace("/static", "/data/myvideo/static")):
-                try: os.remove(video.thumbnail_path.replace("/static", "/data/myvideo/static"))
+            old_thumb_path = settings.fs_path(video.thumbnail_path) if video.thumbnail_path else None
+            if old_thumb_path and old_thumb_path.exists():
+                try: old_thumb_path.unlink()
                 except: pass
 
             # 截图

@@ -56,10 +56,11 @@ from init_data import init_categories, init_recommendation_slots, init_recommend
 from cache_manager import get_cache, RecommendationCache
 from socketio_handler import manager
 from recommendation_engine import RecommendationEngine, compute_user_recommendation_scores
+from config import settings
 import psutil
 
 app = FastAPI(title="MyVideo Backend", version="2.0.0")
-app.mount("/static", StaticFiles(directory="/data/myvideo/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(settings.STATIC_DIR)), name="static")
 
 # --- WebSocket 配置 (使用 python-socketio) ---
 sio = socketio.AsyncServer(
@@ -91,11 +92,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 @app.on_event("startup")
 def on_startup():
     init_db()
-    os.makedirs("/data/myvideo/static/videos/uploads", exist_ok=True)
-    os.makedirs("/data/myvideo/static/videos/processed", exist_ok=True)
-    os.makedirs("/data/myvideo/static/thumbnails", exist_ok=True)
-    os.makedirs("/data/myvideo/static/thumbnails/temp", exist_ok=True) # 临时目录
-    os.makedirs("/data/myvideo/static/avatars", exist_ok=True)
+    settings.ensure_dirs()
     init_categories()
     init_recommendation_slots()
     init_recommendation_config()
@@ -336,7 +333,7 @@ async def upload_video(
     file_id = uuid4()
     ext = os.path.splitext(file.filename)[1]
     save_filename = f"{file_id}{ext}"
-    save_path = f"/data/myvideo/static/videos/uploads/{save_filename}"
+    save_path = str(settings.UPLOADS_DIR / save_filename)
     with open(save_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
 
     # Clean Tags
@@ -1426,14 +1423,14 @@ def update_video(
     if video_in.temp_thumbnail_path:
         print(f"DEBUG: Found temp thumb: {video_in.temp_thumbnail_path}")
 
-        src_abs = video_in.temp_thumbnail_path.replace("/static", "/data/myvideo/static")
-        print(f"DEBUG: Src Abs Path: {src_abs}, Exists: {os.path.exists(src_abs)}")
+        src_abs = settings.fs_path(video_in.temp_thumbnail_path)
+        print(f"DEBUG: Src Abs Path: {src_abs}, Exists: {src_abs.exists()}")
 
         new_filename = f"{video.id}_{int(time.time())}.jpg"
-        dst_abs = f"/data/myvideo/static/thumbnails/{new_filename}"
+        dst_abs = settings.THUMBNAILS_DIR / new_filename
 
-        if os.path.exists(src_abs):
-            shutil.move(src_abs, dst_abs)
+        if src_abs.exists():
+            shutil.move(str(src_abs), str(dst_abs))
             video.thumbnail_path = f"/static/thumbnails/{new_filename}"
             print(f"DEBUG: Moved to {dst_abs}, DB path updated.")
         else:
@@ -1454,7 +1451,7 @@ def regenerate_thumbnail(video_id: str, current_user: User = Depends(get_current
     # 生成到临时目录
     timestamp = f"00:00:{random.randint(5, 59):02d}"
     temp_filename = f"temp_{video.id}_{int(time.time())}.jpg"
-    temp_abs_path = f"/data/myvideo/static/thumbnails/temp/{temp_filename}"
+    temp_abs_path = str(settings.THUMBNAILS_TEMP_DIR / temp_filename)
 
     subprocess.run(["ffmpeg", "-ss", timestamp, "-i", video.original_file_path, "-vframes", "1", temp_abs_path, "-y"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -1468,7 +1465,7 @@ def upload_thumbnail(video_id: str, file: UploadFile = File(...), current_user: 
 
     # 也是先存到临时目录
     temp_filename = f"temp_upload_{video.id}_{int(time.time())}.jpg"
-    temp_abs_path = f"/data/myvideo/static/thumbnails/temp/{temp_filename}"
+    temp_abs_path = str(settings.THUMBNAILS_TEMP_DIR / temp_filename)
 
     with open(temp_abs_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
     return {"url": f"/static/thumbnails/temp/{temp_filename}"}
