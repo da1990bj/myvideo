@@ -15,6 +15,7 @@
 </head>
 <body>
     <script src="/static/admin/admin.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.js"></script>
 
     <div style="padding: 20px;">
         <h1>仪表盘</h1>
@@ -88,11 +89,39 @@
             document.getElementById("last-update-time").innerText = timeStr;
         }
 
+        // WebSocket 连接
+        let socket = null;
+
+        function connectWebSocket() {
+            const token = localStorage.getItem("access_token");
+            if (!token) return;
+
+            socket = io('/', {
+                auth: { token: token },
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                console.log('✅ Admin dashboard WebSocket connected');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('⚠️ Admin dashboard WebSocket disconnected');
+            });
+
+            // 监听数据更新事件（目前用轮询保底）
+            socket.on('transcode_queue_changed', () => {
+                // 仪表盘数据变化时刷新
+                loadStats();
+            });
+        }
+
         document.addEventListener("DOMContentLoaded", () => {
             // 页面加载时立即加载数据
             loadStats();
-            // 每5秒自动刷新一次
-            setInterval(loadStats, 5000);
+            connectWebSocket();
+            // 每 30 秒保底刷新一次
+            setInterval(loadStats, 30000);
         });
     </script>
 </body>

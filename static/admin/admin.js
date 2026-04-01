@@ -30,6 +30,7 @@ function renderSidebar() {
     <div style="width: 240px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; padding: 20px; overflow-y: auto;">
         <h2 style="margin-top:0; color:#00a1d6; margin-bottom:30px;">MyVideo Admin</h2>
         <a href="/static/admin/index.html" class="admin-link">仪表盘</a>
+        <a href="/static/admin/transcode.html" class="admin-link">转码队列</a>
         <a href="/static/admin/videos.html" class="admin-link">视频管理</a>
         <a href="/static/admin/recommendations.html" class="admin-link">推荐管理</a>
         <a href="/static/admin/users.html" class="admin-link">用户管理</a>

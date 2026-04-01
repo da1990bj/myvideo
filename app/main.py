@@ -144,6 +144,11 @@ async def connect(sid, environ, auth):
                 conn_info = await manager.connect(str(user.id), sid)
                 logger.info(f"✅ WebSocket connected: User {user.username} ({user.id}), SID: {sid}")
 
+                # 如果是管理员，加入 admin 房间以便接收广播
+                if user.is_admin or (user.role and user.role.permissions == "*"):
+                    await sio.enter_room(sid, "admin")
+                    logger.info(f"Admin user {user.username} joined admin room")
+
         except JWTError as e:
             logger.warning(f"JWT validation failed in WebSocket connect (SID: {sid}): {str(e)}")
             raise ConnectionRefusedError(f'Invalid JWT token')

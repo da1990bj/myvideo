@@ -66,6 +66,7 @@
 </head>
 <body>
     <script src="/static/admin/admin.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.js"></script>
 
     <div class="container">
         <h1>转码队列监控</h1>
@@ -349,11 +350,45 @@
                 d.getMinutes().toString().padStart(2, '0');
         }
 
+        // WebSocket 连接
+        let socket = null;
+
+        function connectWebSocket() {
+            const token = localStorage.getItem("access_token");
+            if (!token) {
+                console.warn("No token, WebSocket connection skipped");
+                return;
+            }
+
+            socket = io('/', {
+                auth: { token: token },
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                console.log('✅ Transcode panel WebSocket connected');
+                document.getElementById("last-update-time").textContent = 'WebSocket 已连接';
+            });
+
+            socket.on('disconnect', () => {
+                console.log('⚠️ Transcode panel WebSocket disconnected');
+                document.getElementById("last-update-time").textContent = 'WebSocket 断开，重新连接中...';
+            });
+
+            // 监听转码队列变化事件
+            socket.on('transcode_queue_changed', (data) => {
+                console.log('📊 Transcode queue changed:', data);
+                // 重新加载队列数据
+                loadQueue();
+            });
+        }
+
         // 页面加载
         document.addEventListener("DOMContentLoaded", () => {
             loadQueue();
-            // 每 5 秒自动刷新
-            setInterval(loadQueue, 5000);
+            connectWebSocket();
+            // 每 30 秒保底刷新一次（WebSocket 实时更新为主）
+            setInterval(loadQueue, 30000);
         });
     </script>
 </body>

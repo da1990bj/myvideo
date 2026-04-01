@@ -80,6 +80,24 @@ def transcode_video_task(self, video_id: str):
             session.add(video)
             session.commit()
 
+            # 广播转码队列更新给管理员
+            try:
+                from socketio_handler import manager
+                from main import sio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    manager.broadcast_transcode_update(sio, "transcode_queue_changed", {
+                        "video_id": str(video.id),
+                        "status": "processing",
+                        "title": video.title,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                )
+                loop.close()
+            except Exception as e:
+                logger.warning(f"Failed to broadcast queue update: {e}")
+
             # 导入WebSocket管理器用于推送进度
             try:
                 from socketio_handler import manager
@@ -232,6 +250,22 @@ def transcode_video_task(self, video_id: str):
             video.status = "completed"
             video.progress = 100
 
+            # 广播转码队列更新给管理员
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    manager.broadcast_transcode_update(sio, "transcode_queue_changed", {
+                        "video_id": str(video.id),
+                        "status": "completed",
+                        "title": video.title,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                )
+                loop.close()
+            except Exception as e:
+                logger.warning(f"Failed to broadcast queue update: {e}")
+
             # 推送完成状态
             if websocket_available:
                 try:
@@ -253,6 +287,22 @@ def transcode_video_task(self, video_id: str):
         except Exception as e:
             video.status = "failed"
             logger.error(f"Transcoding error for video {video_id}: {e}")
+
+            # 广播转码队列更新给管理员
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    manager.broadcast_transcode_update(sio, "transcode_queue_changed", {
+                        "video_id": str(video.id),
+                        "status": "failed",
+                        "title": video.title,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                )
+                loop.close()
+            except Exception as broadcast_err:
+                logger.warning(f"Failed to broadcast queue update: {broadcast_err}")
 
             # 推送失败状态
             if websocket_available:

@@ -112,6 +112,22 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error pushing progress to user {user_id}: {e}")
 
+    async def broadcast_transcode_update(self, sio, event: str, data: dict):
+        """
+        广播转码队列更新给所有管理员
+
+        Args:
+            sio: Socket.IO AsyncServer实例
+            event: 事件名称
+            data: 事件数据
+        """
+        try:
+            # 广播到 admin 房间的所有连接
+            await sio.emit(event, data, room="admin")
+            logger.debug(f"Broadcasted {event} to all admins")
+        except Exception as e:
+            logger.error(f"Error broadcasting to admins: {e}")
+
     async def push_batch_progress(self, sio, user_id: str, videos_data: list):
         """
         批量推送多个视频的进度（用于连接恢复）
