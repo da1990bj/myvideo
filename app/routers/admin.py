@@ -165,6 +165,20 @@ async def update_role(
 
 # ==================== 系统配置 ====================
 
+def get_config_override(key: str, default: any, session: Session) -> any:
+    """从SystemConfig获取配置覆盖值"""
+    config = session.exec(select(SystemConfig).where(SystemConfig.key == key)).first()
+    if config:
+        # 尝试转换类型
+        if isinstance(default, bool):
+            return config.value.lower() in ("true", "1", "yes")
+        elif isinstance(default, int):
+            return int(config.value)
+        elif isinstance(default, float):
+            return float(config.value)
+        return config.value
+    return default
+
 @router.get("/config")
 async def get_config(
     admin: User = Depends(PermissionChecker("*")),
@@ -241,7 +255,7 @@ async def get_env_config(
         "安全/JWT": {
             "SECRET_KEY": "****" if settings.SECRET_KEY else "",
             "ALGORITHM": settings.ALGORITHM,
-            "ACCESS_TOKEN_EXPIRE_MINUTES": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+            "ACCESS_TOKEN_EXPIRE_MINUTES": get_config_override("ACCESS_TOKEN_EXPIRE_MINUTES", settings.ACCESS_TOKEN_EXPIRE_MINUTES, session),
         },
         "应用服务器": {
             "APP_HOST": settings.APP_HOST,

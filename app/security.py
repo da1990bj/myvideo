@@ -20,14 +20,28 @@ def get_password_hash(password: str) -> str:
     """生成密码哈希"""
     return pwd_context.hash(password)
 
+def get_token_expire_minutes() -> int:
+    """从数据库获取token过期分钟数，支持运行时配置"""
+    try:
+        from sqlmodel import Session, select
+        from database import engine
+        from data_models import SystemConfig
+        with Session(engine) as session:
+            config = session.exec(select(SystemConfig).where(SystemConfig.key == "ACCESS_TOKEN_EXPIRE_MINUTES")).first()
+            if config:
+                return int(config.value)
+    except Exception:
+        pass
+    return ACCESS_TOKEN_EXPIRE_MINUTES
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """生成 JWT 令牌"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    
+        expire = datetime.utcnow() + timedelta(minutes=get_token_expire_minutes())
+
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
