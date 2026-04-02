@@ -319,22 +319,40 @@ async def update_env_config(
     admin: User = Depends(PermissionChecker("*")),
     session: Session = Depends(get_session)
 ):
-    """更新环境配置（实际配置需在 .env 中修改）"""
-    # 注意：这个接口仅用于查看，实际修改需要改 .env 文件
+    """更新环境配置（支持运行时修改的配置项）"""
+    # 允许运行时修改的配置项
     allowed_keys = [
-        "STORAGE_MIGRATION_DELAY",
+        # JWT/安全配置
+        "ACCESS_TOKEN_EXPIRE_MINUTES",
+        # 冷存储配置
+        "COLD_STORAGE_ENABLED",
         "COLD_STORAGE_TRIGGER_DAYS",
         "COLD_STORAGE_TRIGGER_VIEWS",
+        "COLD_STORAGE_PATH_ROOT",
+        # 存储迁移
+        "STORAGE_MIGRATION_DELAY",
+        # 日志配置
+        "LOG_LEVEL",
     ]
 
     for key in updates.keys():
         if key not in allowed_keys:
             raise HTTPException(status_code=400, detail=f"Key {key} cannot be modified via API")
 
+    # 更新数据库配置
+    for key, value in updates.items():
+        conf = session.exec(select(SystemConfig).where(SystemConfig.key == key)).first()
+        if conf:
+            conf.value = str(value)
+            session.add(conf)
+        else:
+            conf = SystemConfig(key=key, value=str(value))
+            session.add(conf)
+
     log_admin_action(session, admin.id, "update_env_config", None, f"Updated keys: {list(updates.keys())}")
     session.commit()
 
-    return {"message": "Config noted (restart required for some changes)"}
+    return {"message": "Config updated successfully"}
 
 
 # ==================== 存储管理 ====================
