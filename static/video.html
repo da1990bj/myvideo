@@ -681,6 +681,7 @@
 
                 // 记录播放次数（一次页面访问只记录一次）
                 let viewRecorded = false;
+                let completedRecorded = false;
                 const recordView = async () => {
                     if (viewRecorded) return;
                     viewRecorded = true;
@@ -697,12 +698,28 @@
 
                 player.addEventListener("play", recordView);
 
-                // 记录完播次数
-                player.addEventListener("ended", async () => {
+                // 记录完播次数 - 兼容HLS和普通视频
+                const recordComplete = async () => {
+                    if (completedRecorded) return;
+                    completedRecorded = true;
                     try {
                         await fetch(`/videos/${video.id}/progress?is_finished=true`, { method: "POST" });
                     } catch(e) { console.error("Complete record error:", e); }
-                });
+                };
+
+                // 对于HLS流，使用FRAG_LOADED事件监听最后一段
+                if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
+                    // 使用timeupdate监控进度，快进到最后5秒内时标记完成
+                    player.addEventListener("timeupdate", () => {
+                        if (completedRecorded || player.duration <= 0) return;
+                        const remaining = player.duration - player.currentTime;
+                        if (remaining < 5 || player.currentTime / player.duration > 0.95) {
+                            recordComplete();
+                        }
+                    });
+                } else {
+                    player.addEventListener("ended", recordComplete);
+                }
 
                 if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
                     const hls = new Hls();
