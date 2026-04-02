@@ -263,7 +263,9 @@ async def record_view(
 async def update_progress(
     video_id: str,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    progress: float = 0,
+    is_finished: bool = False
 ):
     """
     更新播放进度
@@ -283,13 +285,25 @@ async def update_progress(
 
     if history:
         history.last_watched = datetime.utcnow()
+        if progress > history.progress:
+            history.progress = progress
+        # 标记完成状态，只记录一次完播
+        if is_finished and not history.is_finished:
+            history.is_finished = True
+            video.complete_views = (video.complete_views or 0) + 1
+            session.add(video)
         session.add(history)
     else:
         new_history = UserVideoHistory(
             user_id=current_user.id,
-            video_id=video_id
+            video_id=video_id,
+            progress=progress,
+            is_finished=is_finished
         )
         session.add(new_history)
+        if is_finished:
+            video.complete_views = (video.complete_views or 0) + 1
+            session.add(video)
 
     session.commit()
 
