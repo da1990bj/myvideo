@@ -256,18 +256,18 @@
                 const container = document.getElementById("playlist-container");
                 container.style.display = "block";
 
-                const isColFav = data.collection.is_favorited;
+                const isColFav = data.is_favorited || false;
                 const favIconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${isColFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
                 const favBtnText = isColFav ? "已收藏" : "收藏合集";
                 const favBtnStyle = isColFav ? "color:#f08c00; font-weight:bold;" : "color:#666;";
 
                 document.getElementById("pl-title").innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:start;">
-                        <span>${data.collection.title}</span>
+                        <span>${data.title}</span>
                         <button onclick="toggleCollectionFavorite('${colId}', this)" style="border:none; background:none; cursor:pointer; font-size:12px; display:flex; align-items:center; ${favBtnStyle}">${favIconSvg}${favBtnText}</button>
                     </div>
                 `;
-                document.getElementById("pl-total").innerText = data.videos.length;
+                document.getElementById("pl-total").innerText = data.videos ? data.videos.length : 0;
 
                 const list = document.getElementById("pl-list");
                 let currentIndex = -1;
@@ -879,9 +879,9 @@
             if (res.ok) {
                 const data = await res.json();
                 // Sync actual count
-                document.getElementById("like-count").innerText = data.like_count;
+                document.getElementById("like-count").innerText = data.total_likes;
                 // isLiked is already updated by optimistic but verifying status
-                isLiked = data.status === "liked";
+                isLiked = data.liked;
                 updateActionButtons();
             }
         } catch(e) { console.error(e); }
@@ -901,7 +901,7 @@
             });
             if (res.ok) {
                 const data = await res.json();
-                isFavorited = data.status === "favorited";
+                isFavorited = data.favorited;
                 updateActionButtons();
             }
         } catch(e) { console.error(e); }

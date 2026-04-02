@@ -124,32 +124,27 @@ class RecommendationEngine:
         try:
             cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-            stmt = (
-                select(
-                    Video.id,
-                    (
-                        func.sqrt(func.cast(Video.views, float)) +
-                        Video.like_count * 2 +
-                        Video.favorite_count * 3
-                    ).label("trending_score")
-                )
+            # 先查询视频的基本数据
+            videos = self.session.exec(
+                select(Video)
                 .where(Video.created_at >= cutoff_date)
-                .where(Video.status == "published")
+                .where(Video.status.in_(["completed", "approved"]))
                 .where(Video.visibility == "public")
-                .order_by((
-                    func.sqrt(func.cast(Video.views, float)) +
-                    Video.like_count * 2 +
-                    Video.favorite_count * 3
-                ).desc())
-                .limit(limit)
-            )
+            ).all()
 
-            results = self.session.exec(stmt).all()
+            # 计算热度分数
+            scored_videos = []
+            for v in videos:
+                score = (v.views ** 0.5) + v.like_count * 2 + v.favorite_count * 3
+                scored_videos.append((v.id, float(score)))
+
+            # 排序并限制数量
+            scored_videos.sort(key=lambda x: x[1], reverse=True)
 
             # 归一化分数到 0-100
-            if results:
-                max_score = max(score for _, score in results) or 1
-                return [(video_id, min(float(score / max_score * 100), 100.0)) for video_id, score in results]
+            if scored_videos:
+                max_score = scored_videos[0][1] if scored_videos[0][1] > 0 else 1
+                return [(vid, min(float(score / max_score * 100), 100.0)) for vid, score in scored_videos[:limit]]
 
             return []
 
@@ -368,21 +363,8 @@ class RecommendationEngine:
                 # 未登录用户
                 if not slot.show_unauthenticated:
                     return []
-                if slot.unauthenticated_strategy == "trending_only":
-                    # 只返回热门推荐
-                    trending_videos = await self.get_trending_recommendations(limit=slot.max_items)
-                    return [
-                        {
-                            "video_id": vid,
-                            "score": score,
-                            "source": "trending",
-                            "reason": "热门推荐"
-                        }
-                        for vid, score in trending_videos
-                        if vid not in exclude_video_ids
-                    ][:limit]
-                elif slot.unauthenticated_strategy == "hidden":
-                    return []
+                # 注意：即使 unauthenticated_strategy == "trending_only"，仍然继续加载手动推荐
+                # trending_only 只影响算法推荐的加载，不影响手动推荐
 
             # 3. 根据策略加载推荐
             recommendations = {}
@@ -442,7 +424,7 @@ class RecommendationEngine:
                     select(Video).where(Video.id == video_id)
                 ).first()
 
-                if video and video.status == "published" and video.visibility == "public":
+                if video and video.status in ("completed", "approved") and video.visibility == "public":
                     result.append({
                         "video_id": video_id,
                         "score": info["score"],

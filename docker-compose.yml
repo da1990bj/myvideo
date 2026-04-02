@@ -48,7 +48,7 @@ services:
     volumes:
       - ./nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/logs:/var/log/nginx
-      - ./static:/usr/share/nginx/html/static:ro # 关键: Nginx 直接读取 /data/myvideo/static
+      - ./static:/usr/share/nginx/html:ro # 关键: Nginx 直接读取 /data/myvideo/static (包含 index.html)
     extra_hosts:
       - "host.docker.internal:host-gateway" # 允许容器内访问宿主机
     depends_on:

@@ -577,7 +577,8 @@
                 const allConfig = await resEnv.json();
                 if (allConfig["冷存储"]) {
                     const coldConfig = allConfig["冷存储"];
-                    document.getElementById("cold-enable").value = (coldConfig["COLD_STORAGE_ENABLED"] || "FALSE").toUpperCase();
+                    const coldEnabled = coldConfig["COLD_STORAGE_ENABLED"];
+                    document.getElementById("cold-enable").value = (coldEnabled === true || coldEnabled === "true" || coldEnabled === "TRUE") ? "TRUE" : "FALSE";
                     document.getElementById("cold-path-input").value = coldConfig["COLD_STORAGE_PATH_ROOT"] || "/data/myvideo/cold_storage";
                     document.getElementById("cold-days-input").value = coldConfig["COLD_STORAGE_TRIGGER_DAYS"] || "180";
                     document.getElementById("cold-views-input").value = coldConfig["COLD_STORAGE_TRIGGER_VIEWS"] || "10";

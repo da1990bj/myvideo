@@ -65,8 +65,8 @@
             const res = await fetch("/collections/" + colId, { headers: { "Authorization": "Bearer " + token } });
             if (res.ok) {
                 const data = await res.json();
-                document.getElementById("colTitle").innerText = "管理合集: " + data.collection.title;
-                document.getElementById("colDesc").innerText = data.collection.description || "";
+                document.getElementById("colTitle").innerText = "管理合集: " + data.title;
+                document.getElementById("colDesc").innerText = data.description || "";
                 renderColVideos(data.videos);
             } else {
                 alert("加载失败");

@@ -1,21 +1,48 @@
 """
-WebSocket 处理器 - 使用 python-socketio 实现实时转码进度推送
+WebSocket 处理器 - 使用 Redis Pub/Sub 实现分布式实时转码进度推送
+
+该模块独立于 main.py，通过 Redis Pub/Sub 与 Celery workers 解耦。
+所有 WebSocket 推送由 FastAPI 主进程处理，Celery 任务只负责发布消息到 Redis。
 """
 
 from typing import Dict, Optional
-from uuid import UUID
 import logging
 from datetime import datetime
+import asyncio
+import threading
 
 logger = logging.getLogger(__name__)
+
+# Redis 客户端 (延迟初始化，由 init_redis 调用)
+_redis_client = None
+_pubsub = None
+_listener_thread = None
+
+
+def init_redis(redis_url: str):
+    """
+    初始化 Redis 连接，用于 Pub/Sub
+
+    Args:
+        redis_url: Redis 连接 URL
+    """
+    global _redis_client, _pubsub, _listener_thread
+    import redis
+    _redis_client = redis.from_url(redis_url, decode_responses=True)
+    _pubsub = _redis_client.pubsub()
+
+
+def get_redis_client():
+    """获取 Redis 客户端实例"""
+    return _redis_client
 
 
 class ConnectionManager:
     """
-    用户连接池管理器
-    - 维护在线用户与WebSocket会话的映射
+    用户连接池管理器 (保留内存模式，与 socketio 实例配合使用)
+    - 维护在线用户与 WebSocket 会话的映射
     - 处理连接/断开事件
-    - 推送转码进度更新
+    - 注意: 连接状态仍在内存中，通过 socketio Redis Adapter 实现多节点同步
     """
 
     def __init__(self):
@@ -36,8 +63,6 @@ class ConnectionManager:
             self.user_videos[user_id] = set()
 
         logger.info(f"User {user_id} connected via WebSocket (SID: {sid})")
-
-        # 返回连接确认信息
         return {"status": "connected", "message": f"Welcome user {user_id}"}
 
     async def disconnect(self, user_id: str):
@@ -136,10 +161,6 @@ class ConnectionManager:
             sio: Socket.IO AsyncServer实例
             user_id: 目标用户ID
             videos_data: 视频进度数据列表
-                [
-                    {'video_id': '...', 'progress': 50, 'status': 'processing'},
-                    ...
-                ]
         """
         if user_id not in self.active_connections:
             return
@@ -164,10 +185,7 @@ class ConnectionManager:
         return self.user_videos.get(user_id, set())
 
     def get_connection_info(self) -> dict:
-        """
-        获取连接池统计信息
-        用于监控和调试
-        """
+        """获取连接池统计信息"""
         return {
             "connected_users": self.get_connected_users_count(),
             "total_processing_videos": sum(len(videos) for videos in self.user_videos.values()),
@@ -177,3 +195,76 @@ class ConnectionManager:
 
 # 全局连接管理器实例
 manager = ConnectionManager()
+
+
+# ==================== Redis Pub/Sub 转发器 ====================
+
+async def start_redis_listener(sio, redis_url: str):
+    """
+    启动 Redis Pub/Sub 监听器，将消息转发到 WebSocket 客户端
+
+    Args:
+        sio: Socket.IO AsyncServer实例
+        redis_url: Redis 连接 URL
+    """
+    import redis.asyncio as aioredis
+
+    async def listen():
+        global _pubsub
+        redis_client = aioredis.from_url(redis_url, decode_responses=True)
+        pubsub = redis_client.pubsub()
+
+        # 订阅转码进度频道
+        await pubsub.subscribe("transcode:progress")
+        await pubsub.subscribe("transcode:admin")
+
+        logger.info("Redis Pub/Sub listener started")
+
+        try:
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    channel = message["channel"]
+                    data = message["data"]
+
+                    try:
+                        import json
+                        payload = json.loads(data)
+
+                        if channel == "transcode:progress":
+                            # 转发给特定用户
+                            user_id = payload.get("user_id")
+                            video_id = payload.get("video_id")
+                            progress = payload.get("progress")
+                            status = payload.get("status", "processing")
+
+                            if user_id:
+                                await manager.push_progress(
+                                    sio=sio,
+                                    user_id=str(user_id),
+                                    video_id=str(video_id),
+                                    progress=progress,
+                                    status=status
+                                )
+
+                        elif channel == "transcode:admin":
+                            # 广播给所有管理员
+                            await manager.broadcast_transcode_update(
+                                sio=sio,
+                                event=payload.get("event", "transcode_queue_changed"),
+                                data=payload
+                            )
+
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON in Redis message: {data}")
+                    except Exception as e:
+                        logger.error(f"Error processing Redis message: {e}")
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Redis listener error: {e}")
+        finally:
+            await pubsub.unsubscribe()
+            await redis_client.close()
+
+    return listen()

@@ -105,6 +105,26 @@ class MyVideoSettings(BaseSettings):
     # 值越大速度越慢，0 表示不限制
     STORAGE_MIGRATION_DELAY: float = 0.5
 
+    # ==================== 存储后端 ====================
+    # 可选值: local, s3, oss
+    STORAGE_BACKEND: str = "local"
+
+    # S3 配置 (当 STORAGE_BACKEND=s3 时使用)
+    S3_ENDPOINT_URL: Optional[str] = None
+    S3_ACCESS_KEY_ID: Optional[str] = None
+    S3_SECRET_ACCESS_KEY: Optional[str] = None
+    S3_BUCKET_NAME: Optional[str] = None
+    S3_REGION_NAME: str = "us-east-1"
+    S3_PREFIX: str = ""
+
+    # 阿里云 OSS 配置 (当 STORAGE_BACKEND=oss 时使用)
+    OSS_ENDPOINT: Optional[str] = None
+    OSS_ACCESS_KEY_ID: Optional[str] = None
+    OSS_SECRET_ACCESS_KEY: Optional[str] = None
+    OSS_BUCKET_NAME: Optional[str] = None
+    OSS_REGION_NAME: str = "cn-hangzhou"
+    OSS_PREFIX: str = ""
+
     # ==================== 计算属性 ====================
 
     @property
