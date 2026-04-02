@@ -206,10 +206,11 @@ async def get_my_stats(
     total_comments = 0  # 简化计算
     completed_videos = len([v for v in videos if v.status == "completed"])
 
-    # 用户收藏的视频总数
+    # 用户获藏的视频总数（收藏 on 用户的视频）
     from data_models import VideoFavorite
+    user_video_ids = select(Video.id).where(Video.user_id == current_user.id)
     total_favorites = session.exec(
-        select(VideoFavorite).where(VideoFavorite.user_id == current_user.id)
+        select(VideoFavorite).where(VideoFavorite.video_id.in_(user_video_ids))
     ).all()
 
     return {

@@ -679,6 +679,24 @@
                 const qualitySel = document.getElementById("quality");
                 player.poster = video.thumbnail_path;
 
+                // 记录播放次数（一次页面访问只记录一次）
+                let viewRecorded = false;
+                const recordView = async () => {
+                    if (viewRecorded) return;
+                    viewRecorded = true;
+                    try {
+                        await fetch(`/videos/${video.id}/view`, { method: "POST" });
+                        // 更新页面上的播放次数显示
+                        const viewsEl = document.getElementById("views");
+                        if (viewsEl) {
+                            const currentViews = parseInt(viewsEl.textContent) || 0;
+                            viewsEl.innerText = (currentViews + 1) + "次观看";
+                        }
+                    } catch(e) { console.error("View record error:", e); }
+                };
+
+                player.addEventListener("play", recordView);
+
                 if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
                     const hls = new Hls();
                     hls.loadSource(video.processed_file_path);

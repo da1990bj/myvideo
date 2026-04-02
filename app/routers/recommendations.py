@@ -417,7 +417,7 @@ async def get_recommendation_analytics(
 
     total_impressions = len(logs)
     total_clicks = len([l for l in logs if l.clicked])
-    total_watched = sum(l.watched_percent or 0 for l in logs)
+    total_watched = len([l for l in logs if l.watched])
 
     ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0
 
