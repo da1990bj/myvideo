@@ -398,6 +398,7 @@
                 <td>${new Date(c.created_at).toLocaleDateString()}</td>
                 <td>
                     <button class='action-btn' onclick='location.href="/static/collection_manage.html?id=${c.id}"'>管理内容</button>
+                    <button class='action-btn' onclick='openCollectionModal("${c.id}", "${c.title}", "${c.description || ""}")'>编辑</button>
                     <button class='action-btn delete' onclick='deleteCollection("${c.id}")'>删除</button>
                 </td>
             </tr>`;
@@ -405,23 +406,26 @@
         tbody.innerHTML = html;
     }
 
-    function openCollectionModal() {
-        document.getElementById("colId").value = "";
-        document.getElementById("colTitle").value = "";
-        document.getElementById("colDesc").value = "";
-        document.getElementById("colModalTitle").innerText = "创建合集";
+    function openCollectionModal(id, title, description) {
+        document.getElementById("colId").value = id || "";
+        document.getElementById("colTitle").value = title || "";
+        document.getElementById("colDesc").value = description || "";
+        document.getElementById("colModalTitle").innerText = id ? "编辑合集" : "创建合集";
         document.getElementById("collectionModal").style.display = "flex";
     }
 
     async function handleCollectionSubmit(e) {
         e.preventDefault();
+        const colId = document.getElementById("colId").value;
         const title = document.getElementById("colTitle").value;
         const description = document.getElementById("colDesc").value;
         const token = localStorage.getItem("access_token");
 
         try {
-            const res = await fetch("/collections", {
-                method: "POST",
+            const url = colId ? `/collections/${colId}` : "/collections";
+            const method = colId ? "PUT" : "POST";
+            const res = await fetch(url, {
+                method: method,
                 headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
                 body: JSON.stringify({ title, description })
             });
@@ -429,7 +433,7 @@
                 document.getElementById("collectionModal").style.display = "none";
                 loadMyCollections();
             } else {
-                alert("创建失败");
+                alert(colId ? "更新失败" : "创建失败");
             }
         } catch(e) { alert("网络错误"); }
     }

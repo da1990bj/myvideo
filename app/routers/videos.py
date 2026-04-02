@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from database import get_session
 from data_models import (
     Video, VideoRead, VideoUpdate, VideoLike, VideoFavorite,
-    Comment, Category, User, VideoAuditLog
+    Comment, Category, User, VideoAuditLog, CollectionItem
 )
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags
 from tasks import transcode_video_task
@@ -165,6 +165,12 @@ async def get_video(
     video_dict = video.model_dump()
     video_dict["is_liked"] = is_liked
     video_dict["is_favorited"] = is_favorited
+
+    # 获取视频所属的合集 ID
+    item = session.exec(
+        select(CollectionItem).where(CollectionItem.video_id == video.id)
+    ).first()
+    video_dict["collection_id"] = str(item.collection_id) if item else None
 
     # 添加 owner 信息
     if video.owner:

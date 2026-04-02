@@ -2,12 +2,13 @@
 合集/收藏夹路由
 """
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlmodel import Session, select
 
 from database import get_session
-from data_models import Collection, CollectionRead, CollectionCreate, CollectionItem, Video, User
+from data_models import Collection, CollectionRead, CollectionCreate, CollectionUpdate, CollectionItem, Video, User
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker
 
 router = APIRouter(prefix="", tags=["合集"])
@@ -28,6 +29,35 @@ async def create_collection(
         user_id=current_user.id,
         is_public=collection_data.is_public,
     )
+    session.add(collection)
+    session.commit()
+    session.refresh(collection)
+
+    return collection
+
+
+@router.put("/collections/{collection_id}", response_model=CollectionRead)
+async def update_collection(
+    collection_id: UUID,
+    update_data: CollectionUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    更新合集信息
+    """
+    collection = session.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    if collection.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if update_data.title is not None:
+        collection.title = update_data.title
+    if update_data.description is not None:
+        collection.description = update_data.description
+
     session.add(collection)
     session.commit()
     session.refresh(collection)
@@ -110,7 +140,7 @@ async def get_collections(
 
 @router.get("/collections/{collection_id}")
 async def get_collection(
-    collection_id: str,
+    collection_id: UUID,
     current_user: Optional[User] = Depends(get_current_user_optional),
     session: Session = Depends(get_session)
 ):
@@ -141,8 +171,8 @@ async def get_collection(
 
 @router.post("/collections/{collection_id}/videos")
 async def add_video_to_collection(
-    collection_id: str,
-    video_id: str = Body(...),
+    collection_id: UUID,
+    video_id: UUID = Body(..., embed=True),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -176,8 +206,7 @@ async def add_video_to_collection(
         select(CollectionItem)
         .where(CollectionItem.collection_id == collection_id)
         .order_by(CollectionItem.order.desc())
-        .first()
-    )
+    ).first()
     new_order = (last_item.order + 1) if last_item else 0
 
     item = CollectionItem(
@@ -193,8 +222,8 @@ async def add_video_to_collection(
 
 @router.delete("/collections/{collection_id}/videos/{video_id}")
 async def remove_video_from_collection(
-    collection_id: str,
-    video_id: str,
+    collection_id: UUID,
+    video_id: UUID,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -224,8 +253,8 @@ async def remove_video_from_collection(
 
 @router.put("/collections/{collection_id}/reorder")
 async def reorder_collection(
-    collection_id: str,
-    video_ids: List[str] = Body(...),
+    collection_id: UUID,
+    video_ids: List[UUID] = Body(...),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -248,7 +277,7 @@ async def reorder_collection(
         ).first()
 
         if item:
-            item.position = position
+            item.order = position
             session.add(item)
 
     session.commit()
@@ -258,7 +287,7 @@ async def reorder_collection(
 
 @router.delete("/collections/{collection_id}")
 async def delete_collection(
-    collection_id: str,
+    collection_id: UUID,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):

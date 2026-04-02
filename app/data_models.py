@@ -401,6 +401,10 @@ class CollectionCreate(SQLModel):
     title: str
     description: Optional[str] = None
 
+class CollectionUpdate(SQLModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+
 class CollectionRead(SQLModel):
     id: UUID
     title: str
