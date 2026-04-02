@@ -286,20 +286,20 @@ async def get_env_config(
             "CELERY_RESULT_BACKEND": settings.CELERY_RESULT_BACKEND or "",
         },
         "日志": {
-            "LOG_LEVEL": settings.LOG_LEVEL,
+            "LOG_LEVEL": get_config_override("LOG_LEVEL", settings.LOG_LEVEL, session),
             "LOG_FILE": str(settings.LOG_FILE) if settings.LOG_FILE else "",
         },
         "敏感词": {
             "SENSITIVE_WORDS_FILE": str(settings.SENSITIVE_WORDS_PATH) if settings.SENSITIVE_WORDS_FILE else "",
         },
         "冷存储": {
-            "COLD_STORAGE_ENABLED": settings.COLD_STORAGE_ENABLED,
-            "COLD_STORAGE_TRIGGER_DAYS": settings.COLD_STORAGE_TRIGGER_DAYS,
-            "COLD_STORAGE_TRIGGER_VIEWS": settings.COLD_STORAGE_TRIGGER_VIEWS,
-            "COLD_STORAGE_PATH_ROOT": str(settings.COLD_STORAGE_PATH),
+            "COLD_STORAGE_ENABLED": get_config_override("COLD_STORAGE_ENABLED", settings.COLD_STORAGE_ENABLED, session),
+            "COLD_STORAGE_TRIGGER_DAYS": get_config_override("COLD_STORAGE_TRIGGER_DAYS", settings.COLD_STORAGE_TRIGGER_DAYS, session),
+            "COLD_STORAGE_TRIGGER_VIEWS": get_config_override("COLD_STORAGE_TRIGGER_VIEWS", settings.COLD_STORAGE_TRIGGER_VIEWS, session),
+            "COLD_STORAGE_PATH_ROOT": get_config_override("COLD_STORAGE_PATH_ROOT", str(settings.COLD_STORAGE_PATH), session),
         },
         "存储迁移": {
-            "STORAGE_MIGRATION_DELAY": settings.STORAGE_MIGRATION_DELAY,
+            "STORAGE_MIGRATION_DELAY": get_config_override("STORAGE_MIGRATION_DELAY", settings.STORAGE_MIGRATION_DELAY, session),
         },
     }
 
