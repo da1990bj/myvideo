@@ -2,7 +2,28 @@ postgres/
 redis/
 nginx/
 app.pid
+celery.pid
+celery_worker.log
+server.log
 *.log
 __pycache__/
 *.pyc
-celery.pid
+
+# Video files
+*.mp4
+*.mkv
+*.ts
+*.m3u8
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+# Uploads and processed
+static/videos/uploads/
+static/videos/processed/
+static/thumbnails/
+static/avatars/
+
+# Environment
+.env

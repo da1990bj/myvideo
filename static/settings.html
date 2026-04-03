@@ -29,6 +29,7 @@
         <div class="menu-item active" onclick="switchTab('profile', this)">个人资料</div>
         <div class="menu-item" onclick="switchTab('security', this)">账号安全</div>
         <div class="menu-item" onclick="switchTab('following', this)">我的关注</div>
+        <div class="menu-item" onclick="switchTab('followers', this)">我的粉丝</div>
         <div class="menu-item" onclick="switchTab('blacklist', this)">黑名单</div>
     </div>
     
@@ -68,9 +69,14 @@
         <div id="following-list">加载中...</div>
     </div>
 
+    <div class="content" id="tab-followers" style="display:none;">
+        <h2>我的粉丝</h2>
+        <div id="followers-list">加载中...</div>
+    </div>
+
     <div class="content" id="tab-blacklist" style="display:none;">
         <h2>黑名单管理</h2>
-        <div id="blacklist-list">暂无黑名单用户</div>
+        <div id="blacklist-list">加载中...</div>
     </div>
 </div>
 
@@ -78,13 +84,21 @@
     const token = localStorage.getItem("access_token");
     if (!token) location.href = "/static/login.html";
 
+    // 生成默认头像（使用首字母，CSS 渲染）
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+    }
+
     // 初始化
     fetch("/users/me", { headers: { "Authorization": "Bearer " + token } })
         .then(res => res.json())
         .then(user => {
             document.getElementById("username").value = user.username;
             document.getElementById("bio").value = user.bio || "";
-            document.getElementById("avatar").src = user.avatar_path || "https://ui-avatars.com/api/?name=" + user.username;
+            document.getElementById("avatar").src = user.avatar_path || getDefaultAvatar(user.username);
         });
 
     function switchTab(name, el) {
@@ -95,6 +109,7 @@
         el.classList.add('active');
         
         if (name === 'following') loadFollowing();
+        if (name === 'followers') loadFollowers();
         if (name === 'blacklist') loadBlacklist();
     }
 
@@ -150,10 +165,15 @@
         const res = await fetch("/users/me/following", { headers: { "Authorization": "Bearer " + token } });
         if (res.ok) renderUserList(await res.json(), "following-list", "取关", unfollowUser);
     }
-    
+
+    async function loadFollowers() {
+        const res = await fetch("/users/me/followers", { headers: { "Authorization": "Bearer " + token } });
+        if (res.ok) renderUserList(await res.json(), "followers-list", "移除粉丝", removeFollower);
+    }
+
     async function loadBlacklist() {
         const res = await fetch("/users/me/blocks", { headers: { "Authorization": "Bearer " + token } });
-        if (res.ok) renderUserList(await res.json(), "blacklist-list", "解除", unblockUser);
+        if (res.ok) renderUserList(await res.json(), "blacklist-list", "解除拉黑", unblockUser);
     }
 
     function renderUserList(users, containerId, btnText, action) {
@@ -163,7 +183,7 @@
         users.forEach(u => {
             const div = document.createElement("div");
             div.className = "user-list-item";
-            const avatar = u.avatar_path || "https://ui-avatars.com/api/?name=" + u.username;
+            const avatar = u.avatar_path || getDefaultAvatar(u.username);
             div.innerHTML = `<div class="user-info">
                 <img src="${avatar}" class="mini-avatar">
                 <div><a href="/static/profile.html?id=${u.id}" target="_blank" style="color:#333; text-decoration:none; font-weight:bold;">${u.username}</a></div>
@@ -180,9 +200,19 @@
             loadFollowing();
         }
     }
+
+    async function removeFollower(id) {
+        if(confirm("确定移除该粉丝？")) {
+            await fetch(`/users/${id}/follower`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
+            loadFollowers();
+        }
+    }
+
     async function unblockUser(id) {
-        await fetch(`/users/${id}/block`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
-        loadBlacklist();
+        if(confirm("确定解除拉黑？")) {
+            await fetch(`/users/${id}/block`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
+            loadBlacklist();
+        }
     }
 </script>
 </body>

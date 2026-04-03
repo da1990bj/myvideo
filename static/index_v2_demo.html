@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MyVideo - 首页</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f4f5f7; }
+        header { background: #fff; height: 64px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+        .logo { font-size: 24px; font-weight: bold; color: #00a1d6; text-decoration: none; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        /* 轮播区 */
+        .carousel { background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 20px; position: relative; }
+        .carousel-inner { display: flex; transition: transform 0.3s; height: 380px; }
+        .carousel-item { flex: 0 0 100%; position: relative; }
+        .carousel-item img { width: 100%; height: 100%; object-fit: cover; }
+        .carousel-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 60px 30px 20px; color: #fff; }
+        .carousel-title { font-size: 24px; font-weight: bold; margin-bottom: 8px; }
+        .carousel-meta { font-size: 14px; opacity: 0.8; }
+        .carousel-dots { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+        .carousel-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; }
+        .carousel-dot.active { background: #fff; }
+
+        /* 横向分类导航 */
+        .category-scroll { background: #fff; border-radius: 8px; margin-bottom: 20px; padding: 12px 16px; display: flex; gap: 12px; overflow-x: auto; }
+        .category-scroll::-webkit-scrollbar { display: none; }
+        .category-item { padding: 8px 16px; border-radius: 20px; background: #f4f5f7; color: #666; font-size: 14px; cursor: pointer; white-space: nowrap; transition: 0.2s; border: none; }
+        .category-item:hover { background: #e5f4fa; color: #00a1d6; }
+        .category-item.active { background: #00a1d6; color: #fff; }
+
+        /* 内容区两栏布局 */
+        .content-area { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+        .main-content {}
+        .sidebar { position: sticky; top: 84px; height: fit-content; }
+
+        /* 视频卡片网格 */
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .video-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .video-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .video-thumb { position: relative; padding-top: 56.25%; background: #f0f0f0; }
+        .video-thumb img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .video-duration { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+        .video-info { padding: 10px; }
+        .video-title { font-size: 14px; font-weight: 500; color: #18191c; margin: 0 0 6px; line-height: 1.4; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-meta { font-size: 12px; color: #9499a0; display: flex; align-items: center; justify-content: space-between; }
+        .video-author { display: flex; align-items: center; gap: 4px; }
+
+        /* 侧边栏 */
+        .side-section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .side-title { font-size: 16px; font-weight: bold; color: #18191c; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #00a1d6; display: flex; align-items: center; gap: 6px; }
+        .side-video-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        .side-video-item:last-child { border-bottom: none; }
+        .side-video-item:hover .side-video-title { color: #00a1d6; }
+        .side-thumb { width: 100px; height: 56px; border-radius: 4px; object-fit: cover; flex-shrink: 0; position: relative; }
+        .side-thumb .video-duration { font-size: 10px; padding: 1px 4px; }
+        .side-info { flex: 1; min-width: 0; }
+        .side-video-title { font-size: 13px; color: #18191c; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; transition: color 0.2s; }
+        .side-video-stats { font-size: 11px; color: #9499a0; margin-top: 4px; }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .content-area { grid-template-columns: 1fr; }
+            .sidebar { position: static; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+            .side-section { margin-bottom: 0; }
+        }
+        @media (max-width: 640px) {
+            .video-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .sidebar { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="#" class="logo">MyVideo</a>
+        <div style="flex:1; max-width:400px; margin:0 40px;">
+            <input type="text" placeholder="搜索视频..." style="width:100%; padding:8px 16px; border-radius:20px; border:1px solid #e7e7e7; background:#f4f4f4;">
+        </div>
+        <div style="display:flex; gap:16px; align-items:center;">
+            <a href="#" style="color:#00a1d6; text-decoration:none;">上传</a>
+            <a href="#" style="color:#00a1d6; text-decoration:none;">消息</a>
+            <div style="width:36px; height:36px; border-radius:50%; background:#ccc;"></div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- 轮播区 -->
+        <div class="carousel">
+            <div class="carousel-inner" id="carousel">
+                <div class="carousel-item">
+                    <img src="https://picsum.photos/1400/600?random=1" alt="">
+                    <div class="carousel-overlay">
+                        <div class="carousel-title">这是一个视频标题示例</div>
+                        <div class="carousel-meta">UP主名称 · 123万播放</div>
+                    </div>
+                </div>
+                <div class="carousel-item">
+                    <img src="https://picsum.photos/1400/600?random=2" alt="">
+                    <div class="carousel-overlay">
+                        <div class="carousel-title">另一个精彩视频推荐</div>
+                        <div class="carousel-meta">科技数码 · 56万播放</div>
+                    </div>
+                </div>
+                <div class="carousel-item">
+                    <img src="https://picsum.photos/1400/600?random=3" alt="">
+                    <div class="carousel-overlay">
+                        <div class="carousel-title">游戏实况精彩片段</div>
+                        <div class="carousel-meta">游戏区 · 89万播放</div>
+                    </div>
+                </div>
+            </div>
+            <div class="carousel-dots">
+                <div class="carousel-dot active"></div>
+                <div class="carousel-dot"></div>
+                <div class="carousel-dot"></div>
+            </div>
+        </div>
+
+        <!-- 横向分类导航 -->
+        <div class="category-scroll">
+            <button class="category-item active">全部</button>
+            <button class="category-item">科技</button>
+            <button class="category-item">生活</button>
+            <button class="category-item">游戏</button>
+            <button class="category-item">影视</button>
+            <button class="category-item">音乐</button>
+            <button class="category-item">动漫</button>
+            <button class="category-item">美食</button>
+            <button class="category-item">旅游</button>
+            <button class="category-item">教育</button>
+        </div>
+
+        <!-- 内容区 -->
+        <div class="content-area">
+            <!-- 左侧主内容 -->
+            <div class="main-content">
+                <div style="background:#fff; border-radius:8px; padding:16px 20px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between;">
+                    <div style="font-size:18px; font-weight:bold; display:flex; align-items:center; gap:8px;">
+                        <span style="color:#00a1d6;">🔥</span>
+                        <span>热门推荐</span>
+                    </div>
+                    <div style="font-size:13px; color:#999;">根据热度为你推荐</div>
+                </div>
+
+                <div class="video-grid">
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=11" alt="">
+                            <div class="video-duration">12:34</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">视频标题示例第一行第二行内容</h3>
+                            <div class="video-meta">
+                                <span class="video-author">UP主</span>
+                                <span>10万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=12" alt="">
+                            <div class="video-duration">08:45</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">游戏实况精彩集锦第三弹</h3>
+                            <div class="video-meta">
+                                <span class="video-author">游戏主播</span>
+                                <span>56万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=13" alt="">
+                            <div class="video-duration">15:20</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">科技产品开箱测评视频</h3>
+                            <div class="video-meta">
+                                <span class="video-author">数码达人</span>
+                                <span>23万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=14" alt="">
+                            <div class="video-duration">22:10</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">美食制作教程家常菜</h3>
+                            <div class="video-meta">
+                                <span class="video-author">美食家</span>
+                                <span>89万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=15" alt="">
+                            <div class="video-duration">05:30</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">音乐MV精选合集</h3>
+                            <div class="video-meta">
+                                <span class="video-author">音乐台</span>
+                                <span>120万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=16" alt="">
+                            <div class="video-duration">18:45</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">影视解说精彩片段</h3>
+                            <div class="video-meta">
+                                <span class="video-author">影评人</span>
+                                <span>67万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=17" alt="">
+                            <div class="video-duration">10:15</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">生活vlog日常记录</h3>
+                            <div class="video-meta">
+                                <span class="video-author">生活博主</span>
+                                <span>45万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-card">
+                        <div class="video-thumb">
+                            <img src="https://picsum.photos/320/180?random=18" alt="">
+                            <div class="video-duration">25:00</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">动漫剪辑精彩回顾</h3>
+                            <div class="video-meta">
+                                <span class="video-author">动漫控</span>
+                                <span>78万播放</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧边栏 -->
+            <div class="sidebar">
+                <div class="side-section">
+                    <div class="side-title">🔥 热门榜单</div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=21" alt="">
+                            <div class="video-duration">12:34</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">热门视频标题示例</div>
+                            <div class="side-video-stats">234万播放</div>
+                        </div>
+                    </div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=22" alt="">
+                            <div class="video-duration">08:45</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">游戏实况精彩片段</div>
+                            <div class="side-video-stats">189万播放</div>
+                        </div>
+                    </div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=23" alt="">
+                            <div class="video-duration">15:20</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">科技产品测评</div>
+                            <div class="side-video-stats">156万播放</div>
+                        </div>
+                    </div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=24" alt="">
+                            <div class="video-duration">10:15</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">美食教程第三期</div>
+                            <div class="side-video-stats">98万播放</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="side-section">
+                    <div class="side-title">✨ 为你推荐</div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=31" alt="">
+                            <div class="video-duration">18:30</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">根据你的喜好推荐</div>
+                            <div class="side-video-stats">基于观看历史</div>
+                        </div>
+                    </div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=32" alt="">
+                            <div class="video-duration">22:45</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">你关注的UP主新视频</div>
+                            <div class="side-video-stats">3小时前发布</div>
+                        </div>
+                    </div>
+                    <div class="side-video-item">
+                        <div class="side-thumb">
+                            <img src="https://picsum.photos/100/56?random=33" alt="">
+                            <div class="video-duration">05:20</div>
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">相似内容推荐</div>
+                            <div class="side-video-stats">你可能喜欢</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 轮播切换示例
+        let currentSlide = 0;
+        const dots = document.querySelectorAll('.carousel-dot');
+        const inner = document.getElementById('carousel');
+
+        dots.forEach((dot, i) => {
+            dot.addEventListener('click', () => {
+                currentSlide = i;
+                inner.style.transform = `translateX(-${i * 100}%)`;
+                dots.forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+            });
+        });
+
+        // 分类切换示例
+        const categoryItems = document.querySelectorAll('.category-item');
+        categoryItems.forEach(item => {
+            item.addEventListener('click', () => {
+                categoryItems.forEach(c => c.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -19,6 +19,9 @@
 
         .follow-btn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; background: #00a1d6; color: #fff; }
         .follow-btn.following { background: #eee; color: #666; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 10px; }
+        .block-btn { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; cursor: pointer; background: #fff; color: #666; }
+        .block-btn.blocked { background: #ffeaea; color: #f04c49; border-color: #f04c49; }
 
         .content-area { flex: 1; margin-top: 20px; }
 
@@ -59,6 +62,9 @@
         </div>
 
         <button id="follow-btn" class="follow-btn" onclick="toggleFollow()">+ 关注</button>
+        <div class="action-buttons">
+            <button id="block-btn" class="block-btn" onclick="toggleBlock()" style="display:none;">拉黑</button>
+        </div>
     </div>
 
     <div class="content-area">
@@ -87,6 +93,14 @@
     const token = localStorage.getItem("access_token");
     let isFollowing = false;
     let currentUserProfileId = null; // Store resolved UUID
+
+    // 生成默认头像
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         if (!userId) return alert("用户不存在");
@@ -199,7 +213,7 @@
 
                 document.getElementById("username").innerText = data.username;
                 document.getElementById("bio").innerText = data.bio || "这个人很懒...";
-                document.getElementById("avatar").src = data.avatar_path || "https://ui-avatars.com/api/?name=" + data.username;
+                document.getElementById("avatar").src = data.avatar_path || getDefaultAvatar(data.username);
 
                 document.getElementById("fans-count").innerText = data.followers_count;
                 document.getElementById("follow-count").innerText = data.following_count;
@@ -208,13 +222,61 @@
                 isFollowing = data.is_following;
 
                 const btn = document.getElementById("follow-btn");
+                const blockBtn = document.getElementById("block-btn");
                 if (data.is_self) {
                     btn.style.display = "none";
+                    blockBtn.style.display = "none";
                     // Show private tabs
                     document.getElementById("tab-liked").style.display = "block";
                     document.getElementById("tab-favorites").style.display = "block";
                 } else {
                     renderFollowBtn();
+                    // 显示拉黑按钮
+                    blockBtn.style.display = "block";
+                    // 检查是否已被对方拉黑
+                    if (data.is_blocked_by) {
+                        blockBtn.className = "block-btn blocked";
+                        blockBtn.innerText = "已被拉黑";
+                        blockBtn.disabled = true;
+                        btn.disabled = true;
+                        btn.innerText = "无法关注";
+                    }
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function toggleBlock() {
+        const blockBtn = document.getElementById("block-btn");
+        const followBtn = document.getElementById("follow-btn");
+        const isBlocked = blockBtn.classList.contains("blocked");
+
+        if (isBlocked) {
+            alert("您已被该用户拉黑，无法进行操作");
+            return;
+        }
+
+        if (!confirm(isBlocked ? "解除拉黑？" : "确定拉黑该用户？拉黑后将同时取消关注关系。")) return;
+
+        try {
+            const res = await fetch(`/users/${userId}/block`, {
+                method: isBlocked ? "DELETE" : "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                if (isBlocked) {
+                    blockBtn.className = "block-btn";
+                    blockBtn.innerText = "拉黑";
+                    // 恢复关注按钮
+                    followBtn.disabled = false;
+                } else {
+                    blockBtn.className = "block-btn blocked";
+                    blockBtn.innerText = "已拉黑";
+                    blockBtn.disabled = true;
+                    // 取消关注并禁用关注按钮
+                    followBtn.disabled = true;
+                    followBtn.innerText = "已取消关注";
+                    isFollowing = false;
                 }
             }
         } catch(e) { console.error(e); }

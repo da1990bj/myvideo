@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from database import get_session
 from data_models import (
-    User, Video, VideoRead, UserRead,
+    User, Video, VideoRead, UserRead, Role, UserRole,
     VideoLike, VideoFavorite,
     VideoRecommendation, VideoRecommendationRead, VideoRecommendationWithVideoRead,
     VideoRecommendationCreate, VideoRecommendationUpdate,
@@ -24,6 +24,29 @@ from recommendation_engine import RecommendationEngine
 from tasks import compute_all_recommendation_scores
 
 router = APIRouter(prefix="", tags=["推荐系统"])
+
+
+def _build_user_read(owner: User, session: Session) -> UserRead:
+    """构建UserRead，兼容多角色"""
+    user_roles = session.exec(select(UserRole).where(UserRole.user_id == owner.id)).all()
+    role_ids = [ur.role_id for ur in user_roles]
+    role_names = []
+    for rid in role_ids:
+        role = session.get(Role, rid)
+        if role:
+            role_names.append(role.name)
+    return UserRead(
+        id=owner.id,
+        username=owner.username,
+        email=owner.email,
+        is_active=owner.is_active,
+        is_admin=owner.is_admin,
+        role_ids=role_ids,
+        role_names=role_names,
+        created_at=owner.created_at,
+        avatar_path=owner.avatar_path,
+        bio=owner.bio
+    )
 
 
 @router.get("/recommendations", response_model=RecommendationsListResponse)
@@ -125,17 +148,7 @@ async def get_recommendations(
                     is_favorited=is_favorited,
                     created_at=video.created_at,
                     tags=video.tags,
-                    owner=UserRead(
-                        id=video.owner.id,
-                        username=video.owner.username,
-                        email=video.owner.email,
-                        is_active=video.owner.is_active,
-                        is_admin=video.owner.is_admin,
-                        role_id=video.owner.role_id,
-                        created_at=video.owner.created_at,
-                        avatar_path=video.owner.avatar_path,
-                        bio=video.owner.bio
-                    ) if video.owner else None,
+                    owner=_build_user_read(video.owner, session) if video.owner else None,
                     category=video.category
                 )
 

@@ -3,6 +3,15 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from sqlmodel import Field, SQLModel, Relationship, JSON, Column
 
+# User-Role Association Table (many-to-many)
+class UserRole(SQLModel, table=True):
+    __tablename__ = "user_roles"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    role_id: int = Field(foreign_key="roles.id", primary_key=True)
+
+    user: "User" = Relationship(back_populates="user_roles")
+    role: "Role" = Relationship(back_populates="user_roles")
+
 # User
 class User(SQLModel, table=True):
     __tablename__ = "users"
@@ -14,11 +23,10 @@ class User(SQLModel, table=True):
     bio: Optional[str] = None
     is_active: bool = Field(default=True)
     is_admin: bool = Field(default=False) # 新增管理员字段
-    role_id: Optional[int] = Field(default=None, foreign_key="roles.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     videos: List["Video"] = Relationship(back_populates="owner")
     collections: List["Collection"] = Relationship(back_populates="owner")
-    role: Optional["Role"] = Relationship(back_populates="users")
+    user_roles: List["UserRole"] = Relationship(back_populates="user")
 
 # Role
 class Role(SQLModel, table=True):
@@ -28,7 +36,7 @@ class Role(SQLModel, table=True):
     description: Optional[str] = None
     permissions: str = Field(default="") # Comma separated list of permissions
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    users: List["User"] = Relationship(back_populates="role")
+    user_roles: List["UserRole"] = Relationship(back_populates="role")
 
 # System Configuration
 class SystemConfig(SQLModel, table=True):
@@ -344,8 +352,8 @@ class UserRead(SQLModel):
     email: str
     is_active: bool
     is_admin: bool = False
-    role_id: Optional[int] = None
-    role_name: Optional[str] = None # Added for easier display
+    role_ids: List[int] = []
+    role_names: List[str] = []
     created_at: datetime
     avatar_path: Optional[str]
     bio: Optional[str] = None

@@ -45,7 +45,7 @@ async def follow_user(
     existing = session.exec(
         select(UserFollow).where(
             UserFollow.follower_id == current_user.id,
-            UserFollow.following_id == user_id
+            UserFollow.followed_id == user_id
         )
     ).first()
 
@@ -54,7 +54,7 @@ async def follow_user(
 
     follow = UserFollow(
         follower_id=current_user.id,
-        following_id=user_id
+        followed_id=user_id
     )
     session.add(follow)
 
@@ -80,7 +80,7 @@ async def unfollow_user(
     session: Session = Depends(get_session)
 ):
     """
-    取消关注
+    取消关注（取消自己对他人的关注）
     """
     # 先尝试按用户名查询
     target_user = session.exec(select(User).where(User.username == user_id)).first()
@@ -96,7 +96,7 @@ async def unfollow_user(
     existing = session.exec(
         select(UserFollow).where(
             UserFollow.follower_id == current_user.id,
-            UserFollow.following_id == target_user.id
+            UserFollow.followed_id == target_user.id
         )
     ).first()
 
@@ -105,6 +105,41 @@ async def unfollow_user(
         session.commit()
 
     return {"message": "Unfollowed", "following": False}
+
+
+@router.delete("/users/{user_id}/follower")
+async def remove_follower(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    移除粉丝（删除他人对自己的关注）
+    """
+    # 先尝试按用户名查询
+    target_user = session.exec(select(User).where(User.username == user_id)).first()
+    if not target_user:
+        try:
+            target_user = session.get(User, user_id)
+        except Exception:
+            target_user = None
+
+    if not target_user:
+        return {"message": "Follower removed", "removed": False}
+
+    # 删除对方对当前用户的关注
+    existing = session.exec(
+        select(UserFollow).where(
+            UserFollow.follower_id == target_user.id,
+            UserFollow.followed_id == current_user.id
+        )
+    ).first()
+
+    if existing:
+        session.delete(existing)
+        session.commit()
+
+    return {"message": "Follower removed", "removed": True}
 
 
 @router.get("/users/me/following", response_model=List[UserRead])
@@ -119,7 +154,47 @@ async def get_following(
         select(UserFollow).where(UserFollow.follower_id == current_user.id)
     ).all()
 
-    following_ids = [f.following_id for f in follows]
+    following_ids = [f.followed_id for f in follows]
+    if not following_ids:
+        return []
+
+    users = session.exec(select(User).where(User.id.in_(following_ids))).all()
+    return users
+
+
+@router.get("/users/me/followers", response_model=List[UserRead])
+async def get_followers(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    获取当前用户的粉丝列表
+    """
+    follows = session.exec(
+        select(UserFollow).where(UserFollow.followed_id == current_user.id)
+    ).all()
+
+    follower_ids = [f.follower_id for f in follows]
+    if not follower_ids:
+        return []
+
+    users = session.exec(select(User).where(User.id.in_(follower_ids))).all()
+    return users
+
+
+@router.get("/users/me/following", response_model=List[UserRead])
+async def get_following(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    获取当前用户关注的人
+    """
+    follows = session.exec(
+        select(UserFollow).where(UserFollow.follower_id == current_user.id)
+    ).all()
+
+    following_ids = [f.followed_id for f in follows]
     if not following_ids:
         return []
 
@@ -145,6 +220,103 @@ async def get_blocks(
 
     users = session.exec(select(User).where(User.id.in_(blocked_ids))).all()
     return users
+
+
+@router.post("/users/{user_id}/block")
+async def block_user(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    拉黑用户
+    """
+    if str(current_user.id) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot block yourself")
+
+    target_user = session.exec(select(User).where(User.username == user_id)).first()
+    if not target_user:
+        try:
+            target_user = session.get(User, user_id)
+        except Exception:
+            target_user = None
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 检查是否已拉黑
+    existing = session.exec(
+        select(UserBlock).where(
+            UserBlock.blocker_id == current_user.id,
+            UserBlock.blocked_id == user_id
+        )
+    ).first()
+
+    if existing:
+        return {"message": "Already blocked", "blocked": True}
+
+    block = UserBlock(
+        blocker_id=current_user.id,
+        blocked_id=user_id
+    )
+    session.add(block)
+
+    # 同时取消关注（如果有关注关系）
+    follow = session.exec(
+        select(UserFollow).where(
+            UserFollow.follower_id == current_user.id,
+            UserFollow.followed_id == user_id
+        )
+    ).first()
+    if follow:
+        session.delete(follow)
+
+    # 取消被关注（如果对方关注了自己）
+    follower = session.exec(
+        select(UserFollow).where(
+            UserFollow.follower_id == user_id,
+            UserFollow.followed_id == current_user.id
+        )
+    ).first()
+    if follower:
+        session.delete(follower)
+
+    session.commit()
+
+    return {"message": "Blocked", "blocked": True}
+
+
+@router.delete("/users/{user_id}/block")
+async def unblock_user(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    解除拉黑
+    """
+    target_user = session.exec(select(User).where(User.username == user_id)).first()
+    if not target_user:
+        try:
+            target_user = session.get(User, user_id)
+        except Exception:
+            target_user = None
+
+    if not target_user:
+        return {"message": "Unblocked", "blocked": False}
+
+    existing = session.exec(
+        select(UserBlock).where(
+            UserBlock.blocker_id == current_user.id,
+            UserBlock.blocked_id == target_user.id
+        )
+    ).first()
+
+    if existing:
+        session.delete(existing)
+        session.commit()
+
+    return {"message": "Unblocked", "blocked": False}
 
 
 # ==================== 收藏夹 ====================

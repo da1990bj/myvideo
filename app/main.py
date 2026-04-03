@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 
 from config import settings
 from database import engine, init_db
-from data_models import User, Notification
+from data_models import User, Notification, UserRole, Role
 from socketio_handler import manager
 import socketio_handler
 import logging
@@ -181,7 +181,16 @@ async def connect(sid, environ, auth):
                 await manager.connect(str(user.id), sid)
                 logger.info(f"✅ WebSocket connected: User {user.username} ({user.id}), SID: {sid}")
 
-                if user.is_admin or (user.role and user.role.permissions == "*"):
+                # 检查用户是否有超级管理员权限（任何角色的 permissions == "*"）
+                is_superadmin = False
+                user_roles = session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+                for ur in user_roles:
+                    role = session.get(Role, ur.role_id)
+                    if role and role.permissions == "*":
+                        is_superadmin = True
+                        break
+
+                if user.is_admin or is_superadmin:
                     await sio.enter_room(sid, "admin")
                     logger.info(f"Admin user {user.username} joined admin room")
 

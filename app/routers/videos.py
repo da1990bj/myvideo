@@ -3,6 +3,7 @@
 """
 from typing import List, Optional
 from uuid import uuid4
+import io
 import os
 import shutil
 
@@ -12,7 +13,7 @@ from sqlmodel import Session, select
 from database import get_session
 from data_models import (
     Video, VideoRead, VideoUpdate, VideoLike, VideoFavorite,
-    Comment, Category, User, VideoAuditLog, CollectionItem
+    Comment, Category, User, Role, UserRole, VideoAuditLog, CollectionItem
 )
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags
 from tasks import transcode_video_task
@@ -34,17 +35,56 @@ async def upload_video(
     """
     上传新视频
     """
-    if not file.content_type or not file.content_type.startswith("video/"):
-        raise HTTPException(status_code=400, detail="File must be a video")
+    # 支持的视频格式
+    ALLOWED_VIDEO_TYPES = {
+        "video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo",
+        "video/x-ms-wmv", "video/webm", "video/x-matroska", "video/matroska",
+        "video/3gpp", "video/x-flv", "video/x-m4v", "video/ogg",
+        "application/octet-stream"
+    }
+    ALLOWED_EXTENSIONS = {".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv"}
+
+    # 检查文件格式
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"不支持的视频格式: {ext}。支持的格式: MP4, MOV, AVI, WMV, WebM, MKV, MPEG, 3GP, FLV")
+
+    # 规范化 content_type（去除参数如charset）
+    content_type = file.content_type.split(";")[0].strip().lower()
+    # 如果扩展名合法，则更宽松地接受 content_type（某些浏览器对MKV等格式的MIME类型判断不准确）
+    if content_type not in ALLOWED_VIDEO_TYPES:
+        # 允许 video/* 或 application/octet-stream，只要扩展名合法
+        if not (content_type.startswith("video/") or content_type == "application/octet-stream") or ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"文件类型不被支持: {content_type}")
+
+    # 检查上传大小限制
+    # 读取文件内容到内存检查大小
+    file_content = await file.read()
+    file_size = len(file_content)
+    max_size_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+    if max_size_bytes > 0 and file_size > max_size_bytes:
+        # 检查用户是否可以绕过大小限制（管理员/运营）- 支持多角色
+        user_roles = session.exec(select(UserRole).where(UserRole.user_id == current_user.id)).all()
+        can_bypass = False
+        for ur in user_roles:
+            role = session.get(Role, ur.role_id)
+            if role and (role.permissions == "*" or "video:upload_bypass" in role.permissions.split(",")):
+                can_bypass = True
+                break
+        if not can_bypass:
+            raise HTTPException(
+                status_code=413,
+                detail=f"文件大小超过限制 ({settings.MAX_UPLOAD_SIZE_MB}MB)"
+            )
 
     # 保存文件
-    ext = os.path.splitext(file.filename)[1] or ".mp4"
     video_uuid = str(uuid4())
     filename = f"{video_uuid}{ext}"
     file_path = settings.UPLOADS_DIR / filename
 
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_content)
 
     # 获取分类
     category = None
@@ -174,13 +214,21 @@ async def get_video(
 
     # 添加 owner 信息
     if video.owner:
+        user_roles = session.exec(select(UserRole).where(UserRole.user_id == video.owner.id)).all()
+        role_ids = [ur.role_id for ur in user_roles]
+        role_names = []
+        for rid in role_ids:
+            role = session.get(Role, rid)
+            if role:
+                role_names.append(role.name)
         video_dict["owner"] = {
             "id": str(video.owner.id),
             "username": video.owner.username,
             "email": video.owner.email,
             "is_active": video.owner.is_active,
             "is_admin": video.owner.is_admin,
-            "role_id": video.owner.role_id,
+            "role_ids": role_ids,
+            "role_names": role_names,
             "created_at": video.owner.created_at,
             "avatar_path": video.owner.avatar_path,
             "bio": video.owner.bio,

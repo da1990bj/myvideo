@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlmodel import Session, select
 
 from database import get_session
-from data_models import Collection, CollectionRead, CollectionCreate, CollectionUpdate, CollectionItem, Video, User
+from data_models import Collection, CollectionRead, CollectionCreate, CollectionUpdate, CollectionItem, Video, User, Role, UserRole
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker
 
 router = APIRouter(prefix="", tags=["合集"])
@@ -121,13 +121,21 @@ async def get_collections(
 
         # 添加 owner 信息
         if coll.owner:
+            user_roles = session.exec(select(UserRole).where(UserRole.user_id == coll.owner.id)).all()
+            role_ids = [ur.role_id for ur in user_roles]
+            role_names = []
+            for rid in role_ids:
+                role = session.get(Role, rid)
+                if role:
+                    role_names.append(role.name)
             coll_dict["owner"] = {
                 "id": str(coll.owner.id),
                 "username": coll.owner.username,
                 "email": coll.owner.email,
                 "is_active": coll.owner.is_active,
                 "is_admin": coll.owner.is_admin,
-                "role_id": coll.owner.role_id,
+                "role_ids": role_ids,
+                "role_names": role_names,
                 "created_at": coll.owner.created_at,
                 "avatar_path": coll.owner.avatar_path,
                 "bio": coll.owner.bio,

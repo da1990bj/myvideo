@@ -6,9 +6,20 @@
 import json
 import logging
 import redis
+from uuid import UUID
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from config import settings
+
+
+class UUIDEncoder(json.JSONEncoder):
+    """支持UUID和datetime的JSON编码器"""
+    def default(self, obj):
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +113,7 @@ class RecommendationCache:
         ttl = ttl or self.CACHE_CONFIG.get(slot_name, 3600)
 
         try:
-            cache_value = json.dumps(recommendations)
+            cache_value = json.dumps(recommendations, cls=UUIDEncoder)
 
             if self.enabled:
                 self.redis_client.setex(cache_key, ttl, cache_value)

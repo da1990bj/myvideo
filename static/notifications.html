@@ -37,6 +37,14 @@
 </div>
 
 <script>
+    // 生成默认头像
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
         const token = localStorage.getItem("access_token");
         if (!token) return location.href = "/static/login.html";
@@ -64,7 +72,7 @@
                     div.className = `notif-item ${n.is_read ? '' : 'unread'}`;
                     div.onclick = () => handleNotifClick(n, token);
 
-                    const avatar = n.sender.avatar_path || `https://ui-avatars.com/api/?name=${n.sender.username}&background=random`;
+                    const avatar = n.sender.avatar_path || getDefaultAvatar(n.sender.username);
                     const text = getNotifText(n);
                     const time = new Date(n.created_at).toLocaleString();
 

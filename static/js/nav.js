@@ -2,6 +2,14 @@
 const NAV_API_BASE = "";
 let siteConfig = { site_name: "MyVideo" }; // 默认值
 
+// 生成默认头像（使用首字母，CSS 渲染）
+function getDefaultAvatar(username) {
+    const initial = username ? username.charAt(0).toUpperCase() : '?';
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+    const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+    return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     // 先获取系统配置
     await loadSiteConfig();
@@ -66,7 +74,7 @@ async function checkNavUser() {
         });
         if (res.ok) {
             const user = await res.json();
-            const avatar = user.avatar_path || "https://ui-avatars.com/api/?name=" + user.username;
+            const avatar = user.avatar_path || getDefaultAvatar(user.username);
 
             let adminLink = "";
             if (user.is_admin) {

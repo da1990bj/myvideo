@@ -72,6 +72,10 @@ class MyVideoSettings(BaseSettings):
     AVATARS_SUBDIR: str = "static/avatars"
     DATA_SUBDIR: str = "data"
 
+    # ==================== 上传限制 ====================
+    # 视频上传大小限制（单位：MB），0表示不限制
+    MAX_UPLOAD_SIZE_MB: int = 2048
+
     # ==================== URL 路径前缀 ====================
     THUMBNAILS_URL: str = "/static/thumbnails"
     VIDEOS_URL: str = "/static/videos"
@@ -269,3 +273,82 @@ def get_settings() -> MyVideoSettings:
 
 # 模块级单例
 settings = get_settings()
+
+
+# ==================== 运行时配置读取（支持数据库覆盖）====================
+
+def _get_config_override(key: str, default: any, session=None) -> any:
+    """
+    内部辅助：从数据库 SystemConfig 获取配置覆盖值
+
+    Args:
+        key: 配置键名
+        default: 默认值（用于推断类型）
+        session: 可选的数据库会话（如果传入则复用，否则创建新的）
+
+    Returns:
+        覆盖值或默认值
+    """
+    try:
+        from sqlmodel import Session, select
+        from data_models import SystemConfig
+        from database import engine
+
+        if session is None:
+            should_close = True
+            session = Session(engine)
+        else:
+            should_close = False
+
+        try:
+            config = session.exec(select(SystemConfig).where(SystemConfig.key == key)).first()
+            if config:
+                # 根据默认值类型转换
+                if isinstance(default, bool):
+                    return config.value.lower() in ("true", "1", "yes")
+                elif isinstance(default, int):
+                    return int(config.value)
+                elif isinstance(default, float):
+                    return float(config.value)
+                return config.value
+        finally:
+            if should_close:
+                session.close()
+    except Exception:
+        pass
+    return default
+
+
+def get_cold_storage_config() -> dict:
+    """
+    从数据库获取冷存储配置，支持运行时覆盖
+
+    Returns:
+        dict with keys: enabled, trigger_days, trigger_views, path_root
+    """
+    return {
+        "enabled": _get_config_override("COLD_STORAGE_ENABLED", settings.COLD_STORAGE_ENABLED),
+        "trigger_days": _get_config_override("COLD_STORAGE_TRIGGER_DAYS", settings.COLD_STORAGE_TRIGGER_DAYS),
+        "trigger_views": _get_config_override("COLD_STORAGE_TRIGGER_VIEWS", settings.COLD_STORAGE_TRIGGER_VIEWS),
+        "path_root": _get_config_override("COLD_STORAGE_PATH_ROOT", settings.COLD_STORAGE_PATH_ROOT),
+    }
+
+
+def get_storage_migration_delay() -> float:
+    """
+    从数据库获取存储迁移间隔时间（秒）
+
+    Returns:
+        迁移间隔时间
+    """
+    return _get_config_override("STORAGE_MIGRATION_DELAY", settings.STORAGE_MIGRATION_DELAY)
+
+
+def get_log_level() -> str:
+    """
+    从数据库获取日志级别
+
+    Returns:
+        日志级别字符串 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    """
+    return _get_config_override("LOG_LEVEL", settings.LOG_LEVEL)

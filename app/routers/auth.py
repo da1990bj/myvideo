@@ -115,11 +115,21 @@ async def get_user_profile(
     # 是否是自己以及是否已关注（仅登录用户可见）
     is_self = current_user.id == user.id if current_user else False
     is_following = False
+    is_blocked_by = False
     if current_user and not is_self:
         is_following = session.exec(
             select(UserFollow).where(
                 UserFollow.follower_id == current_user.id,
                 UserFollow.followed_id == user.id
+            )
+        ).first() is not None
+
+        # 检查是否被对方拉黑
+        from data_models import UserBlock
+        is_blocked_by = session.exec(
+            select(UserBlock).where(
+                UserBlock.blocker_id == user.id,
+                UserBlock.blocked_id == current_user.id
             )
         ).first() is not None
 
@@ -137,6 +147,7 @@ async def get_user_profile(
         "following_count": len(following_count),
         "is_self": is_self,
         "is_following": is_following,
+        "is_blocked_by": is_blocked_by,
     }
 
 

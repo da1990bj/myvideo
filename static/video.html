@@ -142,7 +142,7 @@
 
             <!-- 添加主评论 -->
             <div class="add-comment-row">
-                <img id="my-avatar" src="https://ui-avatars.com/api/?background=random" class="my-avatar">
+                <img id="my-avatar" src="/static/img/default-avatar.svg" class="my-avatar">
                 <div class="input-wrap">
                     <input type="text" id="main-comment-input" class="comment-input" placeholder="添加评论..." onfocus="showMainActions(true)" oninput="checkInput(this, 'main-submit-btn')">
                     <div class="comment-actions" id="main-actions" style="display:none;">
@@ -181,6 +181,14 @@
     let isLiked = false;
     let isFavorited = false;
     let currentVideoId = null;
+
+    // 生成默认头像
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+    }
 
     document.addEventListener("DOMContentLoaded", async () => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -338,7 +346,7 @@
             const res = await fetch("/users/me", { headers: { "Authorization": "Bearer " + token } });
             if (res.ok) {
                 currentUser = await res.json();
-                const avatar = currentUser.avatar_path || `https://ui-avatars.com/api/?name=${currentUser.username}&background=random`;
+                const avatar = currentUser.avatar_path || getDefaultAvatar(currentUser.username);
                 document.getElementById("my-avatar").src = avatar;
             }
         } catch(e) {}
@@ -424,7 +432,7 @@
         div.className = isMain ? "comment-item" : "reply-item";
         div.id = `comment-${c.id}`;
 
-        const avatar = c.user.avatar_path || `https://ui-avatars.com/api/?name=${c.user.username}&background=random`;
+        const avatar = c.user.avatar_path || getDefaultAvatar(c.user.username);
         const timeAgo = timeSince(new Date(c.created_at));
         const isOwner = currentUser && c.user.username === currentUser.username;
 
@@ -462,7 +470,7 @@
         const replyInputHtml = `
             <div id="reply-box-${c.id}" class="reply-input-box" style="margin-left: ${isMain?56:0}px;">
                 <div class="add-comment-row" style="margin-bottom:0;">
-                    <img src="${currentUser ? (currentUser.avatar_path||`https://ui-avatars.com/api/?name=${currentUser.username}`) : 'https://ui-avatars.com/api/?background=random'}" class="my-avatar" style="width:24px; height:24px;">
+                    <img src="${currentUser ? (currentUser.avatar_path||getDefaultAvatar(currentUser.username)) : '/static/img/default-avatar.svg'}" class="my-avatar" style="width:24px; height:24px;">
                     <div class="input-wrap">
                         <input type="text" id="reply-input-${c.id}" class="comment-input" placeholder="添加回复..." style="font-size:13px;">
                         <div class="comment-actions">
@@ -660,7 +668,7 @@
                 if (video.owner) {
                     currentAuthorId = video.owner.id;
                     document.getElementById("author-name").innerText = video.owner.username;
-                    const avatar = video.owner.avatar_path || "https://ui-avatars.com/api/?name=" + video.owner.username;
+                    const avatar = video.owner.avatar_path || getDefaultAvatar(video.owner.username);
                     document.getElementById("author-avatar").src = avatar;
 
                     // 点击跳转

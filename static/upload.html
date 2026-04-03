@@ -24,10 +24,33 @@
         .btn:disabled { background: #ccc; cursor: not-allowed; }
         .progress-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 10px; display: none; }
         .progress-fill { height: 100%; background: #00a1d6; width: 0%; transition: width 0.2s; }
+
+        /* 模态框样式 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: #fff; border-radius: 12px; padding: 30px; max-width: 450px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        .modal-icon { font-size: 48px; text-align: center; margin-bottom: 15px; }
+        .modal-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 10px; color: #333; }
+        .modal-message { font-size: 14px; color: #666; text-align: center; margin-bottom: 20px; line-height: 1.5; }
+        .modal-btn { background: #00a1d6; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; cursor: pointer; display: block; margin: 0 auto; }
+        .modal-btn:hover { background: #0095c5; }
+        .modal.error .modal-icon { color: #dc3545; }
+        .modal.success .modal-icon { color: #28a745; }
+        .modal.warning .modal-icon { color: #ffc107; }
     </style>
 </head>
 <body>
 <script src="/static/js/nav.js"></script>
+
+<!-- 模态框 -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+        <div class="modal-icon" id="modalIcon">⚠️</div>
+        <div class="modal-title" id="modalTitle">提示</div>
+        <div class="modal-message" id="modalMessage"></div>
+        <button class="modal-btn" onclick="closeModal()">确定</button>
+    </div>
+</div>
 
 <div class="upload-card">
     <h1>投稿视频</h1>
@@ -84,12 +107,92 @@
     const colors = ['#e7f5ff', '#fff0f6', '#ebfbee', '#fff9db', '#f3f0ff'];
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
+    // 支持的视频格式
+    const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv", "video/webm", "video/x-matroska", "video/matroska", "video/3gpp", "video/x-flv", "video/x-m4v", "video/ogg", "application/octet-stream"];
+    const ALLOWED_EXTENSIONS = [".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv"];
+    const ALLOWED_EXT_NAMES = ["MP4", "MOV", "AVI", "WMV", "WebM", "MKV", "MPEG", "3GP", "FLV", "M4V", "OGV"];
+
+    // 默认大小限制 2GB，可通过设置接口获取
+    let MAX_UPLOAD_SIZE_MB = 2048;
+
+    // 模态框函数
+    function showModal(type, title, message) {
+        const overlay = document.getElementById('modalOverlay');
+        const modal = document.getElementById('modal');
+        const icon = document.getElementById('modalIcon');
+        const titleEl = document.getElementById('modalTitle');
+        const messageEl = document.getElementById('modalMessage');
+
+        modal.className = 'modal ' + type;
+        icon.textContent = type === 'error' ? '❌' : type === 'success' ? '✅' : '⚠️';
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        overlay.classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    // 点击遮罩关闭
+    document.getElementById('modalOverlay').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('modalOverlay')) closeModal();
+    });
+
+    // 格式化文件大小
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    }
+
+    // 验证单个文件
+    function validateFile(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        const extWithDot = '.' + ext;
+
+        // 检查扩展名
+        if (!ALLOWED_EXTENSIONS.includes(extWithDot)) {
+            return { valid: false, error: `不支持的视频格式 "${ext.toUpperCase()}"。支持格式: ${ALLOWED_EXT_NAMES.join(', ')}` };
+        }
+
+        // 检查MIME类型（更宽松的检查：只要扩展名合法，MIME类型不严格限制）
+        // 某些浏览器对MKV等格式的MIME类型判断不准确
+        const typeOk = ALLOWED_VIDEO_TYPES.includes(file.type) ||
+                       file.type.startsWith('video/') ||
+                       file.type === 'application/octet-stream' ||
+                       !file.type; // 允许没有MIME类型的情况
+        if (!typeOk) {
+            return { valid: false, error: `文件类型不被支持: ${file.type || '未知'}` };
+        }
+
+        // 检查大小
+        const maxBytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+        if (maxBytes > 0 && file.size > maxBytes) {
+            return { valid: false, error: `文件大小 ${formatSize(file.size)} 超过限制 ${MAX_UPLOAD_SIZE_MB}MB` };
+        }
+
+        return { valid: true };
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
         const token = localStorage.getItem("access_token");
         if (!token) {
-            alert("请先登录！");
-            location.href = "/static/login.html";
+            showModal('error', '请先登录', '需要登录后才能上传视频');
+            setTimeout(() => location.href = "/static/login.html", 2000);
             return;
+        }
+
+        // 获取上传配置（公开接口，无需管理员权限）
+        try {
+            const configRes = await fetch("/admin/upload-config");
+            if (configRes.ok) {
+                const config = await configRes.json();
+                MAX_UPLOAD_SIZE_MB = config.max_upload_size_mb || 2048;
+            }
+        } catch (e) {
+            console.log('使用默认上传大小限制:', MAX_UPLOAD_SIZE_MB, 'MB');
         }
 
         try {
@@ -204,29 +307,48 @@
     function updateFileList(files) {
         const list = document.getElementById("fileList");
         list.innerHTML = "";
+        let hasInvalid = false;
         Array.from(files).forEach((file, index) => {
+            const validation = validateFile(file);
             const item = document.createElement("div");
             item.style.marginBottom = "10px";
+
+            const statusColor = validation.valid ? '#999' : '#dc3545';
+            const statusText = validation.valid ? `${formatSize(file.size)}` : validation.error;
+
             item.innerHTML = `
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <span style="font-size:14px; color:#333;">${file.name}</span>
-                    <span id="status-${index}" style="font-size:13px; color:#999;">等待上传</span>
+                    <span id="status-${index}" style="font-size:13px; color:${statusColor};">${statusText}</span>
                 </div>
                 <div class="progress-bar" id="bar-${index}" style="display:block; margin-top:5px;">
                     <div class="progress-fill" id="fill-${index}" style="width:0%"></div>
                 </div>
             `;
             list.appendChild(item);
+            if (!validation.valid) hasInvalid = true;
         });
         document.getElementById("fileName").innerText = `已选择 ${files.length} 个文件`;
-        document.getElementById("fileName").style.color = "#333";
+        document.getElementById("fileName").style.color = hasInvalid ? "#dc3545" : "#333";
     }
 
     async function handleUpload(e) {
         e.preventDefault();
 
         const files = document.getElementById("fileInput").files;
-        if (files.length === 0) return alert("请选择文件");
+        if (files.length === 0) {
+            showModal('warning', '请选择文件', '请先选择要上传的视频文件');
+            return;
+        }
+
+        // 前置验证所有文件
+        for (let i = 0; i < files.length; i++) {
+            const validation = validateFile(files[i]);
+            if (!validation.valid) {
+                showModal('error', '文件验证失败', validation.error);
+                return;
+            }
+        }
 
         const btn = document.getElementById("submitBtn");
         btn.disabled = true;
@@ -240,6 +362,7 @@
 
         const token = localStorage.getItem("access_token");
 
+        let hasError = false;
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const statusSpan = document.getElementById(`status-${i}`);
@@ -248,7 +371,6 @@
             statusSpan.innerText = "上传中...";
             statusSpan.style.color = "#00a1d6";
 
-            // 简单的模拟进度
             fillDiv.style.width = "30%";
 
             const formData = new FormData();
@@ -259,32 +381,64 @@
             formData.append("tags", tagString);
             formData.append("file", file);
 
-            try {
-                fillDiv.style.width = "60%";
-                const res = await fetch("/videos/upload", {
-                    method: "POST",
-                    headers: { "Authorization": "Bearer " + token },
-                    body: formData
+            // 使用 XMLHttpRequest 以支持上传进度
+            const uploadSuccess = await new Promise((resolve) => {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        fillDiv.style.width = percent + "%";
+                        statusSpan.innerText = `上传中... ${percent}%`;
+                    }
                 });
 
-                if (res.ok) {
-                    fillDiv.style.width = "100%";
-                    statusSpan.innerText = "上传成功";
-                    statusSpan.style.color = "green";
-                } else {
-                    const err = await res.json();
-                    statusSpan.innerText = "失败: " + (err.detail || "未知错误");
+                xhr.addEventListener("load", () => {
+                    if (xhr.status === 200) {
+                        fillDiv.style.width = "100%";
+                        statusSpan.innerText = "上传成功";
+                        statusSpan.style.color = "green";
+                        resolve(true);
+                    } else if (xhr.status === 413) {
+                        statusSpan.innerText = "失败: 文件大小超出限制";
+                        statusSpan.style.color = "red";
+                        hasError = true;
+                        showModal('error', '上传失败', '文件大小超出服务器限制');
+                        resolve(false);
+                    } else {
+                        try {
+                            const err = JSON.parse(xhr.responseText);
+                            statusSpan.innerText = "失败: " + (err.detail || "未知错误");
+                        } catch {
+                            statusSpan.innerText = "失败: HTTP " + xhr.status;
+                        }
+                        statusSpan.style.color = "red";
+                        hasError = true;
+                        resolve(false);
+                    }
+                });
+
+                xhr.addEventListener("error", () => {
+                    statusSpan.innerText = "网络错误";
                     statusSpan.style.color = "red";
-                }
-            } catch(e) {
-                console.error(e);
-                statusSpan.innerText = "网络错误";
-                statusSpan.style.color = "red";
-            }
+                    hasError = true;
+                    showModal('error', '网络错误', '上传失败，请检查网络连接');
+                    resolve(false);
+                });
+
+                xhr.open("POST", "/videos/upload");
+                xhr.setRequestHeader("Authorization", "Bearer " + token);
+                xhr.send(formData);
+            });
         }
 
-        btn.innerText = "全部处理完毕";
-        setTimeout(() => location.href = "/static/dashboard.html", 2000);
+        if (!hasError) {
+            showModal('success', '上传成功', '视频已成功上传，稍后可在创作中心查看');
+            setTimeout(() => location.href = "/static/dashboard.html", 2000);
+        } else {
+            btn.innerText = "部分失败";
+            btn.disabled = false;
+        }
     }
 </script>
 

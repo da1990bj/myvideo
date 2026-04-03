@@ -64,6 +64,9 @@
     <div class="container">
         <h1>系统设置</h1>
 
+        <!-- 全局通知 -->
+        <div id="global-message" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;"></div>
+
         <div class="tabs">
             <div class="tab active" onclick="showTab('env')">环境配置</div>
             <div class="tab" onclick="showTab('storage')">存储设置</div>
@@ -96,6 +99,13 @@
             <div class="form-group">
                 <label class="label">缩略图目录</label>
                 <input type="text" class="input" id="storage-thumbnails">
+            </div>
+
+            <h3 style="margin-top: 30px;">上传限制</h3>
+            <div class="form-group">
+                <label class="label">上传文件大小限制 (MB)</label>
+                <input type="number" class="input" id="storage-upload-limit" min="0" step="1" placeholder="0表示不限制">
+                <span style="color: #888; font-size: 12px; margin-left: 10px;">0 = 不限制，管理员和运营可绕过此限制</span>
             </div>
 
             <div style="margin-top: 15px;">
@@ -226,6 +236,7 @@
             "COLD_STORAGE_TRIGGER_VIEWS": "触发冷存储播放量阈值",
             "COLD_STORAGE_PATH_ROOT": "冷存储根目录",
             "STORAGE_MIGRATION_DELAY": "迁移间隔时间(秒)",
+            "MAX_UPLOAD_SIZE_MB": "上传文件大小限制(MB)",
         };
 
         function showTab(tabName) {
@@ -316,7 +327,12 @@
         }
 
         async function saveEnvConfig() {
-            if (!hasChanges) return;
+            console.log("saveEnvConfig called, hasChanges:", hasChanges);
+
+            if (!hasChanges) {
+                showMessage("env-message", "没有需要保存的更改", "info");
+                return;
+            }
 
             const updates = {};
             const inputs = document.querySelectorAll('#env-config .input');
@@ -331,7 +347,12 @@
                 }
             });
 
-            if (Object.keys(updates).length === 0) return;
+            console.log("Updates to save:", updates);
+
+            if (Object.keys(updates).length === 0) {
+                showMessage("env-message", "没有需要保存的更改", "info");
+                return;
+            }
 
             const envSaveBtn = document.getElementById('env-save-btn');
             const saveBtn = document.getElementById('save-btn');
@@ -342,20 +363,30 @@
                 saveBtn.disabled = true;
             }
 
-            const res = await fetch("/admin/env-config", {
-                method: "PUT",
-                headers: { ...headers, "Content-Type": "application/json" },
-                body: JSON.stringify(updates)
-            });
+            try {
+                console.log("Sending request to /admin/env-config");
+                const res = await fetch("/admin/env-config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify(updates)
+                });
+                console.log("Response status:", res.status);
 
-            if (res.ok) {
-                showMessage("env-message", "配置已保存！部分配置需要重启应用生效。", "success");
-                hasChanges = false;
-                // 重新加载配置
-                await loadEnvConfig();
-            } else {
-                const err = await res.json();
-                showMessage("env-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("Response data:", data);
+                    showMessage("env-message", "配置已保存！" + (data.message || ""), "success");
+                    hasChanges = false;
+                    // 重新加载配置
+                    await loadEnvConfig();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    console.log("Error response:", err);
+                    showMessage("env-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                console.error("Fetch error:", err);
+                showMessage("env-message", "保存失败: " + err.message, "error");
             }
 
             envSaveBtn.textContent = originalText;
@@ -376,6 +407,19 @@
                 document.getElementById("storage-thumbnails").value = config.thumbnails_dir || "";
             }
 
+            // 从环境配置加载上传限制
+            const envRes = await fetch("/admin/env-config", { headers });
+            if (envRes.ok) {
+                const envConfig = await envRes.json();
+                // 遍历所有配置找 MAX_UPLOAD_SIZE_MB
+                for (const section in envConfig) {
+                    if (envConfig[section]["MAX_UPLOAD_SIZE_MB"]) {
+                        document.getElementById("storage-upload-limit").value = envConfig[section]["MAX_UPLOAD_SIZE_MB"] || "2048";
+                        break;
+                    }
+                }
+            }
+
             await loadStorageUsage();
         }
 
@@ -383,22 +427,35 @@
             const uploads = document.getElementById("storage-uploads").value;
             const processed = document.getElementById("storage-processed").value;
             const thumbnails = document.getElementById("storage-thumbnails").value;
+            const uploadLimit = document.getElementById("storage-upload-limit").value;
 
-            const res = await fetch("/admin/storage/config", {
-                method: "PUT",
-                headers: { ...headers, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    storage_uploads_dir: uploads,
-                    storage_processed_dir: processed,
-                    storage_thumbnails_dir: thumbnails
-                })
-            });
+            try {
+                const res = await fetch("/admin/storage/config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        storage_uploads_dir: uploads,
+                        storage_processed_dir: processed,
+                        storage_thumbnails_dir: thumbnails
+                    })
+                });
 
-            if (res.ok) {
-                showMessage("storage-message", "存储配置已保存！修改目录后请点击「迁移数据到新目录」按钮迁移现有数据。", "success");
-            } else {
-                const err = await res.json();
-                showMessage("storage-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                if (res.ok) {
+                    // 同时保存上传限制到环境配置
+                    await fetch("/admin/env-config", {
+                        method: "PUT",
+                        headers: { ...headers, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            "MAX_UPLOAD_SIZE_MB": uploadLimit || "0"
+                        })
+                    });
+                    showMessage("storage-message", "存储配置和上传限制已保存！", "success");
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("storage-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("storage-message", "保存失败: " + err.message, "error");
             }
         }
 
@@ -661,17 +718,21 @@
                 "COLD_STORAGE_TRIGGER_VIEWS": document.getElementById("cold-views-input").value,
             };
 
-            const res = await fetch("/admin/env-config", {
-                method: "PUT",
-                headers: { ...headers, "Content-Type": "application/json" },
-                body: JSON.stringify(updates)
-            });
+            try {
+                const res = await fetch("/admin/env-config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify(updates)
+                });
 
-            if (res.ok) {
-                showMessage("cold-message", "冷存储配置已保存！部分配置需要重启应用生效。", "success");
-            } else {
-                const err = await res.json();
-                showMessage("cold-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                if (res.ok) {
+                    showMessage("cold-message", "冷存储配置已保存！部分配置需要重启应用生效。", "success");
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("cold-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("cold-message", "保存失败: " + err.message, "error");
             }
         }
 
@@ -729,9 +790,21 @@
 
         // ==================== 工具 ====================
         function showMessage(containerId, text, type) {
+            console.log("showMessage called:", containerId, text, type);
+
+            // 显示在指定容器中
             const container = document.getElementById(containerId);
-            container.innerHTML = `<div class="message ${type}">${text}</div>`;
-            setTimeout(() => container.innerHTML = "", 5000);
+            if (container) {
+                container.innerHTML = `<div class="message ${type}">${text}</div>`;
+                setTimeout(() => { container.innerHTML = ""; }, 5000);
+            }
+
+            // 同时显示在全局通知区域（固定在右上角）
+            const globalContainer = document.getElementById("global-message");
+            if (globalContainer) {
+                globalContainer.innerHTML = `<div class="message ${type}" style="box-shadow: 0 4px 12px rgba(0,0,0,0.15);">${text}</div>`;
+                setTimeout(() => { globalContainer.innerHTML = ""; }, 5000);
+            }
         }
 
         function escapeHtml(text) {

@@ -12,7 +12,7 @@ from sqlmodel import Session, select, desc, func
 
 from database import get_session, engine
 from data_models import (
-    User, UserRead, Video, VideoRead, Role, SystemConfig, AdminLog,
+    User, UserRead, Video, VideoRead, Role, SystemConfig, AdminLog, UserRole,
     VideoAuditLog, Comment, Notification, Category,
     VideoRecommendation, VideoRecommendationWithVideoRead,
     RecommendationSlot, RecommendationSlotRead, RecommendationLog, UserVideoScore
@@ -22,6 +22,32 @@ from tasks import transcode_video_task, migrate_storage_task
 from config import settings
 
 router = APIRouter(prefix="/admin", tags=["管理后台"])
+
+
+# ==================== 公开配置（无需管理员权限） ====================
+
+@router.get("/upload-config")
+async def get_upload_config(session: Session = Depends(get_session)):
+    """
+    获取上传相关配置（公开接口，无需管理员权限）
+    仅返回：MAX_UPLOAD_SIZE_MB
+    """
+    # 从数据库配置中读取，如果没配置则使用默认值
+    try:
+        config = session.exec(select(SystemConfig).where(SystemConfig.key == "MAX_UPLOAD_SIZE_MB")).first()
+        max_upload_mb = int(config.value) if config else 2048
+    except Exception:
+        max_upload_mb = 2048
+
+    # 支持的视频格式
+    allowed_extensions = [".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv"]
+    allowed_names = ["MP4", "MOV", "AVI", "WMV", "WebM", "MKV", "MPEG", "3GP", "FLV", "M4V", "OGV"]
+
+    return {
+        "max_upload_size_mb": max_upload_mb,
+        "allowed_extensions": allowed_extensions,
+        "allowed_names": allowed_names
+    }
 
 
 # ==================== 统计相关 ====================
@@ -301,6 +327,9 @@ async def get_env_config(
         "存储迁移": {
             "STORAGE_MIGRATION_DELAY": get_config_override("STORAGE_MIGRATION_DELAY", settings.STORAGE_MIGRATION_DELAY, session),
         },
+        "上传限制": {
+            "MAX_UPLOAD_SIZE_MB": get_config_override("MAX_UPLOAD_SIZE_MB", settings.MAX_UPLOAD_SIZE_MB, session),
+        },
     }
 
     # 处理排除
@@ -333,6 +362,8 @@ async def update_env_config(
         "STORAGE_MIGRATION_DELAY",
         # 日志配置
         "LOG_LEVEL",
+        # 上传限制
+        "MAX_UPLOAD_SIZE_MB",
     ]
 
     for key in updates.keys():
@@ -882,7 +913,30 @@ async def get_all_users(
     users = session.exec(
         select(User).order_by(desc(User.created_at)).offset(offset).limit(size)
     ).all()
-    return users
+
+    # 获取每个用户的角色信息
+    result = []
+    for user in users:
+        user_roles = session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+        role_ids = [ur.role_id for ur in user_roles]
+        role_names = []
+        for rid in role_ids:
+            role = session.get(Role, rid)
+            if role:
+                role_names.append(role.name)
+        result.append(UserRead(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            is_active=user.is_active,
+            is_admin=user.is_admin,
+            role_ids=role_ids,
+            role_names=role_names,
+            created_at=user.created_at,
+            avatar_path=user.avatar_path,
+            bio=user.bio
+        ))
+    return result
 
 
 @router.post("/users/{user_id}/status")
@@ -910,27 +964,45 @@ async def update_user_status(
 @router.put("/users/{user_id}/role")
 async def update_user_role(
     user_id: str,
-    role_id: str = Body(...),
+    body: dict = Body(...),
     admin: User = Depends(PermissionChecker("admin:super")),
     session: Session = Depends(get_session)
 ):
-    """更新用户角色"""
+    """更新用户角色（支持多角色）"""
+    role_ids = body.get("role_ids")
+    if role_ids is None:
+        raise HTTPException(status_code=400, detail="role_ids is required")
+
+    if not isinstance(role_ids, list):
+        raise HTTPException(status_code=400, detail="role_ids must be a list")
+
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    role = session.get(Role, role_id)
-    if not role:
-        raise HTTPException(status_code=404, detail="Role not found")
+    # 验证所有角色存在
+    for rid in role_ids:
+        role = session.get(Role, rid)
+        if not role:
+            raise HTTPException(status_code=404, detail=f"Role {rid} not found")
 
-    user.role_id = role_id
-    session.add(user)
+    # 删除旧的角色关联
+    old_user_roles = session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+    for ur in old_user_roles:
+        session.delete(ur)
+
+    # 添加新的角色关联
+    role_names = []
+    for rid in role_ids:
+        ur = UserRole(user_id=user.id, role_id=rid)
+        session.add(ur)
+        role = session.get(Role, rid)
+        role_names.append(role.name)
+
+    log_admin_action(session, admin.id, "update_user_role", user_id, f"Roles set to {', '.join(role_names)}")
     session.commit()
 
-    log_admin_action(session, admin.id, "update_user_role", user_id, f"Role set to {role.name}")
-    session.commit()
-
-    return {"message": "User role updated"}
+    return {"message": "User roles updated", "role_names": role_names}
 
 
 # ==================== 视频管理 ====================

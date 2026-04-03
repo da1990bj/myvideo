@@ -9,7 +9,7 @@ from jose import JWTError, jwt
 from sqlmodel import Session, select
 
 from database import get_session
-from data_models import User, Role, AdminLog, Tag, VideoTag
+from data_models import User, Role, UserRole, AdminLog, Tag, VideoTag
 from security import SECRET_KEY, ALGORITHM
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -67,7 +67,7 @@ async def get_current_admin(current_user: User = Depends(get_current_user)) -> U
 
 
 class PermissionChecker:
-    """权限检查器依赖"""
+    """权限检查器依赖 - 支持多角色"""
 
     def __init__(self, permission: str):
         self.permission = permission
@@ -76,20 +76,25 @@ class PermissionChecker:
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
 
-        if not user.role_id:
+        # 获取用户所有角色
+        user_roles = session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+        if not user_roles:
             raise HTTPException(status_code=403, detail="Role not assigned")
 
-        role = session.get(Role, user.role_id)
-        if not role:
-            raise HTTPException(status_code=403, detail="Role not found")
+        # 获取所有角色对象
+        role_ids = [ur.role_id for ur in user_roles]
+        roles = session.exec(select(Role).where(Role.id.in_(role_ids))).all()
 
         allowed = False
-        if role.permissions == "*":
-            allowed = True
-        else:
-            perms = role.permissions.split(",")
+        for role in roles:
+            if role.permissions == "*":
+                # 任何角色有 * 权限即代表超级管理员
+                allowed = True
+                break
+            perms = [p.strip() for p in role.permissions.split(",") if p.strip()]
             if self.permission in perms:
                 allowed = True
+                break
 
         if not allowed:
             raise HTTPException(status_code=403, detail=f"Permission '{self.permission}' required")
