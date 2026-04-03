@@ -44,13 +44,20 @@ class RecommendationCache:
     def _make_key(slot_name: str, user_id: Optional[str] = None, **kwargs) -> str:
         """生成缓存键"""
         exclude_params = {"limit", "offset"}
-        params = {k: v for k, v in kwargs.items() if k not in exclude_params}
+        params = {k: str(v) for k, v in kwargs.items() if k not in exclude_params}
 
         if user_id:
-            return f"rec:user:{user_id}:slot:{slot_name}"
+            key = f"rec:user:{user_id}:slot:{slot_name}"
         else:
             # 为非授权用户生成缓存键（基于推荐位）
-            return f"rec:public:slot:{slot_name}"
+            key = f"rec:public:slot:{slot_name}"
+
+        # 加入过滤参数（如 category_id）以区分不同查询
+        if params:
+            filter_str = ":".join(f"{k}={v}" for k, v in sorted(params.items()))
+            key = f"{key}:{filter_str}"
+
+        return key
 
     @staticmethod
     def _make_user_key(user_id: str) -> str:

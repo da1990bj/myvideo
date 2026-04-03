@@ -3,7 +3,7 @@
 支持4种推荐策略的混合推荐系统
 """
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlmodel import Session, select, func
@@ -115,22 +115,44 @@ class RecommendationEngine:
             logger.error(f"Error in collaborative recommendations: {e}")
             return []
 
-    async def get_trending_recommendations(self, days: int = 7, limit: int = 10) -> List[Tuple[UUID, float]]:
+    async def get_trending_recommendations(self, days: int = 7, limit: int = 10, category_id: Optional[int] = None) -> List[Tuple[UUID, float]]:
         """
         获取最近N天的热门视频
 
         热度公式: sqrt(views) + likes*2 + favorites*3
+
+        Args:
+            days: 统计天数
+            limit: 返回数量
+            category_id: 可选，按分类过滤
         """
         try:
             cutoff_date = datetime.utcnow() - timedelta(days=days)
 
             # 先查询视频的基本数据
-            videos = self.session.exec(
+            statement = (
                 select(Video)
                 .where(Video.created_at >= cutoff_date)
                 .where(Video.status.in_(["completed", "approved"]))
                 .where(Video.visibility == "public")
-            ).all()
+            )
+            if category_id:
+                statement = statement.where(Video.category_id == category_id)
+
+            videos = self.session.exec(statement).all()
+
+            # 如果最近N天没有视频，扩展到30天
+            if not videos:
+                cutoff_date = datetime.utcnow() - timedelta(days=30)
+                statement = (
+                    select(Video)
+                    .where(Video.created_at >= cutoff_date)
+                    .where(Video.status.in_(["completed", "approved"]))
+                    .where(Video.visibility == "public")
+                )
+                if category_id:
+                    statement = statement.where(Video.category_id == category_id)
+                videos = self.session.exec(statement).all()
 
             # 计算热度分数
             scored_videos = []
@@ -334,7 +356,8 @@ class RecommendationEngine:
         self,
         slot_name: str,
         limit: int = 10,
-        exclude_video_ids: Optional[List[UUID]] = None
+        exclude_video_ids: Optional[List[UUID]] = None,
+        category_id: Optional[int] = None
     ) -> List[dict]:
         """
         根据推荐位配置返回最终推荐
@@ -344,6 +367,12 @@ class RecommendationEngine:
         2. 根据策略加载手动推荐和算法推荐
         3. 合并、去重、排序
         4. 记录到recommendation_logs
+
+        Args:
+            slot_name: 推荐位名称
+            limit: 返回数量
+            exclude_video_ids: 排除的视频ID列表
+            category_id: 可选，按分类过滤（主要用于热门推荐）
 
         返回: [{"video_id": UUID, "score": float, "source": str, "reason": str}, ...]
         """
@@ -369,11 +398,21 @@ class RecommendationEngine:
             # 3. 根据策略加载推荐
             recommendations = {}
 
-            # 3a. 加载手动推荐
-            if slot.recommendation_strategy in ["manual_first", "mixed"]:
+            # 3a. 加载手动推荐（但当指定 category_id 时，对于 trending 跳过手动推荐以避免显示错误分类）
+            manual_recs = []
+            skip_manual_for_category = (slot_name == "trending" and category_id)
+            if slot.recommendation_strategy in ["manual_first", "mixed"] and not skip_manual_for_category:
+                # 兼容旧数据：slot_name 可能对应旧的 recommendation_type
+                # home_carousel <-> featured_carousel
+                type_mapping = {
+                    "home_carousel": ["home_carousel", "featured_carousel"],
+                    "category_featured": ["category_featured", "category_featured"],
+                }
+                valid_types = type_mapping.get(slot.slot_name, [slot.slot_name])
+
                 manual_recs = self.session.exec(
                     select(VideoRecommendation)
-                    .where(VideoRecommendation.recommendation_type == slot.slot_name)
+                    .where(VideoRecommendation.recommendation_type.in_(valid_types))
                     .where(VideoRecommendation.enabled == True)
                     .where(
                         (VideoRecommendation.expires_at == None) |
@@ -391,9 +430,43 @@ class RecommendationEngine:
                             "reason": rec.reason or "编辑精选推荐"
                         }
 
-            # 3b. 加载算法推荐
-            if slot.recommendation_strategy in ["algorithm_only", "mixed"]:
-                if self.user_id:
+            # 3b. 手动推荐不足时 fallback 到热门推荐
+            # manual_first: 少于 max_items 时补充
+            # mixed: 少于 max_items // 2 时补充
+            expected_manual = slot.max_items if slot.recommendation_strategy == "manual_first" else slot.max_items // 2
+            needs_fallback = len(recommendations) < expected_manual
+
+            # 3c. 加载算法推荐
+            if slot.recommendation_strategy in ["algorithm_only", "mixed"] or needs_fallback:
+                # 对于 trending 推荐位且指定了 category_id，使用热门算法过滤
+                if slot_name == "trending" and category_id:
+                    trending_recs = await self.get_trending_recommendations(
+                        days=7,
+                        limit=slot.max_items,
+                        category_id=category_id
+                    )
+                    for video_id, score in trending_recs:
+                        if video_id not in exclude_video_ids and video_id not in recommendations:
+                            recommendations[video_id] = {
+                                "score": score,
+                                "source": "trending",
+                                "reason": "热门推荐"
+                            }
+                # manual_first fallback 到热门推荐，或者有 category_id 时也需要过滤
+                elif needs_fallback or category_id:
+                    trending_recs = await self.get_trending_recommendations(
+                        days=7,
+                        limit=slot.max_items - len(recommendations),
+                        category_id=category_id
+                    )
+                    for video_id, score in trending_recs:
+                        if video_id not in exclude_video_ids and video_id not in recommendations:
+                            recommendations[video_id] = {
+                                "score": score,
+                                "source": "trending",
+                                "reason": "热门推荐"
+                            }
+                elif self.user_id:
                     # 尝试从缓存加载
                     cached_scores = self.session.exec(
                         select(UserVideoScore)

@@ -686,7 +686,13 @@
                     if (viewRecorded) return;
                     viewRecorded = true;
                     try {
-                        await fetch(`/videos/${video.id}/view`, { method: "POST" });
+                        const token = localStorage.getItem("access_token");
+                        if (token) {
+                            await fetch(`/videos/${video.id}/view`, {
+                                method: "POST",
+                                headers: { "Authorization": "Bearer " + token }
+                            });
+                        }
                         // 更新页面上的播放次数显示
                         const viewsEl = document.getElementById("views");
                         if (viewsEl) {
@@ -703,7 +709,12 @@
                     if (completedRecorded) return;
                     completedRecorded = true;
                     try {
-                        await fetch(`/videos/${video.id}/progress?is_finished=true`, { method: "POST" });
+                        const token = localStorage.getItem("access_token");
+                        if (!token) return;  // 未登录不记录
+                        await fetch(`/videos/${video.id}/progress?is_finished=true`, {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token }
+                        });
                     } catch(e) { console.error("Complete record error:", e); }
                 };
 
@@ -793,7 +804,8 @@
         const headers = token ? { "Authorization": "Bearer " + token } : {};
 
         try {
-            const res = await fetch(`/recommendations?slot_name=sidebar_related&limit=10`, { headers });
+            // 排除当前视频，获取相关推荐
+            const res = await fetch(`/recommendations?slot_name=sidebar_related&limit=10&exclude_video_ids=${currentVideoId}`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 const l = document.getElementById("rec-list");
@@ -807,7 +819,7 @@
                 // 添加标题
                 const title = document.createElement("div");
                 title.style.cssText = "padding:12px; font-size:14px; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; margin-bottom:8px;";
-                title.innerHTML = `<span style="color:#00a1d6;">✨</span> 为你推荐`;
+                title.innerHTML = `<span style="color:#00a1d6;">✨</span> 相关推荐`;
                 l.appendChild(title);
 
                 data.recommendations.forEach((rec, idx) => {

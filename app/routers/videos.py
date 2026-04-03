@@ -366,19 +366,56 @@ async def get_watch_history(
 
     videos = session.exec(select(Video).where(Video.id.in_(history_ids))).all()
 
-    # 手动添加 owner 信息
-    result = []
-    for v in videos:
-        video_dict = v.model_dump()
-        if v.owner:
-            video_dict["owner"] = {
-                "id": str(v.owner.id),
-                "username": v.owner.username,
-                "avatar_path": v.owner.avatar_path,
-            }
-        result.append(video_dict)
+    return videos
 
-    return result
+
+@router.delete("/users/me/history/{video_id}", status_code=204)
+async def delete_watch_history(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    删除单条观看历史
+    """
+    from data_models import UserVideoHistory
+
+    history = session.exec(
+        select(UserVideoHistory).where(
+            UserVideoHistory.user_id == current_user.id,
+            UserVideoHistory.video_id == video_id
+        )
+    ).first()
+
+    if history:
+        session.delete(history)
+        session.commit()
+
+    return None
+
+
+@router.delete("/users/me/history", status_code=204)
+async def clear_watch_history(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    清空所有观看历史
+    """
+    from data_models import UserVideoHistory
+
+    session.exec(
+        select(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id)
+    )
+    histories = session.exec(
+        select(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id)
+    ).all()
+
+    for history in histories:
+        session.delete(history)
+
+    session.commit()
+    return None
 
 
 @router.post("/videos/{video_id}/like")

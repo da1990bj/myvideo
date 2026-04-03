@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from sqlmodel import Session, select
 from database import engine
 from data_models import Video
-from config import settings
+from config import settings, get_cold_storage_config, get_storage_migration_delay
 
 logger = logging.getLogger(__name__)
 
@@ -429,7 +429,7 @@ def migrate_storage_task(self, old_dirs: dict, new_dirs: dict):
 
     logger.info(f"Starting storage migration: {old_dirs} -> {new_dirs}")
 
-    migration_delay = getattr(settings, 'STORAGE_MIGRATION_DELAY', 0.5)
+    migration_delay = get_storage_migration_delay()
     logger.info(f"Migration delay between files: {migration_delay} seconds")
 
     migrated_count = 0
@@ -544,7 +544,8 @@ def cold_storage_migration_task(self):
     定时检查并迁移冷存储视频
     条件：created_at 超过 COLD_STORAGE_TRIGGER_DAYS 天 AND views < COLD_STORAGE_TRIGGER_VIEWS
     """
-    if not settings.COLD_STORAGE_ENABLED:
+    cold_config = get_cold_storage_config()
+    if not cold_config["enabled"]:
         logger.info("Cold storage is disabled, skipping migration check")
         return {"status": "skipped", "reason": "cold_storage_disabled"}
 
@@ -552,8 +553,8 @@ def cold_storage_migration_task(self):
 
     try:
         with Session(engine) as session:
-            days_threshold = settings.COLD_STORAGE_TRIGGER_DAYS
-            views_threshold = settings.COLD_STORAGE_TRIGGER_VIEWS
+            days_threshold = cold_config["trigger_days"]
+            views_threshold = cold_config["trigger_views"]
             cutoff_date = datetime.utcnow() - timedelta(days=days_threshold)
 
             candidates = session.exec(

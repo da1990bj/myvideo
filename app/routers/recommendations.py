@@ -32,6 +32,7 @@ async def get_recommendations(
     limit: int = Query(10, ge=1, le=50),
     offset: int = Query(0, ge=0),
     exclude_video_ids: Optional[List[str]] = Query(None),
+    category_id: Optional[str] = Query(None),
     current_user: Optional[User] = Depends(get_current_user_optional),
     session: Session = Depends(get_session)
 ):
@@ -48,14 +49,23 @@ async def get_recommendations(
                 except ValueError:
                     pass
 
+        # 转换category_id为整数
+        cat_id = None
+        if category_id:
+            try:
+                cat_id = int(category_id)
+            except ValueError:
+                pass
+
         # 缓存逻辑
         cache = get_cache()
 
-        # 尝试从缓存获取推荐ID列表
+        # 尝试从缓存获取推荐ID列表（使用 category_id 作为缓存键的一部分）
         cached_recs = cache.get(
             slot_name,
             user_id=None,
-            limit=limit
+            limit=limit,
+            category_id=cat_id
         )
 
         if cached_recs:
@@ -66,10 +76,11 @@ async def get_recommendations(
             recommendations = await engine.get_recommendations_for_slot(
                 slot_name=slot_name,
                 limit=limit,
-                exclude_video_ids=exclude_ids
+                exclude_video_ids=exclude_ids,
+                category_id=cat_id
             )
-            # 保存到缓存
-            cache.set(slot_name, recommendations, ttl=RecommendationCache.CACHE_CONFIG.get(slot_name))
+            # 保存到缓存（使用相同的 category_id）
+            cache.set(slot_name, recommendations, ttl=RecommendationCache.CACHE_CONFIG.get(slot_name), category_id=cat_id)
 
         # 处理offset
         recommendations = recommendations[offset:]
