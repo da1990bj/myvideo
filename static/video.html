@@ -875,7 +875,19 @@
                         </div>
                     `;
 
-                    d.onclick = () => location.href = `/static/video.html?id=${v.id}`;
+                    d.onclick = async () => {
+                        const token = localStorage.getItem("access_token");
+                        if (token) {
+                            try {
+                                await fetch("/recommendations/click", {
+                                    method: "POST",
+                                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ video_id: v.id, slot_name: "sidebar_related", impression_rank: idx + 1 })
+                                });
+                            } catch(e) {}
+                        }
+                        location.href = `/static/video.html?id=${v.id}&rec_slot=sidebar_related&rec_rank=${idx + 1}`;
+                    };
                     l.appendChild(d);
 
                     // 追踪展示

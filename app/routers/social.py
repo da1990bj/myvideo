@@ -12,6 +12,8 @@ from data_models import (
     Video, VideoRead, VideoFavorite, Collection, CollectionRead, CollectionFavorite, Notification
 )
 from dependencies import get_current_user, get_current_user_optional
+from config import settings
+import socketio_handler
 
 router = APIRouter(prefix="", tags=["社交"])
 
@@ -59,6 +61,7 @@ async def follow_user(
     session.add(follow)
 
     # 发送通知
+    notification_created = False
     if target_user.id != current_user.id:
         notif = Notification(
             sender_id=current_user.id,
@@ -67,8 +70,19 @@ async def follow_user(
             entity_id=str(current_user.id)
         )
         session.add(notif)
+        notification_created = True
 
     session.commit()
+
+    # 发布通知计数更新
+    if notification_created:
+        unread_count = session.exec(
+            select(Notification).where(
+                Notification.recipient_id == str(target_user.id),
+                Notification.is_read == False
+            )
+        ).all()
+        socketio_handler.publish_notification_count(str(target_user.id), len(unread_count), settings.REDIS_URL)
 
     return {"message": "Following", "following": True}
 
@@ -523,6 +537,9 @@ async def mark_all_read(
 
     session.commit()
 
+    # 发布通知计数更新 (已全部已读)
+    socketio_handler.publish_notification_count(str(current_user.id), 0, settings.REDIS_URL)
+
     return {"message": "All notifications marked as read"}
 
 
@@ -545,5 +562,14 @@ async def mark_read(
     notif.is_read = True
     session.add(notif)
     session.commit()
+
+    # 发布通知计数更新
+    unread_count = session.exec(
+        select(Notification).where(
+            Notification.recipient_id == str(current_user.id),
+            Notification.is_read == False
+        )
+    ).all()
+    socketio_handler.publish_notification_count(str(current_user.id), len(unread_count), settings.REDIS_URL)
 
     return {"message": "Notification marked as read"}

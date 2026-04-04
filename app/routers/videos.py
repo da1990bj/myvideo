@@ -19,6 +19,7 @@ from data_models import (
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags
 from tasks import transcode_video_task
 from config import settings, get_transcode_config
+import socketio_handler
 
 router = APIRouter(prefix="", tags=["视频"])
 
@@ -685,11 +686,12 @@ async def create_comment(
     session.flush()
 
     # 发送通知
+    reply_recipient = None
+    comment_recipient = None
+
     if parent_id:
         parent_comment = session.get(Comment, parent_id)
         if parent_comment and parent_comment.user_id != current_user.id:
-            from dependencies import get_current_user
-            from data_models import Notification
             notif = Notification(
                 sender_id=current_user.id,
                 recipient_id=parent_comment.user_id,
@@ -698,9 +700,9 @@ async def create_comment(
                 content=content[:50]
             )
             session.add(notif)
+            reply_recipient = parent_comment.user_id
 
     if video.user_id != current_user.id:
-        from data_models import Notification
         notif = Notification(
             sender_id=current_user.id,
             recipient_id=video.user_id,
@@ -709,9 +711,20 @@ async def create_comment(
             content=content[:50]
         )
         session.add(notif)
+        comment_recipient = video.user_id
 
     session.commit()
     session.refresh(comment)
+
+    # 发布通知计数更新
+    for recipient_id in set(filter(None, [reply_recipient, comment_recipient])):
+        unread_count = session.exec(
+            select(Notification).where(
+                Notification.recipient_id == str(recipient_id),
+                Notification.is_read == False
+            )
+        ).all()
+        socketio_handler.publish_notification_count(str(recipient_id), len(unread_count), settings.REDIS_URL)
 
     return comment
 

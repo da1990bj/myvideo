@@ -1,6 +1,7 @@
 // 统一导航栏渲染逻辑
 const NAV_API_BASE = "";
 let siteConfig = { site_name: "MyVideo" }; // 默认值
+let notifSocket = null; // WebSocket 连接实例
 
 // 带重试的 fetch
 async function fetchWithRetry(url, options = {}, retries = 2) {
@@ -134,7 +135,7 @@ async function checkNavUser() {
                 '</div>';
 
 
-            pollNotifications(token);
+            initNotificationSocket(token);
 
             // 设置默认头像（如果 avatar_path 为空或加载失败）
             const navAvatar = document.getElementById("nav-user-avatar");
@@ -155,7 +156,8 @@ async function checkNavUser() {
     } catch(e) { console.error(e); }
 }
 
-function pollNotifications(token) {
+function initNotificationSocket(token) {
+    // 初始化时先获取一次未读数
     const check = async () => {
         try {
             const res = await fetchWithRetry("/notifications/unread-count", {
@@ -163,20 +165,73 @@ function pollNotifications(token) {
             });
             if (res.ok) {
                 const data = await res.json();
-                const badge = document.getElementById("nav-badge");
-                if (badge) {
-                    if (data.count > 0) {
-                        badge.style.display = "block";
-                        badge.innerText = data.count > 99 ? "99+" : data.count;
-                    } else {
-                        badge.style.display = "none";
-                    }
-                }
+                updateBadge(data.count);
             }
         } catch(e) {}
     };
     check();
-    setInterval(check, 30000); // Poll every 30s
+
+    // 避免重复连接
+    if (notifSocket) {
+        notifSocket.disconnect();
+    }
+
+    const socketOptions = {
+        auth: { token: token },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 10,
+        transports: ['websocket', 'polling']
+    };
+
+    const connectSocket = () => {
+        try {
+            notifSocket = io('/', socketOptions);
+
+            notifSocket.on('connect', () => {
+                console.log('✅ Notification socket connected:', notifSocket.id);
+            });
+
+            notifSocket.on('notification_count', (data) => {
+                updateBadge(data.count);
+            });
+
+            notifSocket.on('disconnect', (reason) => {
+                console.log('Notification socket disconnected:', reason);
+            });
+
+            notifSocket.on('error', (error) => {
+                console.error('Notification socket error:', error);
+            });
+
+        } catch (e) {
+            console.error('Failed to initialize notification socket:', e);
+        }
+    };
+
+    // 如果 Socket.IO 未加载，先动态加载
+    if (typeof io === 'undefined') {
+        const script = document.createElement('script');
+        script.src = '/static/js/socket.io.js';
+        script.onload = connectSocket;
+        script.onerror = () => console.error('Failed to load Socket.IO');
+        document.head.appendChild(script);
+    } else {
+        connectSocket();
+    }
+}
+
+function updateBadge(count) {
+    const badge = document.getElementById("nav-badge");
+    if (badge) {
+        if (count > 0) {
+            badge.style.display = "block";
+            badge.innerText = count > 99 ? "99+" : count;
+        } else {
+            badge.style.display = "none";
+        }
+    }
 }
 
 function logout() {

@@ -210,17 +210,9 @@ async def track_recommendation_click(
             log.clicked_at = datetime.utcnow()
             session.add(log)
         else:
-            # 尝试从 VideoRecommendation 查到来源
+            # 来源映射：根据 slot_name 判断
             rec_source = "unknown"
-            rec = session.exec(
-                select(VideoRecommendation).where(
-                    VideoRecommendation.slot_name == slot_name,
-                    VideoRecommendation.video_id == video_uuid
-                )
-            ).first()
-            if rec:
-                rec_source = "manual"
-            elif slot_name == "home_carousel":
+            if slot_name == "home_carousel":
                 rec_source = "trending"
             elif slot_name == "personalized":
                 rec_source = "collaborative"
@@ -228,6 +220,8 @@ async def track_recommendation_click(
                 rec_source = "similarity"
             elif slot_name == "category_featured":
                 rec_source = "category"
+            else:
+                rec_source = "manual"
 
             new_log = RecommendationLog(
                 user_id=current_user.id,
@@ -278,20 +272,14 @@ async def track_recommendation_watch(
         log = session.exec(query).first()
 
         if log:
-            log.watched_percent = max(log.watched_percent or 0, watch_percent)
+            log.watched = True
+            log.watched_duration = max(log.watched_duration or 0, watch_percent)
             session.add(log)
         elif slot_name is not None:
             # 如果没找到日志但有slot信息，创建新记录
+            # 来源映射：根据 slot_name 判断
             rec_source = "unknown"
-            rec = session.exec(
-                select(VideoRecommendation).where(
-                    VideoRecommendation.slot_name == slot_name,
-                    VideoRecommendation.video_id == video_uuid
-                )
-            ).first()
-            if rec:
-                rec_source = "manual"
-            elif slot_name == "home_carousel":
+            if slot_name == "home_carousel":
                 rec_source = "trending"
             elif slot_name == "personalized":
                 rec_source = "collaborative"
@@ -299,6 +287,8 @@ async def track_recommendation_watch(
                 rec_source = "similarity"
             elif slot_name == "category_featured":
                 rec_source = "category"
+            else:
+                rec_source = "manual"
 
             new_log = RecommendationLog(
                 user_id=current_user.id,
@@ -306,7 +296,8 @@ async def track_recommendation_watch(
                 recommendation_source=rec_source,
                 slot_name=slot_name,
                 impression_rank=impression_rank or 0,
-                watched_percent=watch_percent
+                watched=True,
+                watched_duration=watch_percent
             )
             session.add(new_log)
 

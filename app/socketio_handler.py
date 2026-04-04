@@ -37,6 +37,34 @@ def get_redis_client():
     return _redis_client
 
 
+def ensure_redis_client(redis_url: str):
+    """确保 Redis 客户端已初始化"""
+    global _redis_client
+    if _redis_client is None:
+        import redis
+        _redis_client = redis.from_url(redis_url, decode_responses=True)
+    return _redis_client
+
+
+def publish_notification_count(user_id: str, count: int, redis_url: str = None):
+    """
+    发布通知计数更新到 Redis 频道
+
+    Args:
+        user_id: 用户ID
+        count: 未读通知数量
+        redis_url: Redis URL (如果已初始化则传None)
+    """
+    import json
+    client = ensure_redis_client(redis_url) if redis_url else _redis_client
+    if client:
+        try:
+            payload = json.dumps({"user_id": str(user_id), "count": count})
+            client.publish("notifications:count", payload)
+        except Exception as e:
+            logger.warning(f"Failed to publish notification count: {e}")
+
+
 class ConnectionManager:
     """
     用户连接池管理器 (保留内存模式，与 socketio 实例配合使用)
@@ -137,6 +165,30 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error pushing progress to user {user_id}: {e}")
 
+    async def push_notification_count(self, sio, user_id: str, count: int):
+        """
+        推送通知未读数给用户
+
+        Args:
+            sio: Socket.IO AsyncServer实例
+            user_id: 目标用户ID
+            count: 未读通知数量
+        """
+        if user_id not in self.active_connections:
+            logger.debug(f"User {user_id} not connected, skipping notification count push")
+            return
+
+        try:
+            sid = self.active_connections[user_id]
+            await sio.emit(
+                'notification_count',
+                {'count': count, 'timestamp': datetime.utcnow().isoformat()},
+                room=sid
+            )
+            logger.debug(f"Pushed notification count {count} to user {user_id}")
+        except Exception as e:
+            logger.error(f"Error pushing notification count to user {user_id}: {e}")
+
     async def broadcast_transcode_update(self, sio, event: str, data: dict):
         """
         广播转码队列更新给所有管理员
@@ -217,6 +269,7 @@ async def start_redis_listener(sio, redis_url: str):
         # 订阅转码进度频道
         await pubsub.subscribe("transcode:progress")
         await pubsub.subscribe("transcode:admin")
+        await pubsub.subscribe("notifications:count")
 
         logger.info("Redis Pub/Sub listener started")
 
@@ -253,6 +306,17 @@ async def start_redis_listener(sio, redis_url: str):
                                 event=payload.get("event", "transcode_queue_changed"),
                                 data=payload
                             )
+
+                        elif channel == "notifications:count":
+                            # 推送通知计数给特定用户
+                            user_id = payload.get("user_id")
+                            count = payload.get("count", 0)
+                            if user_id:
+                                await manager.push_notification_count(
+                                    sio=sio,
+                                    user_id=str(user_id),
+                                    count=count
+                                )
 
                     except json.JSONDecodeError:
                         logger.warning(f"Invalid JSON in Redis message: {data}")

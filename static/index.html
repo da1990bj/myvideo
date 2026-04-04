@@ -344,8 +344,9 @@
                     return;
                 }
 
-                videos.forEach(rec => {
-                    const card = createVideoCard(rec);
+                videos.forEach((rec, idx) => {
+                    rec.rank = idx;
+                    const card = createVideoCard(rec, "trending");
                     grid.appendChild(card);
                 });
             }
@@ -401,7 +402,19 @@
                 data.recommendations.forEach((rec, idx) => {
                     const item = document.createElement("div");
                     item.className = "side-item";
-                    item.onclick = () => location.href = `/static/video.html?id=${rec.video.id}`;
+                    item.onclick = async () => {
+                        const token = localStorage.getItem("access_token");
+                        if (token) {
+                            try {
+                                await fetch("/recommendations/click", {
+                                    method: "POST",
+                                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ video_id: rec.video.id, slot_name: "trending", impression_rank: idx })
+                                });
+                            } catch(e) {}
+                        }
+                        location.href = `/static/video.html?id=${rec.video.id}&rec_slot=trending&rec_rank=${idx}`;
+                    };
 
                     const thumb = rec.video.thumbnail_path || "https://via.placeholder.com/100x56?text=Video";
                     const duration = rec.video.duration ? formatDuration(rec.video.duration) : "";
@@ -438,10 +451,22 @@
 
                 if (data.recommendations.length > 0) {
                     container.innerHTML = "";
-                    data.recommendations.forEach((rec) => {
+                    data.recommendations.forEach((rec, idx) => {
                         const item = document.createElement("div");
                         item.className = "side-item";
-                        item.onclick = () => location.href = `/static/video.html?id=${rec.video.id}`;
+                        item.onclick = async () => {
+                            const t = localStorage.getItem("access_token");
+                            if (t) {
+                                try {
+                                    await fetch("/recommendations/click", {
+                                        method: "POST",
+                                        headers: { "Authorization": "Bearer " + t, "Content-Type": "application/json" },
+                                        body: JSON.stringify({ video_id: rec.video.id, slot_name: "personalized", impression_rank: idx })
+                                    });
+                                } catch(e) {}
+                            }
+                            location.href = `/static/video.html?id=${rec.video.id}&rec_slot=personalized&rec_rank=${idx}`;
+                        };
 
                         const thumb = rec.video.thumbnail_path || "https://via.placeholder.com/100x56?text=Video";
                         const duration = rec.video.duration ? formatDuration(rec.video.duration) : "";
@@ -465,10 +490,26 @@
     }
 
     // ==================== 创建视频卡片 ====================
-    function createVideoCard(rec) {
+    function createVideoCard(rec, recSlot) {
         const card = document.createElement("div");
         card.className = "video-card";
-        card.onclick = () => location.href = `/static/video.html?id=${rec.video.id}`;
+        card.onclick = async (e) => {
+            if (recSlot) {
+                const token = localStorage.getItem("access_token");
+                if (token) {
+                    try {
+                        await fetch("/recommendations/click", {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                            body: JSON.stringify({ video_id: rec.video.id, slot_name: recSlot, impression_rank: rec.rank !== undefined ? rec.rank : 0 })
+                        });
+                    } catch(e) {}
+                }
+                location.href = `/static/video.html?id=${rec.video.id}&rec_slot=${recSlot}&rec_rank=${rec.rank !== undefined ? rec.rank : 0}`;
+            } else {
+                location.href = `/static/video.html?id=${rec.video.id}`;
+            }
+        };
 
         const v = rec.video;
         const thumb = v.thumbnail_path || "https://via.placeholder.com/320x180?text=Processing";

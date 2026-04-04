@@ -14,8 +14,12 @@
         .right-col { flex: 1; border-left: 1px solid #eee; padding-left: 20px; }
 
         .video-list { list-style: none; padding: 0; }
-        .video-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; background: #fff; }
+        .video-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; background: #fff; cursor: grab; user-select: none; transition: background 0.15s; }
         .video-item:last-child { border-bottom: none; }
+        .video-item:hover { background: #f8f9fa; }
+        .video-item.dragging { opacity: 0.5; background: #e3f2fd; }
+        .video-item.drag-over { border-top: 2px solid #00a1d6; }
+        .drag-handle { color: #ccc; margin-right: 8px; font-size: 16px; cursor: grab; }
         .video-thumb { width: 80px; height: 45px; object-fit: cover; margin-right: 10px; background: #eee; }
         .video-info { flex: 1; }
         .video-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
@@ -49,6 +53,8 @@
 <script>
     const colId = new URLSearchParams(location.search).get("id");
     let allMyVideos = [];
+    let colVideos = [];
+    let draggedIndex = null;
 
     document.addEventListener("DOMContentLoaded", async () => {
         if (!colId) { alert("参数错误"); location.href="/static/dashboard.html"; return; }
@@ -87,6 +93,7 @@
 
     function renderColVideos(videos) {
         const list = document.getElementById("colVideos");
+        colVideos = videos;
         if (videos.length === 0) {
             list.innerHTML = "<div style='padding:20px; text-align:center; color:#999;'>暂无视频，请从右侧添加</div>";
             return;
@@ -95,7 +102,8 @@
         let html = "";
         videos.forEach((v, index) => {
             html += `
-                <div class="video-item">
+                <div class="video-item" draggable="true" data-index="${index}" data-id="${v.id}">
+                    <span class="drag-handle" title="拖动排序">☰</span>
                     <span style="margin-right:10px; color:#999; width:20px;">${index+1}</span>
                     <img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="video-thumb">
                     <div class="video-info">
@@ -107,6 +115,67 @@
             `;
         });
         list.innerHTML = html;
+
+        // Attach drag events
+        list.querySelectorAll('.video-item').forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragover', handleDragOver);
+            item.addEventListener('dragenter', handleDragEnter);
+            item.addEventListener('dragleave', handleDragLeave);
+            item.addEventListener('drop', handleDrop);
+            item.addEventListener('dragend', handleDragEnd);
+        });
+    }
+
+    function handleDragStart(e) {
+        draggedIndex = parseInt(e.currentTarget.dataset.index);
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleDragEnter(e) {
+        e.preventDefault();
+        const item = e.currentTarget;
+        if (parseInt(item.dataset.index) !== draggedIndex) {
+            item.classList.add('drag-over');
+        }
+    }
+
+    function handleDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        const dropIndex = parseInt(e.currentTarget.dataset.index);
+        if (draggedIndex === null || draggedIndex === dropIndex) return;
+        const [moved] = colVideos.splice(draggedIndex, 1);
+        colVideos.splice(dropIndex, 0, moved);
+        renderColVideos(colVideos);
+        saveVideoOrder();
+    }
+
+    function handleDragEnd(e) {
+        draggedIndex = null;
+        document.querySelectorAll('.video-item').forEach(item => {
+            item.classList.remove('dragging', 'drag-over');
+        });
+    }
+
+    async function saveVideoOrder() {
+        const token = localStorage.getItem("access_token");
+        try {
+            await fetch(`/collections/${colId}/reorder`, {
+                method: "PUT",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ video_ids: colVideos.map(v => v.id) })
+            });
+        } catch(e) { console.error("Reorder failed:", e); }
     }
 
     function renderMyVideos(videos) {

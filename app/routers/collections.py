@@ -167,12 +167,14 @@ async def get_collection(
     ).all()
 
     video_ids = [item.video_id for item in items]
-    videos = []
+    videos_dict = {}
     if video_ids:
         videos = session.exec(select(Video).where(Video.id.in_(video_ids))).all()
+        videos_dict = {v.id: v for v in videos}
 
+    # 按 video_ids 顺序重建数组，保证合集视频顺序固定
     collection_dict = collection.model_dump()
-    collection_dict["videos"] = videos
+    collection_dict["videos"] = [videos_dict[vid] for vid in video_ids if vid in videos_dict]
 
     return collection_dict
 
