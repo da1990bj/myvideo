@@ -1,5 +1,6 @@
 from celery import Celery
 import os
+import socket
 import subprocess
 import re
 import json
@@ -8,10 +9,11 @@ import logging
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
+from uuid import UUID
 from sqlmodel import Session, select
 from database import engine
-from data_models import Video
-from config import settings, get_cold_storage_config, get_storage_migration_delay
+from data_models import Video, User, TranscodeTask
+from config import settings, get_cold_storage_config, get_storage_migration_delay, get_transcode_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,121 @@ def get_redis_client():
     """获取 Redis 客户端用于 Pub/Sub 和锁"""
     import redis
     return redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+def calculate_priority(user: User, waiting_hours: float = 0) -> tuple[int, str, str]:
+    """
+    计算转码任务优先级
+
+    Args:
+        user: 用户对象
+        waiting_hours: 已等待小时数
+
+    Returns:
+        (priority_score, priority_type, queue_name)
+    """
+    config = get_transcode_config()
+    aging_rate = config["aging_rate"]
+    max_priority = config["max_priority"]
+    vip_base = config["vip_base_priority"]
+    paid_base = config["paid_base_priority"]
+
+    # 判断用户类型和优先级
+    if user.is_vip:
+        # VIP用户：基础优先级 + aging
+        base_priority = vip_base
+        priority_type = "vip"
+        queue_name = "vip"
+        aging_bonus = min(waiting_hours * aging_rate * 0.6, 5)  # VIP aging 较慢
+    else:
+        # 普通用户：基础优先级0 + aging
+        base_priority = 0
+        priority_type = "normal"
+        queue_name = "default"
+        aging_bonus = min(waiting_hours * aging_rate, 10)  # 普通用户 aging 较快
+
+    # 付费加速用户有最高优先级，不参与 aging
+    # priority_type 为 paid_speedup 时，由 upgrade_priority API 调用时传入
+
+    total_priority = min(base_priority + aging_bonus, max_priority)
+    return int(total_priority), priority_type, queue_name
+
+
+def create_transcode_task(video_id: str, user_id: str, priority_type: str = "normal") -> TranscodeTask:
+    """
+    创建转码任务记录
+
+    Args:
+        video_id: 视频ID
+        user_id: 用户ID
+        priority_type: 优先级类型 (normal, vip, vip_speedup, paid_speedup)
+
+    Returns:
+        TranscodeTask 对象
+    """
+    with Session(engine) as session:
+        user = session.get(User, UUID(user_id))
+        if not user:
+            raise ValueError(f"User not found: {user_id}")
+
+        # 计算优先级
+        priority, p_type, queue_name = calculate_priority(user, 0)
+
+        # 如果是加速类型，覆盖优先级
+        if priority_type == "vip_speedup":
+            config = get_transcode_config()
+            priority = config["vip_base_priority"]
+            p_type = "vip_speedup"
+            queue_name = "priority"
+        elif priority_type == "paid_speedup":
+            config = get_transcode_config()
+            priority = config["paid_base_priority"]
+            p_type = "paid_speedup"
+            queue_name = "priority"
+
+        # 检查是否已有任务记录
+        existing = session.exec(
+            select(TranscodeTask).where(
+                TranscodeTask.video_id == UUID(video_id),
+                TranscodeTask.status.in_(["pending", "processing"])
+            )
+        ).first()
+
+        if existing:
+            # 更新已有任务
+            existing.priority = priority
+            existing.priority_type = p_type
+            existing.queue_name = queue_name
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+            return existing
+
+        # 创建新任务
+        task = TranscodeTask(
+            video_id=UUID(video_id),
+            user_id=UUID(user_id),
+            priority=priority,
+            priority_type=p_type,
+            queue_name=queue_name,
+            status="pending"
+        )
+        session.add(task)
+        session.commit()
+        session.refresh(task)
+        return task
+
+
+def update_transcode_task_priority(task_id: UUID, priority: int, priority_type: str, queue_name: str):
+    """更新转码任务优先级"""
+    with Session(engine) as session:
+        task = session.get(TranscodeTask, task_id)
+        if task:
+            task.priority = priority
+            task.priority_type = priority_type
+            task.queue_name = queue_name
+            session.add(task)
+            session.commit()
 
 
 def publish_transcode_progress(video_id: str, user_id: str, progress: int, status: str = "processing"):
@@ -79,7 +196,7 @@ def broadcast_transcode_admin(event: str, data: dict):
         logger.warning(f"Failed to broadcast transcode admin event: {e}")
 
 
-def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration, push_progress_callback=None):
+def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration, push_progress_callback=None, video_id: str = None):
     """
     辅助函数: 运行 FFmpeg 并更新进度
 
@@ -91,8 +208,10 @@ def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration, 
         end_percent: 本阶段的结束百分比
         total_duration: 视频总时长
         push_progress_callback: 进度回调函数 (video_id, progress) -> None
+        video_id: 视频ID（用于保存时间戳到Redis）
     """
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    redis_client = get_redis_client()
 
     for line in process.stdout:
         if "out_time_ms=" in line:
@@ -111,6 +230,10 @@ def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration, 
                         session.add(video)
                         session.commit()
 
+                        # 保存时间戳到Redis（用于暂停恢复）
+                        if video_id:
+                            redis_client.set(f"transcode_timestamp:{video_id}", f"{int(sec):02d}:{int(sec%60):02d}:{int((sec%1)*100):02d}", ex=3600)
+
                         # 触发进度推送回调（通过 Redis Pub/Sub）
                         if push_progress_callback:
                             try:
@@ -124,14 +247,33 @@ def run_ffmpeg(cmd, video, session, start_percent, end_percent, total_duration, 
 
 
 @celery_app.task(bind=True)
-def transcode_video_task(self, video_id: str):
+def transcode_video_task(self, video_id: str, priority_type: str = "normal", resume: str = None):
     """
     视频转码任务 (HLS 自适应码率)
 
     使用 Redis 分布式锁实现任务去重，防止同一视频重复转码。
+    支持优先级队列：default, vip, priority (付费/VIP加速)
+    支持暂停/恢复：resume="yes" 表示从暂停点恢复
     """
     redis_client = get_redis_client()
     lock_key = f"transcode_lock:{video_id}"
+
+    # 检查是否是恢复任务
+    is_resume = (resume == "resume")
+    resume_percent = None
+    resume_resolution = None
+    resume_timestamp = None
+
+    if is_resume:
+        # 从Redis读取恢复信息
+        resume_percent = redis_client.get(f"transcode_resume_percent:{video_id}")
+        resume_resolution = redis_client.get(f"transcode_resume_resolution:{video_id}")
+        resume_timestamp = redis_client.get(f"transcode_resume_timestamp:{video_id}")
+        # 清理恢复信息
+        redis_client.delete(f"transcode_resume_percent:{video_id}")
+        redis_client.delete(f"transcode_resume_resolution:{video_id}")
+        redis_client.delete(f"transcode_resume_timestamp:{video_id}")
+        logger.info(f"Resuming video {video_id} from {resume_percent}% ({resume_resolution}, {resume_timestamp})")
 
     # 尝试获取分布式锁（防止同一视频重复转码）
     lock_acquired = redis_client.set(lock_key, self.request.id, nx=True, ex=3600)
@@ -141,16 +283,39 @@ def transcode_video_task(self, video_id: str):
         logger.info(f"Video {video_id} already being transcoded by task {existing}, skipping")
         return {"status": "skipped", "reason": "already_transcoding", "task_id": existing}
 
+    # 获取任务优先级（如果未传入 priority_type，默认 normal）
+    task_record = None
+    try:
+        with Session(engine) as session:
+            user = session.exec(select(Video).where(Video.id == video_id)).first()
+            if user:
+                task_record = create_transcode_task(video_id, str(user.user_id), priority_type)
+    except Exception as e:
+        logger.warning(f"Failed to create transcode task record: {e}")
+
     try:
         with Session(engine) as session:
             video = session.exec(select(Video).where(Video.id == video_id)).first()
             if not video:
                 redis_client.delete(lock_key)
+                if task_record:
+                    task_record.status = "failed"
+                    session.merge(task_record)
+                    session.commit()
                 return {"status": "error", "message": "Video not found"}
 
             video.status = "processing"
             video.progress = 0
             session.add(video)
+
+            # 更新转码任务记录
+            if task_record:
+                task_record.status = "processing"
+                task_record.started_at = datetime.utcnow()
+                task_record.celery_task_id = self.request.id
+                task_record.worker_name = socket.gethostname()
+                session.merge(task_record)
+
             session.commit()
 
             # 广播转码队列更新给管理员
@@ -237,18 +402,58 @@ def transcode_video_task(self, video_id: str):
             master_playlist = ["#EXTM3U", "#EXT-X-VERSION:3"]
 
             for r_h, r_b, r_a, r_n in target_resolutions:
-                cmd = [
-                    "ffmpeg", "-i", input_path,
-                    "-c:v", "libx264", "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                    "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
-                    "-hls_time", "6", "-hls_playlist_type", "vod",
-                    "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
-                    "-progress", "pipe:1",
-                    os.path.join(hls_dir, f"{r_n}.m3u8"), "-y"
-                ]
+                # 如果是恢复任务，跳过已完成的分辨率
+                if is_resume and resume_resolution:
+                    # 恢复时跳过比恢复点更高的分辨率
+                    resolution_order = {"1440p": 0, "1080p": 1, "720p": 2, "480p": 3}
+                    current_order = resolution_order.get(r_n, 99)
+                    resume_order = resolution_order.get(resume_resolution, -1)
+                    if current_order > resume_order:
+                        # 跳过已完成的
+                        current_progress_base += step
+                        # Add to master anyway since file exists
+                        if os.path.exists(os.path.join(hls_dir, f"{r_n}.m3u8")):
+                            bw = int(r_b[:-1]) * 1000 + int(r_a[:-1]) * 1000
+                            master_playlist.append(f'#EXT-X-STREAM-INF:BANDWIDTH={bw},RESOLUTION={int(r_h * width / height)}x{r_h},NAME="{r_n}"')
+                            master_playlist.append(f"{r_n}.m3u8")
+                        continue
+                    elif current_order == resume_order and resume_timestamp:
+                        # 从恢复点继续，使用 -ss 定位
+                        cmd = [
+                            "ffmpeg", "-ss", resume_timestamp, "-i", input_path,
+                            "-c:v", "libx264", "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
+                            "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
+                            "-hls_time", "6", "-hls_playlist_type", "vod",
+                            "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
+                            "-progress", "pipe:1",
+                            os.path.join(hls_dir, f"{r_n}.m3u8"), "-y"
+                        ]
+                    else:
+                        cmd = [
+                            "ffmpeg", "-i", input_path,
+                            "-c:v", "libx264", "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
+                            "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
+                            "-hls_time", "6", "-hls_playlist_type", "vod",
+                            "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
+                            "-progress", "pipe:1",
+                            os.path.join(hls_dir, f"{r_n}.m3u8"), "-y"
+                        ]
+                else:
+                    cmd = [
+                        "ffmpeg", "-i", input_path,
+                        "-c:v", "libx264", "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
+                        "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
+                        "-hls_time", "6", "-hls_playlist_type", "vod",
+                        "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
+                        "-progress", "pipe:1",
+                        os.path.join(hls_dir, f"{r_n}.m3u8"), "-y"
+                    ]
+
+                # 记录当前处理的分辨率到Redis（用于暂停）
+                redis_client.set(f"transcode_resolution:{video_id}", r_n, ex=3600)
 
                 end_p = current_progress_base + step
-                run_ffmpeg(cmd, video, session, current_progress_base, end_p, total_duration, push_progress_callback)
+                run_ffmpeg(cmd, video, session, current_progress_base, end_p, total_duration, push_progress_callback, video_id)
                 current_progress_base = end_p
 
                 # Add to master
@@ -266,6 +471,12 @@ def transcode_video_task(self, video_id: str):
             video.thumbnail_path = f"/static/thumbnails/{video.id}.jpg"
             video.status = "completed"
             video.progress = 100
+
+            # 更新转码任务记录
+            if task_record:
+                task_record.status = "completed"
+                task_record.completed_at = datetime.utcnow()
+                session.add(task_record)
 
             # 广播转码完成
             broadcast_transcode_admin("transcode_queue_changed", {
@@ -292,7 +503,14 @@ def transcode_video_task(self, video_id: str):
             if video:
                 video.status = "failed"
                 session.add(video)
-                session.commit()
+
+            # 更新转码任务记录
+            if task_record:
+                task_record.status = "failed"
+                task_record.completed_at = datetime.utcnow()
+                session.add(task_record)
+
+            session.commit()
 
         # 广播失败
         broadcast_transcode_admin("transcode_queue_changed", {
@@ -618,6 +836,67 @@ def cold_storage_migration_task(self):
         return {"status": "error", "message": str(e)}
 
 
+# ==================== 转码队列优先级 Aging 任务 ====================
+
+@celery_app.task(bind=True)
+def update_transcode_aging(self):
+    """
+    定时更新转码任务的等待时间并重新计算优先级
+    每小时执行一次，使普通用户的任务优先级随等待时间增长
+    """
+    logger.info("Starting transcode aging update...")
+
+    try:
+        with Session(engine) as session:
+            # 获取所有 pending 状态的任务
+            pending_tasks = session.exec(
+                select(TranscodeTask).where(TranscodeTask.status == "pending")
+            ).all()
+
+            updated_count = 0
+            for task in pending_tasks:
+                # 增加等待时间
+                task.waiting_hours += 1
+
+                # 获取用户信息
+                user = session.get(User, task.user_id)
+                if not user:
+                    continue
+
+                # 计算新的优先级
+                priority, priority_type, queue_name = calculate_priority(user, task.waiting_hours)
+
+                # 如果是加速类型，跳过 aging 更新
+                if task.priority_type in ("vip_speedup", "paid_speedup"):
+                    session.add(task)
+                    continue
+
+                # 只有普通用户和普通VIP任务需要 aging
+                if priority != task.priority or queue_name != task.queue_name:
+                    old_priority = task.priority
+                    task.priority = priority
+                    task.queue_name = queue_name
+                    task.priority_type = priority_type
+                    session.add(task)
+                    updated_count += 1
+                    logger.debug(f"Task {task.id}: priority {old_priority} -> {priority}, queue {task.queue_name}")
+                else:
+                    session.add(task)
+
+            session.commit()
+            logger.info(f"Transcode aging update complete. Updated {updated_count}/{len(pending_tasks)} tasks")
+
+            return {
+                "status": "completed",
+                "total": len(pending_tasks),
+                "updated": updated_count
+            }
+
+    except Exception as e:
+        logger.error(f"Error in transcode aging update: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 # Celery Beat 定时任务配置
 from celery.schedules import crontab
 
@@ -630,6 +909,11 @@ celery_app.conf.beat_schedule = {
     'cold-storage-migration-daily': {
         'task': 'tasks.cold_storage_migration_task',
         'schedule': crontab(hour=1, minute=0),
+        'options': {'queue': 'default'}
+    },
+    'transcode-aging-hourly': {
+        'task': 'tasks.update_transcode_aging',
+        'schedule': crontab(minute=0),  # 每小时执行一次
         'options': {'queue': 'default'}
     },
 }

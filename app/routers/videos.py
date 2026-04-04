@@ -13,11 +13,12 @@ from sqlmodel import Session, select
 from database import get_session
 from data_models import (
     Video, VideoRead, VideoUpdate, VideoLike, VideoFavorite,
-    Comment, Category, User, Role, UserRole, VideoAuditLog, CollectionItem
+    Comment, Category, User, Role, UserRole, VideoAuditLog, CollectionItem,
+    TranscodeTask
 )
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags
 from tasks import transcode_video_task
-from config import settings
+from config import settings, get_transcode_config
 
 router = APIRouter(prefix="", tags=["视频"])
 
@@ -274,11 +275,11 @@ async def update_video(
 @router.delete("/videos/{video_id}")
 async def delete_video(
     video_id: str,
-    current_user: User = Depends(PermissionChecker("video:delete")),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
-    删除视频
+    删除视频（所有者或管理员）
     """
     video = session.get(Video, video_id)
     if not video:
@@ -286,6 +287,53 @@ async def delete_video(
 
     if video.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    # 删除关联记录
+    from data_models import (
+        TranscodeTask, Comment, VideoLike, VideoFavorite,
+        VideoAuditLog, CollectionItem, VideoTag,
+        RecommendationLog, UserVideoHistory, UserVideoScore
+    )
+
+    # 转码任务
+    for task in session.exec(select(TranscodeTask).where(TranscodeTask.video_id == video.id)).all():
+        session.delete(task)
+
+    # 评论
+    for c in session.exec(select(Comment).where(Comment.video_id == video.id)).all():
+        session.delete(c)
+
+    # 点赞
+    for l in session.exec(select(VideoLike).where(VideoLike.video_id == video.id)).all():
+        session.delete(l)
+
+    # 收藏
+    for f in session.exec(select(VideoFavorite).where(VideoFavorite.video_id == video.id)).all():
+        session.delete(f)
+
+    # 审核日志
+    for log in session.exec(select(VideoAuditLog).where(VideoAuditLog.video_id == video.id)).all():
+        session.delete(log)
+
+    # 合集项目
+    for item in session.exec(select(CollectionItem).where(CollectionItem.video_id == video.id)).all():
+        session.delete(item)
+
+    # 标签
+    for tag in session.exec(select(VideoTag).where(VideoTag.video_id == video.id)).all():
+        session.delete(tag)
+
+    # 推荐日志
+    for log in session.exec(select(RecommendationLog).where(RecommendationLog.video_id == video.id)).all():
+        session.delete(log)
+
+    # 观看历史
+    for h in session.exec(select(UserVideoHistory).where(UserVideoHistory.video_id == video.id)).all():
+        session.delete(h)
+
+    # 评分
+    for s in session.exec(select(UserVideoScore).where(UserVideoScore.video_id == video.id)).all():
+        session.delete(s)
 
     session.delete(video)
     session.commit()
@@ -795,3 +843,253 @@ async def mark_video_complete(
     session.commit()
 
     return {"message": "Video marked as complete"}
+
+
+@router.post("/videos/{video_id}/upgrade_priority")
+async def upgrade_transcode_priority(
+    video_id: str,
+    priority_type: str = Query(..., description="vip_speedup 或 paid_speedup"),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    升级视频转码优先级
+
+    - vip_speedup: VIP加速（需要VIP用户）
+    - paid_speedup: 付费加速（任何用户可用，扣除积分）
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # 检查视频状态
+    if video.status not in ("pending", "processing"):
+        raise HTTPException(status_code=400, detail="Only pending or processing videos can be upgraded")
+
+    # 查找转码任务记录
+    task = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.video_id == video.id,
+            TranscodeTask.status.in_(["pending", "processing"])
+        )
+    ).first()
+
+    if priority_type == "vip_speedup":
+        # VIP加速：需要VIP用户
+        if not current_user.is_vip:
+            raise HTTPException(status_code=403, detail="VIP speedup requires VIP membership")
+        if task:
+            task.priority = 15
+            task.priority_type = "vip_speedup"
+            task.queue_name = "priority"
+            session.add(task)
+        session.commit()
+        return {"message": "Priority upgraded to VIP speedup", "priority_type": "vip_speedup"}
+
+    elif priority_type == "paid_speedup":
+        # 付费加速：扣除用户积分
+        config = get_transcode_config()
+        bump_cost = config.get("bump_cost", settings.TRANSCODE_BUMP_COST)
+
+        # 检查用户积分是否足够
+        if current_user.credits < bump_cost:
+            raise HTTPException(status_code=403, detail=f"Insufficient credits. Need {bump_cost}, have {current_user.credits}")
+
+        # 扣除积分
+        current_user.credits -= bump_cost
+
+        if task:
+            task.priority = 30
+            task.priority_type = "paid_speedup"
+            task.queue_name = "priority"
+            task.bump_count = (task.bump_count or 0) + 1
+            session.add(task)
+        session.add(current_user)
+        session.commit()
+        return {"message": "Priority upgraded to paid speedup", "priority_type": "paid_speedup", "credits_deducted": bump_cost}
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid priority type")
+
+
+@router.post("/videos/{video_id}/bump")
+async def bump_video_transcode(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    用户对自己上传的视频进行插队（消耗积分）
+
+    - 检查用户积分是否足够
+    - 扣除积分
+    - 将任务设置为最高优先级
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # 检查是否是视频所有者
+    if video.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # 查找待转码任务
+    task = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.video_id == video.id,
+            TranscodeTask.status == "pending"
+        )
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="No pending transcode task found")
+
+    # 获取积分成本
+    config = get_transcode_config()
+    bump_cost = config.get("bump_cost", settings.TRANSCODE_BUMP_COST)
+
+    # 检查积分
+    if current_user.credits < bump_cost:
+        raise HTTPException(status_code=403, detail=f"Insufficient credits. Need {bump_cost}, have {current_user.credits}")
+
+    # 扣除积分
+    current_user.credits -= bump_cost
+
+    # 设置最高优先级
+    max_priority = config["max_priority"]
+    task.priority = max_priority
+    task.priority_type = "paid_speedup"
+    task.queue_name = "priority"
+    task.bump_count = (task.bump_count or 0) + 1
+    task.worker_name = None  # 清除之前的worker记录
+
+    session.add(task)
+    session.add(current_user)
+    session.commit()
+
+    return {"message": "Task bumped to priority queue", "credits_deducted": bump_cost, "new_priority": max_priority}
+
+
+@router.post("/videos/{video_id}/retry")
+async def retry_video_transcode(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    用户对自己上传的失败视频进行重试（仅限1次）
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # 检查是否是视频所有者
+    if video.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # 查找失败的任务记录
+    task = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.video_id == video.id,
+            TranscodeTask.status == "failed"
+        )
+    ).first()
+
+    if task:
+        # 检查重试次数
+        if task.retry_count >= 1:
+            raise HTTPException(status_code=403, detail="This task has already been retried once and cannot be retried again")
+        task.retry_count += 1
+        task.status = "pending"
+        task.priority = 0
+        task.priority_type = "normal"
+        task.queue_name = "default"
+        task.started_at = None
+        task.completed_at = None
+        session.add(task)
+
+    video.status = "pending"
+    video.progress = 0
+    session.add(video)
+    session.commit()
+
+    transcode_video_task.delay(video_id)
+
+    return {"message": "Transcode retry scheduled", "retry_count": task.retry_count if task else 0}
+
+
+@router.get("/videos/{video_id}/queue_info")
+async def get_video_queue_info(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    获取视频在转码队列中的位置和预估等待时间
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # 检查是否是视频所有者
+    if video.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # 查找当前视频的转码任务
+    task = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.video_id == video.id,
+            TranscodeTask.status.in_(["pending", "processing"])
+        )
+    ).first()
+
+    if not task:
+        return {"in_queue": False, "message": "No active transcode task"}
+
+    if task.status == "processing":
+        return {
+            "in_queue": True,
+            "status": "processing",
+            "position": 0,
+            "estimated_minutes": 0,
+            "message": "转码中"
+        }
+
+    # 计算排在前面的任务数（相同或更高优先级的任务）
+    ahead_count = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.status == "pending",
+            TranscodeTask.priority >= task.priority,
+            TranscodeTask.created_at <= task.created_at,
+            TranscodeTask.id != task.id
+        )
+    ).all()
+
+    # 获取当前处理中的任务数
+    processing_count = session.exec(
+        select(TranscodeTask).where(TranscodeTask.status == "processing")
+    ).all()
+
+    # 粗略估算：假设每个任务平均5分钟，VIP/付费任务优先处理
+    avg_task_minutes = 5
+    concurrency = get_transcode_config().get("concurrency", 4)
+
+    # 纯普通任务数量
+    normal_ahead = len([t for t in ahead_count if t.priority_type == "normal"])
+    priority_ahead = len(ahead_count) - normal_ahead
+
+    # 预估时间 = VIP任务立即处理 + 普通任务排队时间
+    estimated_minutes = priority_ahead * 1 + (normal_ahead // concurrency) * avg_task_minutes
+
+    return {
+        "in_queue": True,
+        "status": "pending",
+        "position": len(ahead_count) + 1,
+        "ahead_count": len(ahead_count),
+        "estimated_minutes": estimated_minutes,
+        "task_priority": task.priority,
+        "task_priority_type": task.priority_type,
+        "current_user_credits": current_user.credits,
+        "bump_cost": get_transcode_config().get("bump_cost", 5),
+        "message": f"前面还有 {len(ahead_count)} 个任务"
+    }

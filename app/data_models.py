@@ -23,6 +23,8 @@ class User(SQLModel, table=True):
     bio: Optional[str] = None
     is_active: bool = Field(default=True)
     is_admin: bool = Field(default=False) # 新增管理员字段
+    is_vip: bool = Field(default=False)  # VIP用户标识
+    credits: int = Field(default=0)  # 用户积分（用于插队等功能）
     created_at: datetime = Field(default_factory=datetime.utcnow)
     videos: List["Video"] = Relationship(back_populates="owner")
     collections: List["Collection"] = Relationship(back_populates="owner")
@@ -352,6 +354,7 @@ class UserRead(SQLModel):
     email: str
     is_active: bool
     is_admin: bool = False
+    is_vip: bool = False
     role_ids: List[int] = []
     role_names: List[str] = []
     created_at: datetime
@@ -580,3 +583,59 @@ class RecommendationsListResponse(SQLModel):
     """推荐列表API返回"""
     recommendations: List[RecommendationResponse]
     slot_info: dict  # {"slot_name": str, "display_title": str}
+
+# ==================== 转码队列优先级系统 ====================
+
+class TranscodeTask(SQLModel, table=True):
+    """转码任务队列"""
+    __tablename__ = "transcode_tasks"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    video_id: UUID = Field(foreign_key="videos.id", index=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    status: str = "pending"  # pending, processing, completed, failed, cancelled
+    priority: int = 0  # 0-40
+    priority_type: str = "normal"  # normal, vip, vip_speedup, paid_speedup
+    queue_name: str = "default"  # default, vip, priority, operations
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    waiting_hours: float = 0  # 用于aging计算
+    celery_task_id: Optional[str] = None  # Celery任务ID
+    worker_name: Optional[str] = None  # 执行任务的worker节点名称
+    bump_count: int = 0  # 插队次数
+    retry_count: int = 0  # 重试次数（仅允许1次）
+    # 暂停相关字段
+    pause_percent: float = 0  # 暂停时的进度百分比
+    pause_resolution: Optional[str] = None  # 暂停时正在处理的分辨率
+    pause_timestamp: Optional[str] = None  # FFmpeg时间戳，用于恢复
+
+    video: Optional["Video"] = Relationship()
+    owner: Optional["User"] = Relationship()
+
+class TranscodeTaskRead(SQLModel):
+    """转码任务读取"""
+    id: UUID
+    video_id: UUID
+    user_id: UUID
+    status: str
+    priority: int
+    priority_type: str
+    queue_name: str
+    created_at: datetime
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    waiting_hours: float
+    worker_name: Optional[str] = None
+    bump_count: int = 0
+    retry_count: int = 0
+    video_title: Optional[str] = None
+    username: Optional[str] = None
+    is_vip: bool = False
+
+class TranscodeTaskUpdate(SQLModel):
+    """转码任务更新"""
+    priority: Optional[int] = None
+    priority_type: Optional[str] = None
+    queue_name: Optional[str] = None
+    status: Optional[str] = None

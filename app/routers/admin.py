@@ -6,6 +6,7 @@ from uuid import uuid4
 from datetime import datetime
 import psutil
 import os
+import shutil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlmodel import Session, select, desc, func
@@ -15,11 +16,12 @@ from data_models import (
     User, UserRead, Video, VideoRead, Role, SystemConfig, AdminLog, UserRole,
     VideoAuditLog, Comment, Notification, Category,
     VideoRecommendation, VideoRecommendationWithVideoRead,
-    RecommendationSlot, RecommendationSlotRead, RecommendationLog, UserVideoScore
+    RecommendationSlot, RecommendationSlotRead, RecommendationLog, UserVideoScore,
+    TranscodeTask, TranscodeTaskRead
 )
 from dependencies import get_current_user, PermissionChecker, log_admin_action
-from tasks import transcode_video_task, migrate_storage_task
-from config import settings
+from tasks import transcode_video_task, migrate_storage_task, celery_app
+from config import settings, get_transcode_config
 
 router = APIRouter(prefix="/admin", tags=["管理后台"])
 
@@ -630,61 +632,303 @@ async def get_admin_logs(
 @router.get("/transcode/queue")
 async def get_transcode_queue(
     admin: User = Depends(PermissionChecker("video:audit")),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    priority_type: Optional[str] = None
 ):
-    """获取转码队列状态"""
-    pending = session.exec(select(Video).where(Video.status == "pending").order_by(Video.created_at)).all()
-    processing = session.exec(select(Video).where(Video.status == "processing").order_by(Video.created_at)).all()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_completed = session.exec(
-        select(Video).where(Video.status == "completed", Video.created_at >= today)
-    ).all()
-    failed = session.exec(
-        select(Video).where(Video.status == "failed").order_by(desc(Video.created_at)).limit(20)
-    ).all()
+    """
+    获取转码队列状态
+    - search: 按视频标题或用户名搜索
+    - status: 筛选状态 (pending, processing, completed, failed)
+    - priority_type: 筛选优先级类型 (normal, vip, vip_speedup, paid_speedup)
+    """
+    # 构建基础查询
+    query = select(TranscodeTask)
+    if status:
+        query = query.where(TranscodeTask.status == status)
+    if priority_type:
+        query = query.where(TranscodeTask.priority_type == priority_type)
 
-    result_pending = []
-    for v in pending:
-        video_dict = v.model_dump()
-        owner = session.get(User, v.user_id)
-        video_dict["owner"] = owner.username if owner else ""
-        result_pending.append(video_dict)
+    # 执行查询
+    tasks = session.exec(query.order_by(desc(TranscodeTask.priority), TranscodeTask.created_at)).all()
 
-    result_processing = []
-    for v in processing:
-        video_dict = v.model_dump()
-        owner = session.get(User, v.user_id)
-        video_dict["owner"] = owner.username if owner else ""
-        result_processing.append(video_dict)
+    # 获取视频和用户信息
+    result = []
+    for task in tasks:
+        video = session.get(Video, task.video_id)
+        user = session.get(User, task.user_id)
 
-    result_completed = []
-    for v in today_completed:
-        video_dict = v.model_dump()
-        owner = session.get(User, v.user_id)
-        video_dict["owner"] = owner.username if owner else ""
-        result_completed.append(video_dict)
+        # 搜索过滤
+        if search:
+            video_title = video.title if video else ""
+            username = user.username if user else ""
+            if search.lower() not in video_title.lower() and search.lower() not in username.lower():
+                continue
 
-    result_failed = []
-    for v in failed:
-        video_dict = v.model_dump()
-        owner = session.get(User, v.user_id)
-        video_dict["owner"] = owner.username if owner else ""
-        result_failed.append(video_dict)
+        task_dict = {
+            "id": str(task.id),
+            "video_id": str(task.video_id),
+            "user_id": str(task.user_id),
+            "status": task.status,
+            "priority": task.priority,
+            "priority_type": task.priority_type,
+            "queue_name": task.queue_name,
+            "worker_name": task.worker_name,
+            "bump_count": task.bump_count,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "waiting_hours": task.waiting_hours,
+            "video_title": video.title if video else "",
+            "video_progress": video.progress if video else 0,
+            "username": user.username if user else "",
+            "is_vip": user.is_vip if user else False,
+        }
+        result.append(task_dict)
+
+    # 按状态分组
+    pending = [t for t in result if t["status"] == "pending"]
+    processing = [t for t in result if t["status"] == "processing"]
+    completed = [t for t in result if t["status"] == "completed"]
+    failed = [t for t in result if t["status"] == "failed"]
 
     return {
         "stats": {
-            "pending_count": len(result_pending),
-            "processing_count": len(result_processing),
-            "completed_today": len(result_completed),
-            "today_completed": len(result_completed),
-            "failed_count": len(result_failed),
+            "pending_count": len(pending),
+            "processing_count": len(processing),
+            "completed_today": len([t for t in completed if t["completed_at"] and datetime.fromisoformat(t["completed_at"]).date() == datetime.utcnow().date()]),
+            "failed_count": len(failed),
+            "total_count": len(result),
         },
-        "pending": result_pending,
-        "processing": result_processing,
-        "completed_recent": result_completed,
-        "failed": result_failed,
-        "recently_failed": result_failed,
+        "tasks": result,
+        "pending": pending,
+        "processing": processing,
+        "completed_recent": completed[:20],
+        "failed": failed[:20],
     }
+
+
+@router.post("/transcode/{task_id}/bump")
+async def bump_transcode_task(
+    task_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    管理员将指定任务插队到最前面（最高优先级，不扣积分）
+    """
+    task = session.get(TranscodeTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status != "pending":
+        raise HTTPException(status_code=400, detail="Only pending tasks can be bumped")
+
+    # 设置为最高优先级
+    config = get_transcode_config()
+    max_priority = config["max_priority"]
+
+    task.priority = max_priority
+    task.queue_name = "priority"
+    task.worker_name = None  # 清除worker记录
+    task.bump_count = (task.bump_count or 0) + 1
+
+    # 如果是付费/VIP加速，保持类型；否则改为 vip_speedup
+    if task.priority_type not in ("vip_speedup", "paid_speedup"):
+        task.priority_type = "vip_speedup"
+
+    session.add(task)
+    session.commit()
+
+    return {"message": "Task bumped to priority queue", "priority": task.priority, "bump_count": task.bump_count}
+
+
+@router.post("/transcode/{task_id}/cancel")
+async def cancel_transcode_task(
+    task_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    取消转码任务（同时清理缓存文件）
+    """
+    task = session.get(TranscodeTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status in ("completed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Task cannot be cancelled")
+
+    # 终止 Celery 任务
+    if task.celery_task_id and task.status == "processing":
+        try:
+            celery_app.control.revoke(task.celery_task_id, terminate=True)
+        except Exception:
+            pass
+
+    # 清理 Redis 锁
+    try:
+        from tasks import get_redis_client
+        redis_client = get_redis_client()
+        redis_client.delete(f"transcode_lock:{task.video_id}")
+    except Exception:
+        pass
+
+    # 清理缓存文件
+    processed_dir = settings.PROCESSED_DIR / str(task.video_id)
+    if processed_dir.exists():
+        shutil.rmtree(processed_dir)
+
+    task.status = "cancelled"
+    task.pause_percent = 0
+    task.pause_resolution = None
+    task.pause_timestamp = None
+    session.add(task)
+
+    # 如果视频正在转码，标记为 failed
+    video = session.get(Video, task.video_id)
+    if video and video.status == "processing":
+        video.status = "failed"
+        video.progress = 0
+        session.add(video)
+
+    session.commit()
+
+    return {"message": "Task cancelled"}
+
+
+@router.post("/transcode/{task_id}/pause")
+async def pause_transcode_task(
+    task_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    暂停转码任务（保存当前进度）
+    """
+    task = session.get(TranscodeTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status != "processing":
+        raise HTTPException(status_code=400, detail="Only processing tasks can be paused")
+
+    # 终止 Celery 任务
+    if task.celery_task_id:
+        try:
+            celery_app.control.revoke(task.celery_task_id, terminate=True)
+        except Exception:
+            pass
+
+    # 获取当前进度（从Redis或视频表）
+    video = session.get(Video, task.video_id)
+    current_progress = video.progress if video else 0
+
+    # 保存暂停进度
+    task.status = "paused"
+    task.pause_percent = current_progress
+    # 从Redis获取当前处理的分辨率和时间戳
+    try:
+        from tasks import get_redis_client
+        redis_client = get_redis_client()
+        task.pause_resolution = redis_client.get(f"transcode_resolution:{task.video_id}") or None
+        task.pause_timestamp = redis_client.get(f"transcode_timestamp:{task.video_id}") or None
+    except Exception:
+        pass
+
+    session.add(task)
+    session.commit()
+
+    return {"message": "Task paused", "pause_percent": task.pause_percent}
+
+
+@router.post("/transcode/{task_id}/resume")
+async def resume_transcode_task(
+    task_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    继续转码任务（从暂停点恢复）
+    """
+    task = session.get(TranscodeTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status != "paused":
+        raise HTTPException(status_code=400, detail="Only paused tasks can be resumed")
+
+    # 保存恢复点信息到Redis，供任务读取
+    try:
+        from tasks import get_redis_client
+        redis_client = get_redis_client()
+        if task.pause_percent:
+            redis_client.set(f"transcode_resume_percent:{task.video_id}", task.pause_percent, ex=3600)
+        if task.pause_resolution:
+            redis_client.set(f"transcode_resume_resolution:{task.video_id}", task.pause_resolution, ex=3600)
+        if task.pause_timestamp:
+            redis_client.set(f"transcode_resume_timestamp:{task.video_id}", task.pause_timestamp, ex=3600)
+    except Exception:
+        pass
+
+    # 重置任务状态
+    task.status = "pending"
+    task.celery_task_id = None  # 清除旧的task_id
+    session.add(task)
+
+    # 视频状态重置为pending
+    video = session.get(Video, task.video_id)
+    if video:
+        video.status = "pending"
+        session.add(video)
+
+    session.commit()
+
+    # 重新提交Celery任务，传递恢复参数
+    transcode_video_task.delay(str(task.video_id), "resume")
+
+    return {"message": "Task resumed", "resume_from_percent": task.pause_percent}
+
+
+@router.get("/transcode/config")
+async def get_transcode_settings(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    获取转码队列配置
+    """
+    config = get_transcode_config()
+    return config
+
+
+@router.put("/transcode/concurrency")
+async def update_transcode_concurrency(
+    concurrency: int = Body(..., ge=1, le=32),
+    admin: User = Depends(PermissionChecker("admin:super")),
+    session: Session = Depends(get_session)
+):
+    """
+    更新转码并发数配置
+    """
+    # 保存到系统配置
+    config = session.exec(select(SystemConfig).where(SystemConfig.key == "TRANSCODE_CONCURRENCY")).first()
+    if config:
+        config.value = str(concurrency)
+        session.add(config)
+    else:
+        config = SystemConfig(
+            key="TRANSCODE_CONCURRENCY",
+            value=str(concurrency),
+            value_type="int",
+            description="转码并发数"
+        )
+        session.add(config)
+
+    session.commit()
+
+    return {"message": "Concurrency updated", "concurrency": concurrency}
 
 
 @router.post("/transcode/{video_id}/retry")
@@ -693,10 +937,29 @@ async def retry_transcode(
     admin: User = Depends(PermissionChecker("video:audit")),
     session: Session = Depends(get_session)
 ):
-    """重试失败的转码"""
+    """重试失败的转码（仅限1次）"""
     video = session.get(Video, video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    # 查找失败的任务记录
+    task = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.video_id == video.id,
+            TranscodeTask.status == "failed"
+        )
+    ).first()
+
+    if task:
+        # 管理员重试不限制次数
+        task.retry_count += 1
+        task.status = "pending"
+        task.priority = 0
+        task.priority_type = "normal"
+        task.queue_name = "default"
+        task.started_at = None
+        task.completed_at = None
+        session.add(task)
 
     video.status = "pending"
     video.progress = 0
@@ -705,7 +968,7 @@ async def retry_transcode(
 
     transcode_video_task.delay(video_id)
 
-    return {"message": "Transcode retry scheduled"}
+    return {"message": "Transcode retry scheduled", "retry_count": task.retry_count if task else 0}
 
 
 # ==================== 冷存储 ====================
@@ -1020,7 +1283,7 @@ async def get_all_videos(
         select(Video).order_by(desc(Video.created_at)).offset(offset).limit(size)
     ).all()
 
-    # 手动添加 owner 信息
+    # 手动添加 owner 和 category 信息
     result = []
     for v in videos:
         video_dict = v.model_dump()
@@ -1029,6 +1292,11 @@ async def get_all_videos(
                 "id": str(v.owner.id),
                 "username": v.owner.username,
                 "avatar_path": v.owner.avatar_path,
+            }
+        if v.category:
+            video_dict["category"] = {
+                "id": v.category.id,
+                "name": v.category.name,
             }
         result.append(video_dict)
 

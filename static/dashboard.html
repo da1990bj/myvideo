@@ -488,6 +488,13 @@
                 const videos = await res.json();
                 renderTable(videos);
 
+                // 加载队列信息
+                videos.forEach(v => {
+                    if (v.status === "pending" || v.status === "processing") {
+                        loadQueueInfo(v.id);
+                    }
+                });
+
                 // 仅在WebSocket未连接时启用轮询
                 if (!socket || !socket.connected) {
                     const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
@@ -532,7 +539,7 @@
             } else if (status === "failed") {
                 statusHtml = "<span class='status-badge' style='color:red; background:#ffe6e6;'>处理失败</span>";
             } else if (status === "pending") {
-                statusHtml = "<span class='status-badge'>等待处理</span>";
+                statusHtml = `<span class='status-badge'>等待处理</span><div style='font-size:11px; color:#888; margin-top:2px;' id='queue-info-${v.id}'>加载中...</div>`;
             } else if (status === "banned") {
                 statusHtml = `<span class='status-badge' style='color:white; background:#f04c49;' title='原因: ${v.ban_reason || "未知"}'>已下架</span><div style="font-size:12px; color:#f04c49; margin-top:4px;">${v.ban_reason || ""}</div>`;
             } else if (status === "appealing") {
@@ -550,6 +557,10 @@
 
             if (status === "banned") {
                 buttons += `<button class='action-btn' style='color:#f08c00;' onclick='appealVideo("${v.id}")'>申诉</button>`;
+            } else if (status === "failed") {
+                buttons += `<button class='action-btn' style='color:#00a1d6;' onclick='retryVideo("${v.id}")'>重试</button>`;
+            } else if (status === "pending") {
+                buttons += `<button class='action-btn' style='color:#9c27b0;' onclick='bumpVideo("${v.id}")'>付费插队</button>`;
             }
 
             buttons += `<button class='action-btn delete' onclick='deleteVideo("${v.id}")'>删除</button>`;
@@ -586,6 +597,64 @@
                 loadMyVideos();
             } else {
                 alert("提交失败");
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function retryVideo(id) {
+        if (!confirm("确定要重试转码吗？每个任务仅允许重试一次。")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${id}/retry`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert("重试已提交");
+                loadMyVideos();
+            } else {
+                const err = await res.json();
+                alert("重试失败: " + (err.detail || "未知错误"));
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function loadQueueInfo(videoId) {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${videoId}/queue_info`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const queueInfoEl = document.getElementById(`queue-info-${videoId}`);
+                if (queueInfoEl) {
+                    if (data.status === "processing") {
+                        queueInfoEl.textContent = "转码处理中...";
+                    } else if (data.in_queue) {
+                        queueInfoEl.textContent = `排队位置: 第${data.position}位 | 预计等待: ${data.estimated_minutes}分钟`;
+                    }
+                }
+            }
+        } catch(e) {}
+    }
+
+    async function bumpVideo(id) {
+        if (!confirm("确定要付费插队吗？将消耗5积分。")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${id}/bump`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert(`已插队到优先级队列，消耗 ${data.credits_deducted} 积分`);
+                loadMyVideos();
+            } else {
+                const err = await res.json();
+                alert("插队失败: " + (err.detail || "积分不足"));
             }
         } catch(e) { alert("网络错误"); }
     }

@@ -70,6 +70,7 @@
         <div class="tabs">
             <div class="tab active" onclick="showTab('env')">环境配置</div>
             <div class="tab" onclick="showTab('storage')">存储设置</div>
+            <div class="tab" onclick="showTab('transcode')">转码设置</div>
             <div class="tab" onclick="showTab('cold-storage')">冷存储</div>
         </div>
 
@@ -132,6 +133,50 @@
             <div id="orphan-actions" style="display: none;">
                 <button class="btn btn-danger" onclick="cleanupOrphanFiles()">删除所有孤立文件</button>
                 <span id="orphan-summary" style="color: #888; margin-left: 10px;"></span>
+            </div>
+        </div>
+
+        <!-- 转码设置 -->
+        <div id="tab-transcode" class="tab-content">
+            <div id="transcode-message"></div>
+
+            <h3>转码队列配置</h3>
+            <div style="padding: 15px; background: #f9f9f9; border-radius: 8px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label class="label">转码并发数</label>
+                    <input type="number" class="input" id="transcode-concurrency" min="1" max="32" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">同时进行的转码任务数（1-32）</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">普通用户优先级 aging 增速</label>
+                    <input type="number" class="input" id="transcode-aging-rate" min="0" step="0.1" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">每小时增加的优先级分值</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">最大优先级分数</label>
+                    <input type="number" class="input" id="transcode-max-priority" min="1" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">优先级分数上限</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">VIP 用户基础优先级</label>
+                    <input type="number" class="input" id="transcode-vip-priority" min="0" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">VIP任务的起始优先级</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">付费加速用户基础优先级</label>
+                    <input type="number" class="input" id="transcode-paid-priority" min="0" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">付费加速任务的起始优先级</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">插队消耗积分</label>
+                    <input type="number" class="input" id="transcode-bump-cost" min="0" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">每次付费插队消耗的积分数量</span>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn" onclick="saveTranscodeConfig()">保存转码配置</button>
+                <span style="color: #888; margin-left: 10px;">部分配置需要重启 Celery worker 生效</span>
             </div>
         </div>
 
@@ -824,6 +869,49 @@
                 d.getMinutes().toString().padStart(2, '0');
         }
 
+        // ==================== 转码设置 ====================
+        async function loadTranscodeConfig() {
+            const res = await fetch("/admin/transcode/config", { headers });
+            if (res.ok) {
+                const config = await res.json();
+                document.getElementById("transcode-concurrency").value = config.concurrency || 4;
+                document.getElementById("transcode-aging-rate").value = config.aging_rate || 0.5;
+                document.getElementById("transcode-max-priority").value = config.max_priority || 40;
+                document.getElementById("transcode-vip-priority").value = config.vip_base_priority || 10;
+                document.getElementById("transcode-paid-priority").value = config.paid_base_priority || 30;
+                document.getElementById("transcode-bump-cost").value = config.bump_cost || 5;
+            }
+        }
+
+        async function saveTranscodeConfig() {
+            const updates = {
+                "TRANSCODE_CONCURRENCY": document.getElementById("transcode-concurrency").value,
+                "TRANSCODE_AGING_RATE": document.getElementById("transcode-aging-rate").value,
+                "TRANSCODE_MAX_PRIORITY": document.getElementById("transcode-max-priority").value,
+                "TRANSCODE_VIP_BASE_PRIORITY": document.getElementById("transcode-vip-priority").value,
+                "TRANSCODE_PAID_BASE_PRIORITY": document.getElementById("transcode-paid-priority").value,
+                "TRANSCODE_BUMP_COST": document.getElementById("transcode-bump-cost").value,
+            };
+
+            try {
+                const res = await fetch("/admin/env-config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify(updates)
+                });
+
+                if (res.ok) {
+                    showMessage("transcode-message", "转码配置已保存！部分配置需要重启 Celery worker 生效。", "success");
+                    loadTranscodeConfig();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("transcode-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("transcode-message", "保存失败: " + err.message, "error");
+            }
+        }
+
         // 页面加载
         document.addEventListener("DOMContentLoaded", () => {
             // 检查 URL 参数切换标签
@@ -835,6 +923,7 @@
 
             loadEnvConfig();
             loadStorageConfig();
+            loadTranscodeConfig();
             loadColdStorageConfig();
         });
     </script>

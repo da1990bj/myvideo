@@ -104,6 +104,20 @@ class MyVideoSettings(BaseSettings):
     COLD_STORAGE_TRIGGER_VIEWS: int = 10
     COLD_STORAGE_PATH_ROOT: str = "/data/myvideo/cold_storage"
 
+    # ==================== 转码队列优先级 ====================
+    # 转码并发数（同时进行的转码任务数）
+    TRANSCODE_CONCURRENCY: int = 4
+    # 普通用户 aging 增速（每小时增加的优先级）
+    TRANSCODE_AGING_RATE: float = 0.5
+    # 最大优先级分数
+    TRANSCODE_MAX_PRIORITY: int = 40
+    # VIP用户基础优先级
+    TRANSCODE_VIP_BASE_PRIORITY: int = 10
+    # 付费加速用户基础优先级
+    TRANSCODE_PAID_BASE_PRIORITY: int = 30
+    # 插队消耗积分
+    TRANSCODE_BUMP_COST: int = 5
+
     # ==================== 存储迁移 ====================
     # 迁移间隔时间（秒），控制迁移速度，避免 CPU/磁盘 占用过高
     # 值越大速度越慢，0 表示不限制
@@ -352,3 +366,20 @@ def get_log_level() -> str:
         日志级别字符串 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
     return _get_config_override("LOG_LEVEL", settings.LOG_LEVEL)
+
+
+def get_transcode_config() -> dict:
+    """
+    从数据库获取转码队列配置，支持运行时覆盖
+
+    Returns:
+        dict with keys: concurrency, aging_rate, max_priority, vip_base_priority, paid_base_priority, bump_cost
+    """
+    return {
+        "concurrency": _get_config_override("TRANSCODE_CONCURRENCY", settings.TRANSCODE_CONCURRENCY),
+        "aging_rate": _get_config_override("TRANSCODE_AGING_RATE", settings.TRANSCODE_AGING_RATE),
+        "max_priority": _get_config_override("TRANSCODE_MAX_PRIORITY", settings.TRANSCODE_MAX_PRIORITY),
+        "vip_base_priority": _get_config_override("TRANSCODE_VIP_BASE_PRIORITY", settings.TRANSCODE_VIP_BASE_PRIORITY),
+        "paid_base_priority": _get_config_override("TRANSCODE_PAID_BASE_PRIORITY", settings.TRANSCODE_PAID_BASE_PRIORITY),
+        "bump_cost": _get_config_override("TRANSCODE_BUMP_COST", settings.TRANSCODE_BUMP_COST),
+    }

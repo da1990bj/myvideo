@@ -5,7 +5,7 @@
     <title>后台管理 - 转码队列</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-        .container { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .container { padding: 20px; max-width: 1600px; margin: 0 auto; }
         h1 { margin-bottom: 20px; color: #333; }
         h2 { margin-top: 30px; margin-bottom: 15px; color: #555; font-size: 18px; border-left: 4px solid #00a1d6; padding-left: 12px; }
 
@@ -21,6 +21,11 @@
         .stat-card.processing .num { color: #00a1d6; }
         .stat-card.completed .num { color: #2f9e44; }
         .stat-card.failed .num { color: #f04c49; }
+
+        /* 搜索和筛选 */
+        .filter-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        .search-input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 250px; }
+        .filter-select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; }
 
         /* 表格样式 */
         table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; margin-top: 10px; }
@@ -41,8 +46,17 @@
         .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
         .status-pending { background: #fff3e0; color: #f08c00; }
         .status-processing { background: #e3f2fd; color: #00a1d6; }
+        .status-paused { background: #fff8e1; color: #f08c00; }
         .status-completed { background: #e8f5e9; color: #2f9e44; }
         .status-failed { background: #ffebee; color: #f04c49; }
+        .status-cancelled { background: #f5f5f5; color: #999; }
+
+        /* 优先级标签 */
+        .priority-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .priority-normal { background: #f5f5f5; color: #666; }
+        .priority-vip { background: #fff8e1; color: #ff9800; }
+        .priority-vip-speedup { background: #fff3e0; color: #e65100; }
+        .priority-paid-speedup { background: #ffebee; color: #d32f2f; }
 
         /* 按钮 */
         .btn { padding: 6px 14px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; font-size: 13px; transition: all 0.2s; }
@@ -51,6 +65,9 @@
         .btn-danger:hover { background: #ffebee; }
         .btn-retry { color: #00a1d6; border-color: #00a1d6; }
         .btn-retry:hover { background: #e3f2fd; }
+        .btn-bump { color: #9c27b0; border-color: #9c27b0; }
+        .btn-bump:hover { background: #f3e5f5; }
+        .btn-small { padding: 4px 10px; font-size: 12px; }
 
         /* 空状态 */
         .empty { text-align: center; padding: 40px; color: #999; }
@@ -62,6 +79,12 @@
 
         /* 时间 */
         .time { color: #888; font-size: 12px; }
+
+        /* VIP标识 */
+        .vip-tag { display: inline-block; padding: 2px 6px; background: #ff9800; color: #fff; font-size: 10px; border-radius: 4px; margin-left: 4px; }
+
+        /* 操作列 */
+        .action-cell { display: flex; gap: 6px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -69,7 +92,7 @@
     <script src="/static/js/socket.io.js"></script>
 
     <div class="container">
-        <h1>转码队列监控</h1>
+        <h1>转码队列管理</h1>
         <div class="refresh-info">
             上次更新：<span id="last-update-time">加载中...</span>
             <button onclick="loadQueue()">刷新</button>
@@ -93,88 +116,73 @@
                 <div class="label">失败</div>
                 <div class="num" id="failed-count">-</div>
             </div>
+            <div class="stat-card" style="background:#f0f8ff;">
+                <div class="label">总计转码任务</div>
+                <div class="num" id="total-count" style="color:#666;">-</div>
+            </div>
         </div>
 
-        <!-- 转码中 -->
-        <h2>转码中</h2>
-        <div id="processing-section">
+        <!-- 搜索和筛选 -->
+        <div class="filter-row">
+            <input type="text" id="search-input" class="search-input" placeholder="搜索视频标题或用户名..." oninput="applyFilters()">
+            <select id="status-filter" class="filter-select" onchange="applyFilters()">
+                <option value="">全部状态</option>
+                <option value="pending">待处理</option>
+                <option value="processing">转码中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+            </select>
+            <select id="priority-filter" class="filter-select" onchange="applyFilters()">
+                <option value="">全部优先级</option>
+                <option value="normal">普通</option>
+                <option value="vip">VIP</option>
+                <option value="vip_speedup">VIP加速</option>
+                <option value="paid_speedup">付费加速</option>
+            </select>
+        </div>
+
+        <!-- 全部任务表格 -->
+        <h2>任务列表 (<span id="task-list-count">0</span>)</h2>
+        <div id="task-section">
             <table>
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>缩略图</th>
                         <th>标题</th>
-                        <th>作者</th>
+                        <th>用户</th>
+                        <th>优先级</th>
+                        <th>队列</th>
+                        <th>等待时间</th>
+                        <th>提交时间</th>
                         <th>进度</th>
                         <th>状态</th>
-                    </tr>
-                </thead>
-                <tbody id="processing-list"></tbody>
-            </table>
-            <div class="empty" id="processing-empty" style="display:none">暂无正在转码的视频</div>
-        </div>
-
-        <!-- 排队中 -->
-        <h2>排队中 (<span id="pending-total">0</span>)</h2>
-        <div id="pending-section">
-            <table>
-                <thead>
-                    <tr>
-                        <th>缩略图</th>
-                        <th>标题</th>
-                        <th>作者</th>
-                        <th>提交时间</th>
-                        <th>状态</th>
-                    </tr>
-                </thead>
-                <tbody id="pending-list"></tbody>
-            </table>
-            <div class="empty" id="pending-empty" style="display:none">暂无待处理视频</div>
-        </div>
-
-        <!-- 最近完成 -->
-        <h2>最近完成</h2>
-        <div id="completed-section">
-            <table>
-                <thead>
-                    <tr>
-                        <th>缩略图</th>
-                        <th>标题</th>
-                        <th>作者</th>
-                        <th>完成时间</th>
-                        <th>状态</th>
-                    </tr>
-                </thead>
-                <tbody id="completed-list"></tbody>
-            </table>
-            <div class="empty" id="completed-empty" style="display:none">今日暂无完成的视频</div>
-        </div>
-
-        <!-- 失败记录 -->
-        <h2>失败记录</h2>
-        <div id="failed-section">
-            <table>
-                <thead>
-                    <tr>
-                        <th>缩略图</th>
-                        <th>标题</th>
-                        <th>作者</th>
-                        <th>失败时间</th>
                         <th>操作</th>
                     </tr>
                 </thead>
-                <tbody id="failed-list"></tbody>
+                <tbody id="task-list"></tbody>
             </table>
-            <div class="empty" id="failed-empty" style="display:none">暂无失败记录</div>
+            <div class="empty" id="task-empty" style="display:none">暂无任务</div>
         </div>
     </div>
 
     <script>
         const token = localStorage.getItem("access_token");
         const headers = { "Authorization": "Bearer " + token };
+        let allTasks = [];
 
         async function loadQueue() {
             try {
-                const res = await fetch("/admin/transcode/queue", { headers });
+                const search = document.getElementById("search-input").value;
+                const status = document.getElementById("status-filter").value;
+                const priority = document.getElementById("priority-filter").value;
+
+                let url = "/admin/transcode/queue?";
+                if (search) url += "search=" + encodeURIComponent(search) + "&";
+                if (status) url += "status=" + encodeURIComponent(status) + "&";
+                if (priority) url += "priority_type=" + encodeURIComponent(priority) + "&";
+
+                const res = await fetch(url, { headers });
                 if (!res.ok) {
                     if (res.status === 401) {
                         alert("请先登录");
@@ -184,24 +192,21 @@
                 }
                 const data = await res.json();
 
+                // 保存所有任务
+                allTasks = data.tasks;
+
                 // 更新统计
                 document.getElementById("pending-count").textContent = data.stats.pending_count;
                 document.getElementById("processing-count").textContent = data.stats.processing_count;
                 document.getElementById("completed-count").textContent = data.stats.completed_today;
                 document.getElementById("failed-count").textContent = data.stats.failed_count;
 
-                // 转码中
-                renderProcessingList(data.processing);
+                // 更新总任务数
+                document.getElementById("total-count").textContent = data.stats.total_count || data.tasks.length;
+                document.getElementById("task-list-count").textContent = data.tasks.length;
 
-                // 排队中
-                document.getElementById("pending-total").textContent = data.pending.length;
-                renderPendingList(data.pending);
-
-                // 最近完成
-                renderCompletedList(data.completed_recent);
-
-                // 失败记录
-                renderFailedList(data.failed);
+                // 渲染任务列表
+                renderTaskList(data.tasks);
 
                 // 更新时间
                 const now = new Date();
@@ -214,110 +219,146 @@
             }
         }
 
-        function renderProcessingList(videos) {
-            const tbody = document.getElementById("processing-list");
-            const empty = document.getElementById("processing-empty");
+        function applyFilters() {
+            loadQueue();
+        }
+
+        function renderTaskList(tasks) {
+            const tbody = document.getElementById("task-list");
+            const empty = document.getElementById("task-empty");
             tbody.innerHTML = "";
 
-            if (videos.length === 0) {
+            if (tasks.length === 0) {
                 empty.style.display = "block";
                 return;
             }
             empty.style.display = "none";
 
-            videos.forEach(v => {
+            tasks.forEach(t => {
                 const tr = document.createElement("tr");
+
+                // 获取优先级显示
+                const priorityLabels = {
+                    "normal": "普通",
+                    "vip": "VIP",
+                    "vip_speedup": "VIP加速",
+                    "paid_speedup": "付费加速"
+                };
+                const priorityClass = {
+                    "normal": "priority-normal",
+                    "vip": "priority-vip",
+                    "vip_speedup": "priority-vip-speedup",
+                    "paid_speedup": "priority-paid-speedup"
+                };
+
+                // 获取状态显示
+                const statusLabels = {
+                    "pending": "待处理",
+                    "processing": "转码中",
+                    "paused": "已暂停",
+                    "completed": "已完成",
+                    "failed": "失败",
+                    "cancelled": "已取消"
+                };
+
+                // 获取等待时间
+                const waitTime = t.waiting_hours ? t.waiting_hours.toFixed(1) + "小时" : "-";
+
+                // 操作按钮
+                let actions = "";
+                if (t.status === "pending") {
+                    actions = `
+                        <button class="btn btn-bump btn-small" onclick="bumpTask('${t.id}')">插队</button>
+                        <button class="btn btn-danger btn-small" onclick="cancelTask('${t.id}')">取消</button>
+                    `;
+                } else if (t.status === "processing") {
+                    actions = `
+                        <button class="btn btn-small" style="color:#f08c00;" onclick="pauseTask('${t.id}')">暂停</button>
+                        <button class="btn btn-danger btn-small" onclick="cancelTask('${t.id}')">取消</button>
+                    `;
+                } else if (t.status === "paused") {
+                    actions = `
+                        <button class="btn btn-retry btn-small" style="color:#2f9e44;" onclick="resumeTask('${t.id}')">继续</button>
+                        <button class="btn btn-danger btn-small" onclick="cancelTask('${t.id}')">取消</button>
+                    `;
+                } else if (t.status === "failed") {
+                    actions = `<button class="btn btn-retry btn-small" onclick="retryTranscode('${t.id}')">重试</button>`;
+                }
+
                 tr.innerHTML = `
-                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
-                    <td>${escapeHtml(v.title)}</td>
-                    <td>${escapeHtml(v.owner)}</td>
+                    <td style="font-size:11px; color:#999;">${t.id.substring(0, 8)}...</td>
+                    <td><img src="${t.video_title ? '/static/thumbnails/' + t.video_id + '.jpg' : '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
+                    <td><a href="/static/video.html?id=${t.video_id}" target="_blank" style="color:#333; text-decoration:none;">${escapeHtml(t.video_title || '未知')}</a></td>
                     <td>
-                        <div class="progress-bar"><div class="progress-fill" style="width:${v.progress}%"></div></div>
-                        <span class="progress-text">${v.progress}%</span>
+                        ${escapeHtml(t.username)}
+                        ${t.is_vip ? '<span class="vip-tag">VIP</span>' : ''}
                     </td>
-                    <td><span class="status-badge status-processing">转码中</span></td>
+                    <td><span class="priority-badge ${priorityClass[t.priority_type] || 'priority-normal'}">${priorityLabels[t.priority_type] || '普通'}</span></td>
+                    <td style="font-size:12px; color:#666;">${t.worker_name || t.queue_name || '-'}</td>
+                    <td style="font-size:12px; color:#888;">${waitTime}</td>
+                    <td class="time">${formatTime(t.created_at)}</td>
+                    <td>${t.status === 'processing' ? `<div style="display:flex; align-items:center; gap:5px;"><div class="progress-bar"><div class="progress-fill" style="width:${t.video_progress || t.progress || 0}%"></div></div><span style="font-size:11px;color:#666;">${t.video_progress || t.progress || 0}%</span></div>` : '-'}</td>
+                    <td><span class="status-badge status-${t.status}">${statusLabels[t.status] || t.status}</span></td>
+                    <td class="action-cell">${actions}</td>
                 `;
                 tbody.appendChild(tr);
             });
         }
 
-        function renderPendingList(videos) {
-            const tbody = document.getElementById("pending-list");
-            const empty = document.getElementById("pending-empty");
-            tbody.innerHTML = "";
+        async function bumpTask(taskId) {
+            if (!confirm("确定要将该任务插队到最前面吗？")) return;
 
-            if (videos.length === 0) {
-                empty.style.display = "block";
-                return;
+            try {
+                // 管理员插队接口（不消耗积分）
+                const res = await fetch(`/admin/transcode/${taskId}/bump`, {
+                    method: "POST",
+                    headers
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert("已将任务插队到优先级队列");
+                    loadQueue();
+                } else {
+                    const err = await res.json();
+                    alert("操作失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("操作失败: " + err.message);
             }
-            empty.style.display = "none";
-
-            videos.forEach(v => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
-                    <td>${escapeHtml(v.title)}</td>
-                    <td>${escapeHtml(v.owner)}</td>
-                    <td class="time">${formatTime(v.created_at)}</td>
-                    <td><span class="status-badge status-pending">等待中</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
         }
 
-        function renderCompletedList(videos) {
-            const tbody = document.getElementById("completed-list");
-            const empty = document.getElementById("completed-empty");
-            tbody.innerHTML = "";
+        async function cancelTask(taskId) {
+            if (!confirm("确定要取消该转码任务吗？")) return;
 
-            if (videos.length === 0) {
-                empty.style.display = "block";
-                return;
+            try {
+                const res = await fetch(`/admin/transcode/${taskId}/cancel`, {
+                    method: "POST",
+                    headers
+                });
+                if (res.ok) {
+                    alert("已取消任务");
+                    loadQueue();
+                } else {
+                    const err = await res.json();
+                    alert("操作失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("操作失败: " + err.message);
             }
-            empty.style.display = "none";
-
-            videos.forEach(v => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
-                    <td>${escapeHtml(v.title)}</td>
-                    <td>${escapeHtml(v.owner)}</td>
-                    <td class="time">${formatTime(v.created_at)}</td>
-                    <td><span class="status-badge status-completed">已完成</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
         }
 
-        function renderFailedList(videos) {
-            const tbody = document.getElementById("failed-list");
-            const empty = document.getElementById("failed-empty");
-            tbody.innerHTML = "";
-
-            if (videos.length === 0) {
-                empty.style.display = "block";
-                return;
-            }
-            empty.style.display = "none";
-
-            videos.forEach(v => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
-                    <td>${escapeHtml(v.title)}</td>
-                    <td>${escapeHtml(v.owner)}</td>
-                    <td class="time">${formatTime(v.created_at)}</td>
-                    <td><button class="btn btn-retry" onclick="retryTranscode('${v.id}')">重试</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        async function retryTranscode(videoId) {
+        async function retryTranscode(taskId) {
             if (!confirm("确定要重新提交该视频的转码任务吗？")) return;
 
             try {
-                const res = await fetch(`/admin/transcode/${videoId}/retry`, {
+                // 需要先获取视频ID
+                const task = allTasks.find(t => t.id === taskId);
+                if (!task) {
+                    alert("找不到任务");
+                    return;
+                }
+
+                const res = await fetch(`/admin/transcode/${task.video_id}/retry`, {
                     method: "POST",
                     headers
                 });
@@ -330,6 +371,48 @@
                 }
             } catch (err) {
                 alert("重试失败: " + err.message);
+            }
+        }
+
+        async function pauseTask(taskId) {
+            if (!confirm("确定要暂停该转码任务吗？")) return;
+
+            try {
+                const res = await fetch(`/admin/transcode/${taskId}/pause`, {
+                    method: "POST",
+                    headers
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert("已暂停转码任务，保存进度 " + data.pause_percent + "%");
+                    loadQueue();
+                } else {
+                    const err = await res.json();
+                    alert("暂停失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("暂停失败: " + err.message);
+            }
+        }
+
+        async function resumeTask(taskId) {
+            if (!confirm("确定要继续该转码任务吗？")) return;
+
+            try {
+                const res = await fetch(`/admin/transcode/${taskId}/resume`, {
+                    method: "POST",
+                    headers
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert("已继续转码任务，从 " + data.resume_from_percent + "% 恢复");
+                    loadQueue();
+                } else {
+                    const err = await res.json();
+                    alert("继续失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("继续失败: " + err.message);
             }
         }
 
