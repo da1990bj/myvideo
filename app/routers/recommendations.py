@@ -210,10 +210,29 @@ async def track_recommendation_click(
             log.clicked_at = datetime.utcnow()
             session.add(log)
         else:
+            # 尝试从 VideoRecommendation 查到来源
+            rec_source = "unknown"
+            rec = session.exec(
+                select(VideoRecommendation).where(
+                    VideoRecommendation.slot_name == slot_name,
+                    VideoRecommendation.video_id == video_uuid
+                )
+            ).first()
+            if rec:
+                rec_source = "manual"
+            elif slot_name == "home_carousel":
+                rec_source = "trending"
+            elif slot_name == "personalized":
+                rec_source = "collaborative"
+            elif slot_name == "sidebar_related":
+                rec_source = "similarity"
+            elif slot_name == "category_featured":
+                rec_source = "category"
+
             new_log = RecommendationLog(
                 user_id=current_user.id,
                 video_id=video_uuid,
-                recommendation_source="unknown",
+                recommendation_source=rec_source,
                 slot_name=slot_name,
                 impression_rank=impression_rank,
                 clicked=True,
@@ -241,20 +260,55 @@ async def track_recommendation_watch(
     try:
         video_id = request_body.get("video_id")
         watch_percent = request_body.get("watch_percent", 0)
+        slot_name = request_body.get("slot_name")
+        impression_rank = request_body.get("impression_rank")
 
         video_uuid = UUID(video_id)
 
-        # 更新推荐日志
-        log = session.exec(
-            select(RecommendationLog).where(
-                RecommendationLog.user_id == current_user.id,
-                RecommendationLog.video_id == video_uuid
+        # 更新推荐日志，优先按 slot_name 和 impression_rank 查找
+        query = select(RecommendationLog).where(
+            RecommendationLog.user_id == current_user.id,
+            RecommendationLog.video_id == video_uuid
+        )
+        if slot_name is not None and impression_rank is not None:
+            query = query.where(
+                RecommendationLog.slot_name == slot_name,
+                RecommendationLog.impression_rank == impression_rank
             )
-        ).first()
+        log = session.exec(query).first()
 
         if log:
             log.watched_percent = max(log.watched_percent or 0, watch_percent)
             session.add(log)
+        elif slot_name is not None:
+            # 如果没找到日志但有slot信息，创建新记录
+            rec_source = "unknown"
+            rec = session.exec(
+                select(VideoRecommendation).where(
+                    VideoRecommendation.slot_name == slot_name,
+                    VideoRecommendation.video_id == video_uuid
+                )
+            ).first()
+            if rec:
+                rec_source = "manual"
+            elif slot_name == "home_carousel":
+                rec_source = "trending"
+            elif slot_name == "personalized":
+                rec_source = "collaborative"
+            elif slot_name == "sidebar_related":
+                rec_source = "similarity"
+            elif slot_name == "category_featured":
+                rec_source = "category"
+
+            new_log = RecommendationLog(
+                user_id=current_user.id,
+                video_id=video_uuid,
+                recommendation_source=rec_source,
+                slot_name=slot_name,
+                impression_rank=impression_rank or 0,
+                watched_percent=watch_percent
+            )
+            session.add(new_log)
 
         session.commit()
         return {"status": "ok"}
@@ -445,6 +499,52 @@ async def get_recommendation_analytics(
 
     ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0
 
+    # 获取所有推荐位名称映射
+    slots = session.exec(select(RecommendationSlot)).all()
+    slot_name_map = {s.slot_name: s.display_title or s.slot_name for s in slots}
+
+    # 按视频统计 top_performing
+    video_ids = list(set(str(log.video_id) for log in logs))
+    videos = {str(v.id): v for v in session.exec(select(Video).where(Video.id.in_(video_ids))).all()}
+
+    video_stats = {}
+    for log in logs:
+        vid = str(log.video_id)
+        if vid not in video_stats:
+            video = videos.get(vid)
+            video_stats[vid] = {
+                "video_id": vid,
+                "video_title": video.title if video else "未知",
+                "category": video.category.name if video and video.category else "未知",
+                "author": video.owner.username if video and video.owner else "未知",
+                "impressions": 0, "clicks": 0, "watched": 0
+            }
+        video_stats[vid]["impressions"] += 1
+        if log.clicked:
+            video_stats[vid]["clicks"] += 1
+        if log.watched:
+            video_stats[vid]["watched"] += 1
+
+    # 计算每个视频的 CTR 并排序
+    for vid, stats in video_stats.items():
+        stats["ctr"] = round((stats["clicks"] / stats["impressions"] * 100), 2) if stats["impressions"] > 0 else 0
+    top_performing = sorted(video_stats.values(), key=lambda x: x["clicks"], reverse=True)[:10]
+
+    # 按来源统计 by_source（按推荐位 slot_name 分组，显示推荐位标题）
+    source_stats = {}
+    for log in logs:
+        slot = log.slot_name or "unknown"
+        display_name = slot_name_map.get(slot, slot)
+        if slot not in source_stats:
+            source_stats[slot] = {"source": display_name, "slot_name": slot, "impressions": 0, "clicks": 0, "watched": 0}
+        source_stats[slot]["impressions"] += 1
+        if log.clicked:
+            source_stats[slot]["clicks"] += 1
+        if log.watched:
+            source_stats[slot]["watched"] += 1
+    for slot, stats in source_stats.items():
+        stats["ctr"] = round((stats["clicks"] / stats["impressions"] * 100), 2) if stats["impressions"] > 0 else 0
+
     return {
         "user_engagement": {
             "total_impressions": total_impressions,
@@ -452,8 +552,8 @@ async def get_recommendation_analytics(
             "click_through_rate": round(ctr, 2),
             "total_watched": total_watched,
         },
-        "top_performing": [],
-        "by_source": {},
+        "top_performing": top_performing,
+        "by_source": source_stats,
     }
 
 

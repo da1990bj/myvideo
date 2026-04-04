@@ -19,6 +19,20 @@ fi
 LOG_FILE="${SCRIPT_DIR}/celery_worker.log"
 PID_FILE="${SCRIPT_DIR}/celery.pid"
 
+# 从数据库读取转码并发数配置
+get_transcode_concurrency() {
+    local concurrency=4
+    # 尝试从数据库读取配置
+    if command -v docker &> /dev/null; then
+        concurrency=$(docker exec shared_postgres psql -U admin -d myvideo_db -t -c "SELECT value FROM system_configs WHERE key = 'TRANSCODE_CONCURRENCY' LIMIT 1;" 2>/dev/null | tr -d ' ' | tr -d '\n')
+        # 如果为空或无效，使用默认值
+        if [ -z "$concurrency" ] || ! [[ "$concurrency" =~ ^[0-9]+$ ]]; then
+            concurrency=4
+        fi
+    fi
+    echo "$concurrency"
+}
+
 start() {
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
@@ -31,16 +45,23 @@ start() {
         fi
     fi
 
-    echo "Starting Celery Worker..."
+    # 获取并发数配置
+    CONCURRENCY=$(get_transcode_concurrency)
+    echo "Starting Celery Worker (concurrency: $CONCURRENCY, memory limit: 6GB)..."
+
     cd "$APP_DIR" || exit 1
 
-    # Start Celery Worker
+    # 限制最大内存占用 6GB (6291456 KB)
+    ulimit -m 6291456
+    ulimit -v 6291456
+
+    # Start Celery Worker with concurrency setting
     # -A tasks.celery_app points to the Celery instance in app/tasks.py
-    nohup "$CELERY_BIN" -A tasks.celery_app worker --loglevel=info > "$LOG_FILE" 2>&1 &
+    nohup "$CELERY_BIN" -A tasks.celery_app worker --loglevel=info --concurrency="$CONCURRENCY" > "$LOG_FILE" 2>&1 &
 
     PID=$!
     echo "$PID" > "$PID_FILE"
-    echo "Celery Worker started with PID $PID. Logs: $LOG_FILE"
+    echo "Celery Worker started with PID $PID (concurrency=$CONCURRENCY). Logs: $LOG_FILE"
 }
 
 stop() {

@@ -18,6 +18,36 @@ const DEFAULT_MENU = [
 
 let currentMenu = [...DEFAULT_MENU];
 let apiMenuLoaded = false;
+let sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+
+// 切换侧边栏显示/隐藏
+function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    localStorage.setItem('sidebarCollapsed', sidebarCollapsed);
+    updateSidebarState();
+}
+
+// 更新侧边栏状态
+function updateSidebarState() {
+    const sidebar = document.getElementById('admin-sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle-btn');
+    const floatBtn = document.getElementById('sidebar-float-btn');
+    if (!sidebar) return;
+
+    if (sidebarCollapsed) {
+        sidebar.style.left = '-240px';
+        sidebar.style.boxShadow = 'none';
+        document.body.classList.add('sidebar-collapsed');
+        if (toggleBtn) toggleBtn.style.display = 'none';
+        if (floatBtn) floatBtn.style.display = 'block';
+    } else {
+        sidebar.style.left = '0';
+        sidebar.style.boxShadow = '2px 0 10px rgba(0,0,0,0.1)';
+        document.body.classList.remove('sidebar-collapsed');
+        if (toggleBtn) toggleBtn.style.display = 'block';
+        if (floatBtn) floatBtn.style.display = 'none';
+    }
+}
 
 // 从 API 加载菜单顺序
 async function loadMenuOrderFromAPI() {
@@ -93,28 +123,40 @@ function renderSidebar(menu) {
 
     const html = `
     <div id="admin-sidebar">
-        <h2 style="margin-top:0; color:#00a1d6; margin-bottom:30px;">MyVideo Admin</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="margin:0; color:#00a1d6;">MyVideo Admin</h2>
+            <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:none; border:none; cursor:pointer; font-size:20px; color:#999; padding:4px;" title="收起菜单">&#9776;</button>
+        </div>
         <div id="menu-container">
             ${menuHtml}
         </div>
     </div>
+    <div id="sidebar-float-btn" onclick="toggleSidebar()" style="display:none; position:fixed; left:10px; top:20px; z-index:99; background:#00a1d6; color:#fff; width:40px; height:40px; border-radius:50%; cursor:pointer; font-size:18px; text-align:center; line-height:40px; box-shadow:0 2px 10px rgba(0,0,0,0.2);" title="展开菜单">&#9776;</div>
     <style>
-        #admin-sidebar { width: 240px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; padding: 20px; overflow-y: auto; z-index: 100; }
+        #admin-sidebar { width: 240px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; padding: 20px; overflow-y: auto; z-index: 100; transition: left 0.3s, box-shadow 0.3s; }
         .admin-link { display: block; padding: 12px; color: #333; text-decoration: none; border-radius: 4px; margin-bottom: 4px; transition: all 0.2s; cursor: pointer; user-select: none; }
         .admin-link:hover { background: #f4f5f7; color: #00a1d6; }
         .admin-link.dragging { opacity: 0.5; background: #e3f2fd; }
         .admin-link.drag-over { border-top: 2px solid #00a1d6; }
         .admin-link.drag-over-next { border-bottom: 2px solid #00a1d6; }
         .drag-handle:hover { opacity: 1 !important; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding-left: 280px; background-color: #f4f5f7; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding-left: 280px; background-color: #f4f5f7; transition: padding-left 0.3s; }
+        body.sidebar-collapsed { padding-left: 20px; }
         .container, .content { padding: 20px; max-width: 100%; }
         #menu-container { min-height: 50px; }
+        #sidebar-toggle-btn:hover { color: #00a1d6; }
     </style>
     `;
 
     const div = document.createElement("div");
     div.innerHTML = html;
     document.body.appendChild(div);
+
+    // 应用保存的状态
+    if (sidebarCollapsed) {
+        document.body.classList.add('sidebar-collapsed');
+    }
+    updateSidebarState();
 
     initDragAndDrop();
 }

@@ -208,12 +208,28 @@
         carouselItems.forEach((rec, idx) => {
             const item = document.createElement("div");
             item.className = "carousel-item";
+            item.style.cursor = "pointer";
+            item.onclick = async (e) => {
+                if (e.target.closest(".carousel-controls") || e.target.closest(".carousel-dots")) return;
+                // 追踪推荐点击
+                const token = localStorage.getItem("access_token");
+                if (token) {
+                    try {
+                        await fetch("/recommendations/click", {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                            body: JSON.stringify({ video_id: rec.video.id, slot_name: "home_carousel", impression_rank: idx })
+                        });
+                    } catch(e) { console.error("Track click error:", e); }
+                }
+                location.href = '/static/video.html?id=' + rec.video.id + '&rec_slot=home_carousel&rec_rank=' + idx;
+            };
             const thumb = rec.video.thumbnail_path || "https://via.placeholder.com/1400x380?text=Video";
 
             const infoDiv = document.createElement("div");
             infoDiv.className = "carousel-info";
             infoDiv.innerHTML = `
-                <div class="carousel-title" onclick="location.href='/static/video.html?id=${rec.video.id}'">${rec.video.title}</div>
+                <div class="carousel-title">${rec.video.title}</div>
                 <div class="carousel-meta">${rec.reason || ''} · ${rec.video.views}次播放</div>
             `;
 

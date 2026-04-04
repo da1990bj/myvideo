@@ -47,6 +47,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=1, minute=0),  # 每天凌晨1点
         'options': {'queue': 'default'}
     },
+    'transcode-aging-hourly': {
+        'task': 'tasks.update_transcode_aging',
+        'schedule': crontab(minute=0),  # 每小时执行一次
+        'options': {'queue': 'default'}
+    },
 }
 
 # 创建 Celery app
@@ -55,3 +60,11 @@ celery_app.config_from_object(__name__)
 
 # 导入任务模块
 celery_app.autodiscover_tasks(['tasks'])
+
+# 任务队列路由配置
+# 高优先级任务进入 priority 队列，普通任务进入 default 队列
+CELERY_TASK_ROUTES = {
+    'tasks.transcode_video_task': {
+        'queue': 'default',
+    },
+}

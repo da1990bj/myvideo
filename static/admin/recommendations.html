@@ -159,30 +159,32 @@
                 <thead>
                     <tr>
                         <th>视频</th>
+                        <th>分类</th>
+                        <th>作者</th>
                         <th>展示</th>
                         <th>点击</th>
                         <th>点击率</th>
                     </tr>
                 </thead>
                 <tbody id="top-videos">
-                    <tr><td colspan="4" class="empty">加载中...</td></tr>
+                    <tr><td colspan="6" class="empty">加载中...</td></tr>
                 </tbody>
             </table>
         </div>
 
         <div class="table-wrapper" style="margin-top:20px;">
-            <h3 style="padding:16px 12px 0; margin:0;">按来源统计</h3>
+            <h3 style="padding:16px 12px 0; margin:0;">按推荐位统计</h3>
             <table class="table">
                 <thead>
                     <tr>
-                        <th>推荐来源</th>
+                        <th>推荐位</th>
                         <th>展示</th>
                         <th>点击</th>
                         <th>点击率</th>
                     </tr>
                 </thead>
                 <tbody id="by-source">
-                    <tr><td colspan="4" class="empty">加载中...</td></tr>
+                    <tr><td colspan="6" class="empty">加载中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -615,7 +617,9 @@
                 data.top_performing.slice(0, 5).forEach(v => {
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
-                        <td>${v.video_id.substring(0, 8)}...</td>
+                        <td>${v.video_title || v.video_id.substring(0, 8)}</td>
+                        <td>${v.category || '-'}</td>
+                        <td>${v.author || '-'}</td>
                         <td>${v.impressions}</td>
                         <td>${v.clicks}</td>
                         <td>${(v.ctr * 100).toFixed(2)}%</td>
@@ -630,7 +634,7 @@
                     const tr = document.createElement("tr");
                     const ctr = stats.impressions > 0 ? (stats.clicks / stats.impressions) : 0;
                     tr.innerHTML = `
-                        <td>${getRecommendationBadge(source)}</td>
+                        <td>${stats.source}</td>
                         <td>${stats.impressions}</td>
                         <td>${stats.clicks}</td>
                         <td>${(ctr * 100).toFixed(2)}%</td>

@@ -181,6 +181,8 @@
     let isLiked = false;
     let isFavorited = false;
     let currentVideoId = null;
+    let recSlot = null;
+    let recRank = null;
 
     // 生成默认头像
     function getDefaultAvatar(username) {
@@ -196,6 +198,8 @@
         const videoId = urlParams.get('id');
         currentVideoId = videoId;
         const collectionId = urlParams.get('collection_id');
+        recSlot = urlParams.get('rec_slot');
+        recRank = urlParams.get('rec_rank') ? parseInt(urlParams.get('rec_rank')) : null;
 
         if (!videoId) return location.href = "/static/index.html";
 
@@ -701,6 +705,14 @@
                                 method: "POST",
                                 headers: { "Authorization": "Bearer " + token }
                             });
+                            // 追踪推荐播放
+                            if (recSlot) {
+                                await fetch("/recommendations/watch", {
+                                    method: "POST",
+                                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ video_id: video.id, watch_percent: 0, slot_name: recSlot, impression_rank: recRank })
+                                });
+                            }
                         }
                         // 更新页面上的播放次数显示
                         const viewsEl = document.getElementById("views");
