@@ -2,6 +2,19 @@
 const NAV_API_BASE = "";
 let siteConfig = { site_name: "MyVideo" }; // 默认值
 
+// 带重试的 fetch
+async function fetchWithRetry(url, options = {}, retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const res = await fetch(url, options);
+            return res;
+        } catch (e) {
+            if (i >= retries) throw e;
+            await new Promise(r => setTimeout(r, 200 * (i + 1)));
+        }
+    }
+}
+
 // 生成默认头像（使用首字母，CSS 渲染）
 function getDefaultAvatar(username) {
     const initial = username ? username.charAt(0).toUpperCase() : '?';
@@ -56,7 +69,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // 获取系统配置
 async function loadSiteConfig() {
     try {
-        const res = await fetch("/system/config");
+        const res = await fetchWithRetry("/system/config");
         if (res.ok) {
             const config = await res.json();
             if (config.site_name) {
@@ -79,7 +92,7 @@ async function checkNavUser() {
     }
 
     try {
-        const res = await fetch("/users/me", {
+        const res = await fetchWithRetry("/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
         if (res.ok) {
@@ -145,7 +158,7 @@ async function checkNavUser() {
 function pollNotifications(token) {
     const check = async () => {
         try {
-            const res = await fetch("/notifications/unread-count", {
+            const res = await fetchWithRetry("/notifications/unread-count", {
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) {
@@ -195,7 +208,7 @@ async function loadNavHistory(container) {
     if (!token) return;
 
     try {
-        const res = await fetch("/users/me/history?size=5", {
+        const res = await fetchWithRetry("/users/me/history?size=5", {
              headers: { "Authorization": "Bearer " + token }
         });
         if (res.ok) {

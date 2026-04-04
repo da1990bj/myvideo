@@ -35,14 +35,16 @@ function updateSidebarState() {
     if (!sidebar) return;
 
     if (sidebarCollapsed) {
-        sidebar.style.left = '-240px';
+        sidebar.style.left = '-300px';
         sidebar.style.boxShadow = 'none';
+        sidebar.style.borderRight = 'none';
         document.body.classList.add('sidebar-collapsed');
         if (toggleBtn) toggleBtn.style.display = 'none';
         if (floatBtn) floatBtn.style.display = 'block';
     } else {
         sidebar.style.left = '0';
         sidebar.style.boxShadow = '2px 0 10px rgba(0,0,0,0.1)';
+        sidebar.style.borderRight = '1px solid #eee';
         document.body.classList.remove('sidebar-collapsed');
         if (toggleBtn) toggleBtn.style.display = 'block';
         if (floatBtn) floatBtn.style.display = 'none';
@@ -140,8 +142,8 @@ function renderSidebar(menu) {
         .admin-link.drag-over { border-top: 2px solid #00a1d6; }
         .admin-link.drag-over-next { border-bottom: 2px solid #00a1d6; }
         .drag-handle:hover { opacity: 1 !important; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding-left: 280px; background-color: #f4f5f7; transition: padding-left 0.3s; }
-        body.sidebar-collapsed { padding-left: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0 !important; padding-left: 280px !important; background-color: #f4f5f7 !important; transition: padding-left 0.3s; }
+        body.sidebar-collapsed { padding-left: 20px !important; }
         .container, .content { padding: 20px; max-width: 100%; }
         #menu-container { min-height: 50px; }
         #sidebar-toggle-btn:hover { color: #00a1d6; }
