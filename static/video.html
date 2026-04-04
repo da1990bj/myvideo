@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>视频详情 - MyVideo</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="/static/js/hls.min.js"></script>
     <style>
         body { font-family: Roboto, Arial, sans-serif; background: #f9f9f9; margin: 0; color: #0f0f0f; }
         /* 导航栏由 nav.js 生成 */
@@ -108,7 +108,7 @@
         <h1 class="video-title" id="title">加载中...</h1>
 
         <div class="author-card">
-            <img id="author-avatar" class="author-avatar">
+            <img id="author-avatar" class="author-avatar" onerror="this.onerror=null; this.src='/static/img/default-avatar.svg'">
             <div class="author-info">
                 <div id="author-name" class="author-name"></div>
                 <div id="author-subs" class="author-subs">0 粉丝</div>
@@ -142,7 +142,7 @@
 
             <!-- 添加主评论 -->
             <div class="add-comment-row">
-                <img id="my-avatar" src="/static/img/default-avatar.svg" class="my-avatar">
+                <img id="my-avatar" src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'100'%20height%3D'100'%20viewBox%3D'0%200%20100%20100'%3E%3Crect%20width%3D'100'%20height%3D'100'%20fill%3D'%234ECDC4'%20rx%3D'50'%2F%3E%3Ctext%20x%3D'50'%20y%3D'50'%20dy%3D'.35em'%20text-anchor%3D'middle'%20fill%3D'white'%20font-size%3D'40'%20font-family%3D'Arial'%3EU%3C%2Ftext%3E%3C%2Fsvg%3E" class="my-avatar">
                 <div class="input-wrap">
                     <input type="text" id="main-comment-input" class="comment-input" placeholder="添加评论..." onfocus="showMainActions(true)" oninput="checkInput(this, 'main-submit-btn')">
                     <div class="comment-actions" id="main-actions" style="display:none;">
@@ -187,7 +187,8 @@
         const initial = username ? username.charAt(0).toUpperCase() : '?';
         const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
         const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
-        return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
@@ -346,7 +347,7 @@
             const res = await fetch("/users/me", { headers: { "Authorization": "Bearer " + token } });
             if (res.ok) {
                 currentUser = await res.json();
-                const avatar = currentUser.avatar_path || getDefaultAvatar(currentUser.username);
+                const avatar = getAvatarUrl(currentUser.avatar_path) || getDefaultAvatar(currentUser.username);
                 document.getElementById("my-avatar").src = avatar;
             }
         } catch(e) {}
@@ -432,7 +433,7 @@
         div.className = isMain ? "comment-item" : "reply-item";
         div.id = `comment-${c.id}`;
 
-        const avatar = c.user.avatar_path || getDefaultAvatar(c.user.username);
+        const avatar = getAvatarUrl(c.user.avatar_url) || getDefaultAvatar(c.user.username);
         const timeAgo = timeSince(new Date(c.created_at));
         const isOwner = currentUser && c.user.username === currentUser.username;
 
@@ -470,7 +471,7 @@
         const replyInputHtml = `
             <div id="reply-box-${c.id}" class="reply-input-box" style="margin-left: ${isMain?56:0}px;">
                 <div class="add-comment-row" style="margin-bottom:0;">
-                    <img src="${currentUser ? (currentUser.avatar_path||getDefaultAvatar(currentUser.username)) : '/static/img/default-avatar.svg'}" class="my-avatar" style="width:24px; height:24px;">
+                    <img src="${currentUser ? (getAvatarUrl(currentUser.avatar_path)||getDefaultAvatar(currentUser.username)) : '/static/img/default-avatar.svg'}" class="my-avatar" style="width:24px; height:24px;">
                     <div class="input-wrap">
                         <input type="text" id="reply-input-${c.id}" class="comment-input" placeholder="添加回复..." style="font-size:13px;">
                         <div class="comment-actions">
@@ -668,7 +669,7 @@
                 if (video.owner) {
                     currentAuthorId = video.owner.id;
                     document.getElementById("author-name").innerText = video.owner.username;
-                    const avatar = video.owner.avatar_path || getDefaultAvatar(video.owner.username);
+                    const avatar = getAvatarUrl(video.owner.avatar_path) || getDefaultAvatar(video.owner.username);
                     document.getElementById("author-avatar").src = avatar;
 
                     // 点击跳转
@@ -761,7 +762,7 @@
                                 hls.currentLevel = parseInt(e.target.value);
                             };
                         }
-                        player.play();
+                        player.play().catch(() => {});
                     });
                 } else {
                     player.src = video.processed_file_path;

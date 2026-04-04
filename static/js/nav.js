@@ -7,7 +7,17 @@ function getDefaultAvatar(username) {
     const initial = username ? username.charAt(0).toUpperCase() : '?';
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
     const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
-    return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="${color}" rx="50"/><text x="50" y="50" dy=".35em" text-anchor="middle" fill="white" font-size="40" font-family="Arial">${initial}</text></svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+// 将 avatar 文件名转换为完整 URL
+function getAvatarUrl(avatar_path) {
+    if (!avatar_path) return null;
+    // 如果已经是完整路径直接返回
+    if (avatar_path.startsWith('/')) return avatar_path;
+    // 否则拼接 /static/avatars/ 前缀
+    return '/static/avatars/' + avatar_path;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -74,7 +84,10 @@ async function checkNavUser() {
         });
         if (res.ok) {
             const user = await res.json();
-            const avatar = user.avatar_path || getDefaultAvatar(user.username);
+            console.log('[Nav] User data:', user);
+            console.log('[Nav] avatar_path:', user.avatar_path);
+            const avatar = getAvatarUrl(user.avatar_path) || getDefaultAvatar(user.username);
+            console.log('[Nav] Final avatar:', avatar.substring(0, 50) + '...');
 
             let adminLink = "";
             if (user.is_admin) {
@@ -97,7 +110,7 @@ async function checkNavUser() {
 
                 // User Menu Dropdown
                 '<div style="display:inline-block; position:relative; margin-left:16px; vertical-align:middle;" onmouseenter="showUserMenu(this)" onmouseleave="hideUserMenu(this)">' +
-                    '<img src="' + avatar + '" class="user-avatar" style="cursor:pointer;">' +
+                    '<img id="nav-user-avatar" src="' + (getAvatarUrl(user.avatar_path) || getDefaultAvatar(user.username)) + '" class="user-avatar" style="cursor:pointer;">' +
                     '<div class="user-menu-dropdown" style="display:none; position:absolute; top:100%; right:0; width:150px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15); border-radius:4px; z-index:1000; padding:8px 0; text-align:left;">' +
                         '<div style="padding:10px 16px; font-weight:bold; border-bottom:1px solid #eee; margin-bottom:5px;">' + user.username + '</div>' +
                         '<a href="/static/profile.html?id=' + user.username + '" class="menu-item" style="display:block; padding:8px 16px; color:#333; text-decoration:none; font-size:14px;">个人主页</a>' +
@@ -109,6 +122,20 @@ async function checkNavUser() {
 
 
             pollNotifications(token);
+
+            // 设置默认头像（如果 avatar_path 为空或加载失败）
+            const navAvatar = document.getElementById("nav-user-avatar");
+            if (navAvatar) {
+                if (!user.avatar_path) {
+                    navAvatar.src = getDefaultAvatar(user.username);
+                } else {
+                    navAvatar.src = getAvatarUrl(user.avatar_path);
+                    navAvatar.onerror = function() {
+                        this.src = getDefaultAvatar(user.username);
+                        this.onerror = null;
+                    };
+                }
+            }
         } else {
             localStorage.removeItem("access_token");
         }

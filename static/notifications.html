@@ -72,7 +72,7 @@
                     div.className = `notif-item ${n.is_read ? '' : 'unread'}`;
                     div.onclick = () => handleNotifClick(n, token);
 
-                    const avatar = n.sender.avatar_path || getDefaultAvatar(n.sender.username);
+                    const avatar = getAvatarUrl(n.sender.avatar_path) || getDefaultAvatar(n.sender.username);
                     const text = getNotifText(n);
                     const time = new Date(n.created_at).toLocaleString();
 
