@@ -606,6 +606,22 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        function toggleSection(id) {
+            const el = document.getElementById(id);
+            const allDetails = document.querySelectorAll('[id$="-detail"]');
+            const allArrows = document.querySelectorAll('.section-arrow');
+
+            // 关闭所有其他详情区
+            allDetails.forEach(d => {
+                if (d.id !== id) d.style.display = 'none';
+            });
+
+            // 切换当前区
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
         async function scanOrphanFiles() {
             showMessage("storage-message", "正在扫描孤立文件...", "info");
             const res = await fetch("/admin/storage/orphans", { headers });
@@ -624,21 +640,52 @@
                 } else {
                     listDiv.style.display = 'block';
                     let html = `<p style="color: #f04c49;">发现 ${data.total_count} 个孤立文件，总大小 ${formatSize(data.total_size)}：</p>`;
-                    html += '<table style="width: 100%; margin-top: 10px;">';
-                    html += '<tr><th>类型</th><th>数量</th><th>大小</th></tr>';
+
+                    // 原始视频详情
                     if (data.files.uploads.length > 0) {
                         const size = data.files.uploads.reduce((s, f) => s + f.size, 0);
-                        html += `<tr><td>原始视频</td><td>${data.files.uploads.length}</td><td>${formatSize(size)}</td></tr>`;
+                        html += `<div style="margin-top:16px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('uploads-detail')">
+                                <h4 style="margin:0;">📹 原始视频 (${data.files.uploads.length}个, ${formatSize(size)})</h4>
+                                <span>▼</span>
+                            </div>
+                            <div id="uploads-detail" style="display:none; max-height:200px; overflow-y:auto; background:#f9f9f9; padding:8px; border-radius:4px; margin-top:8px;">`;
+                        data.files.uploads.forEach(f => {
+                            html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px solid #eee; word-break:break-all;">${f.path}<br><span style="color:#666;">${formatSize(f.size)}</span></div>`;
+                        });
+                        html += `</div></div>`;
                     }
+
+                    // 转码文件详情
                     if (data.files.processed.length > 0) {
                         const size = data.files.processed.reduce((s, d) => s + d.size, 0);
-                        html += `<tr><td>转码文件</td><td>${data.files.processed.length}</td><td>${formatSize(size)}</td></tr>`;
+                        html += `<div style="margin-top:16px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('processed-detail')">
+                                <h4 style="margin:0;">🎬 转码文件 (${data.files.processed.length}个, ${formatSize(size)})</h4>
+                                <span>▼</span>
+                            </div>
+                            <div id="processed-detail" style="display:none; max-height:200px; overflow-y:auto; background:#f9f9f9; padding:8px; border-radius:4px; margin-top:8px;">`;
+                        data.files.processed.forEach(d => {
+                            html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px solid #eee; word-break:break-all;">${d.path}<br><span style="color:#666;">${formatSize(d.size)}</span></div>`;
+                        });
+                        html += `</div></div>`;
                     }
+
+                    // 缩略图详情
                     if (data.files.thumbnails.length > 0) {
                         const size = data.files.thumbnails.reduce((s, f) => s + f.size, 0);
-                        html += `<tr><td>缩略图</td><td>${data.files.thumbnails.length}</td><td>${formatSize(size)}</td></tr>`;
+                        html += `<div style="margin-top:16px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('thumbnails-detail')">
+                                <h4 style="margin:0;">🖼️ 缩略图 (${data.files.thumbnails.length}个, ${formatSize(size)})</h4>
+                                <span>▼</span>
+                            </div>
+                            <div id="thumbnails-detail" style="display:none; max-height:200px; overflow-y:auto; background:#f9f9f9; padding:8px; border-radius:4px; margin-top:8px;">`;
+                        data.files.thumbnails.forEach(f => {
+                            html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px solid #eee; word-break:break-all;">${f.path}<br><span style="color:#666;">${formatSize(f.size)}</span></div>`;
+                        });
+                        html += `</div></div>`;
                     }
-                    html += '</table>';
+
                     listDiv.innerHTML = html;
 
                     actionsDiv.style.display = 'block';
@@ -657,7 +704,19 @@
             if (!confirm(`确定要删除 ${orphanData.total_count} 个孤立文件吗？\n\n此操作不可恢复！`)) return;
 
             showMessage("storage-message", "正在删除孤立文件...", "info");
-            const res = await fetch("/admin/storage/cleanup", { method: "POST", headers });
+
+            // 收集所有孤立文件路径
+            const paths = [
+                ...orphanData.files.uploads.map(f => f.path),
+                ...orphanData.files.processed.map(d => d.path),
+                ...orphanData.files.thumbnails.map(f => f.path)
+            ];
+
+            const res = await fetch("/admin/storage/cleanup", {
+                method: "POST",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify(paths)
+            });
             if (res.ok) {
                 const data = await res.json();
                 showMessage("storage-message", `已删除 ${data.deleted_count} 个孤立文件，释放 ${formatSize(data.freed_size)} 空间`, "success");

@@ -1,7 +1,8 @@
 """
 管理后台路由
 """
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, List, Optional
 from pydantic import BaseModel
 from uuid import uuid4
 from datetime import datetime
@@ -559,7 +560,11 @@ async def get_orphan_files(
     videos = session.exec(select(Video)).all()
     video_ids = set(str(v.id) for v in videos)
 
-    orphans = []
+    orphan_files = {
+        "uploads": [],
+        "processed": [],
+        "thumbnails": []
+    }
 
     # 检查 uploads 目录
     if settings.UPLOADS_DIR.exists():
@@ -567,39 +572,114 @@ async def get_orphan_files(
             if f.is_file():
                 file_uuid = f.stem
                 if file_uuid not in video_ids:
-                    orphans.append({
+                    orphan_files["uploads"].append({
                         "path": str(f),
                         "size": f.stat().st_size,
                         "reason": "uploads_not_in_db"
                     })
 
-    return orphans
+    # 检查 processed 目录（孤立视频目录）
+    if settings.PROCESSED_DIR.exists():
+        for d in settings.PROCESSED_DIR.iterdir():
+            if d.is_dir():
+                dir_uuid = d.name
+                if dir_uuid not in video_ids:
+                    # 计算目录大小
+                    total_size = sum(f.stat().st_size for f in d.rglob('*') if f.is_file())
+                    orphan_files["processed"].append({
+                        "path": str(d),
+                        "size": total_size,
+                        "reason": "processed_not_in_db"
+                    })
+
+    # 检查 thumbnails 目录
+    if settings.THUMBNAILS_DIR.exists():
+        for f in settings.THUMBNAILS_DIR.iterdir():
+            if f.is_file():
+                file_uuid = f.stem
+                # 缩略图文件名格式: video_id_timestamp.jpg
+                # 检查是否是某个视频的缩略图
+                is_orphan = True
+                for vid in video_ids:
+                    if file_uuid.startswith(vid):
+                        is_orphan = False
+                        break
+                if is_orphan:
+                    orphan_files["thumbnails"].append({
+                        "path": str(f),
+                        "size": f.stat().st_size,
+                        "reason": "thumbnail_not_in_db"
+                    })
+
+    # 计算总数和总大小
+    total_count = len(orphan_files["uploads"]) + len(orphan_files["processed"]) + len(orphan_files["thumbnails"])
+    total_size = sum(f["size"] for f in orphan_files["uploads"]) + \
+                 sum(d["size"] for d in orphan_files["processed"]) + \
+                 sum(f["size"] for f in orphan_files["thumbnails"])
+
+    return {
+        "total_count": total_count,
+        "total_size": total_size,
+        "files": orphan_files
+    }
 
 
 @router.post("/storage/cleanup")
 async def cleanup_orphan_files(
-    paths: List[str] = Body(...),
     admin: User = Depends(PermissionChecker("*")),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    request_data: Any = Body(...)
 ):
     """清理孤立文件"""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # 支持两种格式: {"paths": [...]} 或直接是数组 [...]
+    if isinstance(request_data, list):
+        paths = request_data
+    elif isinstance(request_data, dict):
+        paths = request_data.get("paths", [])
+    else:
+        paths = []
+
+    if not isinstance(paths, list):
+        paths = []
+
     deleted_count = 0
     freed_size = 0
+    errors = []
 
     for path_str in paths:
-        path = Path(path_str)
-        if path.exists() and path.is_file():
-            size = path.stat().st_size
-            path.unlink()
-            deleted_count += 1
-            freed_size += size
+        try:
+            p = Path(path_str)
+            if not p.exists():
+                errors.append(f"{path_str}: does not exist")
+                continue
+            if p.is_file():
+                size = p.stat().st_size
+                p.unlink()
+                deleted_count += 1
+                freed_size += size
+            elif p.is_dir():
+                import shutil
+                size = sum(f.stat().st_size for f in p.rglob('*') if f.is_file())
+                shutil.rmtree(p)
+                deleted_count += 1
+                freed_size += size
+        except Exception as e:
+            errors.append(f"{path_str}: {str(e)}")
 
-    log_admin_action(session, admin.id, "cleanup_orphans", None, f"Deleted {deleted_count} files, freed {freed_size} bytes")
-    session.commit()
+    try:
+        log_admin_action(session, admin.id, "cleanup_orphans", None, f"Deleted {deleted_count} files, freed {freed_size} bytes")
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        errors.append(f"log_admin_action failed: {str(e)}")
 
     return {
         "deleted_count": deleted_count,
-        "freed_size": freed_size
+        "freed_size": freed_size,
+        "errors": errors
     }
 
 
