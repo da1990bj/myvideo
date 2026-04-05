@@ -2,19 +2,22 @@
 视频相关路由
 """
 from typing import List, Optional
-from uuid import uuid4
+from uuid import uuid4, UUID
+from pathlib import Path
+from datetime import datetime
 import io
+import json
 import os
 import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Query, status
 from sqlmodel import Session, select
 
 from database import get_session
 from data_models import (
     Video, VideoRead, VideoUpdate, VideoLike, VideoFavorite,
     Comment, Category, User, Role, UserRole, VideoAuditLog, CollectionItem,
-    TranscodeTask
+    TranscodeTask, UploadSession, UploadSessionRead, Notification
 )
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags
 from tasks import transcode_video_task
@@ -243,7 +246,7 @@ async def get_video(
 async def update_video(
     video_id: str,
     video_update: VideoUpdate,
-    current_user: User = Depends(PermissionChecker("video:edit")),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
@@ -258,12 +261,30 @@ async def update_video(
 
     # 更新字段
     update_data = video_update.model_dump(exclude_unset=True)
+
+    # 处理临时封面路径
+    temp_thumb = update_data.pop("temp_thumbnail_path", None)
+    if temp_thumb:
+        # 删除旧封面
+        old_thumb = settings.fs_path(video.thumbnail_path) if video.thumbnail_path else None
+        if old_thumb and old_thumb.exists():
+            try:
+                old_thumb.unlink()
+            except:
+                pass
+        # 更新封面路径
+        video.thumbnail_path = temp_thumb
+
+    # 处理标签（tags 是只读 property，需要单独处理）
+    if "tags" in update_data:
+        update_data.pop("tags")
+
     for key, value in update_data.items():
         setattr(video, key, value)
 
     # 处理标签
     if video_update.tags is not None:
-        tag_list = [t.strip() for t in video_update.tags.split(",") if t.strip()]
+        tag_list = [t.strip() for t in video_update.tags if t.strip()]
         process_tags(session, video, tag_list)
 
     session.add(video)
@@ -770,13 +791,15 @@ async def delete_comment(
 @router.post("/videos/{video_id}/thumbnail/regenerate")
 async def regenerate_thumbnail(
     video_id: str,
-    current_user: User = Depends(PermissionChecker("video:edit")),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
-    重新生成视频封面
+    重新生成视频封面（同步执行）
     """
-    from tasks import regenerate_thumbnail_task
+    import random
+    import subprocess
+    import time as time_module
 
     video = session.get(Video, video_id)
     if not video:
@@ -785,20 +808,61 @@ async def regenerate_thumbnail(
     if video.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    regenerate_thumbnail_task.delay(video_id)
+    try:
+        # 处理两种路径格式：完整路径 或 URL路径
+        orig_path = video.original_file_path
+        if orig_path.startswith("/data/myvideo"):
+            input_path = Path(orig_path)
+        else:
+            input_path = settings.fs_path(orig_path)
 
-    return {"message": "Thumbnail regeneration started"}
+        # 获取视频时长
+        probe_json = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", input_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        data = json.loads(probe_json.stdout)
+        total_duration = float(data['format']['duration'])
+
+        # 随机时间点
+        random_time = random.uniform(1, max(1, total_duration - 1))
+        m, s = divmod(int(random_time), 60)
+        h, m = divmod(m, 60)
+        timestamp = f"{h:02d}:{m:02d}:{s:02d}"
+
+        # 生成新文件名
+        new_filename = f"{video.id}_{int(time_module.time())}.jpg"
+        thumb_rel_path = f"/static/thumbnails/{new_filename}"
+        thumb_abs_path = str(settings.THUMBNAILS_DIR / new_filename)
+
+        # 删除旧封面
+        old_thumb_path = settings.fs_path(video.thumbnail_path) if video.thumbnail_path else None
+        if old_thumb_path and old_thumb_path.exists():
+            try:
+                old_thumb_path.unlink()
+            except:
+                pass
+
+        # 生成新封面（不保存到数据库，只返回路径，等用户保存时再更新）
+        subprocess.run([
+            "ffmpeg", "-ss", timestamp, "-i", input_path, "-vframes", "1", thumb_abs_path, "-y"
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        return {"url": thumb_rel_path, "timestamp": timestamp}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成封面失败: {str(e)}")
 
 
 @router.post("/videos/{video_id}/thumbnail/upload")
 async def upload_thumbnail(
     video_id: str,
     file: UploadFile = File(...),
-    current_user: User = Depends(PermissionChecker("video:edit")),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
-    上传视频封面
+    上传视频封面（只保存文件，返回路径由用户决定是否保存）
     """
     video = session.get(Video, video_id)
     if not video:
@@ -812,18 +876,14 @@ async def upload_thumbnail(
 
     # 保存文件
     ext = os.path.splitext(file.filename)[1] or ".jpg"
-    filename = f"{video_id}{ext}"
-    thumb_path = settings.THUMBNAILS_DIR / filename
+    filename = f"{video_id}_{int(__import__('time').time())}{ext}"
+    thumb_rel_path = f"/static/thumbnails/{filename}"
+    thumb_abs_path = settings.THUMBNAILS_DIR / filename
 
-    with open(thumb_path, "wb") as buffer:
+    with open(thumb_abs_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 更新数据库
-    video.thumbnail_path = f"/static/thumbnails/{filename}"
-    session.add(video)
-    session.commit()
-
-    return {"thumbnail_path": video.thumbnail_path}
+    return {"thumbnail_path": thumb_rel_path}
 
 
 @router.get("/categories", response_model=List[Category])
@@ -837,7 +897,7 @@ async def get_categories(session: Session = Depends(get_session)):
 @router.post("/videos/{video_id}/complete")
 async def mark_video_complete(
     video_id: str,
-    current_user: User = Depends(PermissionChecker("video:edit")),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
@@ -1105,4 +1165,404 @@ async def get_video_queue_info(
         "current_user_credits": current_user.credits,
         "bump_cost": get_transcode_config().get("bump_cost", 5),
         "message": f"前面还有 {len(ahead_count)} 个任务"
+    }
+
+
+@router.post("/videos/{video_id}/appeal")
+async def appeal_video(
+    video_id: str,
+    reason: str = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    用户对被下架的视频提起申诉
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if video.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if video.status != "banned":
+        raise HTTPException(status_code=400, detail="Only banned videos can be appealed")
+
+    video.status = "appealing"
+    session.add(video)
+
+    log = VideoAuditLog(
+        video_id=video_id,
+        operator_id=current_user.id,
+        action="appeal",
+        reason=reason
+    )
+    session.add(log)
+
+    session.commit()
+
+    return {"ok": True}
+
+
+@router.get("/videos/{video_id}/audit-logs")
+async def get_audit_logs(
+    video_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    获取视频的审核日志
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if not current_user.is_admin and video.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    logs = session.exec(
+        select(VideoAuditLog).where(
+            VideoAuditLog.video_id == video_id
+        ).order_by(VideoAuditLog.created_at.desc())
+    ).all()
+
+    result = []
+    for l in logs:
+        op = session.get(User, l.operator_id)
+        result.append({
+            "action": l.action,
+            "reason": l.reason,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+            "operator_name": op.username if op else "Unknown",
+            "is_admin": op.is_admin if op else False
+        })
+
+    return result
+
+
+# ==================== 分片上传接口 ====================
+
+CHUNK_SIZE = 5 * 1024 * 1024  # 5MB per chunk
+
+
+@router.post("/upload-sessions/init")
+async def init_upload_session(
+    filename: str = Form(...),
+    file_size: int = Form(...),
+    title: str = Form(...),
+    description: str = Form(""),
+    category_id: int = Form(None),
+    visibility: str = Form("public"),
+    tags: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    初始化分片上传会话
+    """
+    total_chunks = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+    session_id = str(uuid4())
+    temp_dir = settings.UPLOADS_DIR / f".chunks_{session_id}"
+
+    # 创建临时目录
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # 创建会话记录
+    upload_session = UploadSession(
+        id=uuid4(),
+        user_id=current_user.id,
+        filename=filename,
+        file_size=file_size,
+        chunk_size=CHUNK_SIZE,
+        total_chunks=total_chunks,
+        uploaded_chunks=[],
+        temp_dir=str(temp_dir),
+        title=title,
+        description=description,
+        category_id=category_id,
+        visibility=visibility,
+        tags=tags
+    )
+    session.add(upload_session)
+    session.commit()
+
+    return {
+        "session_id": str(upload_session.id),
+        "total_chunks": total_chunks,
+        "chunk_size": CHUNK_SIZE,
+        "uploaded_chunks": []
+    }
+
+
+@router.post("/upload-sessions/{session_id}/chunks/{chunk_index}")
+async def upload_chunk(
+    session_id: str,
+    chunk_index: int,
+    chunk: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    上传单个分片
+    """
+    # 确保 session_id 是 UUID 格式
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    upload_session = session.exec(
+        select(UploadSession).where(UploadSession.id == session_uuid)
+    ).first()
+
+    if not upload_session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    if str(upload_session.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if upload_session.status != "uploading":
+        raise HTTPException(status_code=400, detail="Upload session is not active")
+
+    if chunk_index in upload_session.uploaded_chunks:
+        # 分片已上传，直接返回成功
+        return {"message": "Chunk already uploaded", "chunk_index": chunk_index}
+
+    # 保存分片文件
+    chunk_path = Path(upload_session.temp_dir) / f"chunk_{chunk_index}"
+    with open(chunk_path, "wb") as f:
+        shutil.copyfileobj(chunk.file, f)
+
+    # 更新已上传分片
+    chunks = list(upload_session.uploaded_chunks or [])
+    chunks.append(chunk_index)
+    chunks.sort()
+    upload_session.uploaded_chunks = chunks
+    upload_session.updated_at = datetime.utcnow()
+    session.add(upload_session)
+    session.commit()
+    session.refresh(upload_session)  # 刷新确保获取最新数据
+
+    # 计算进度并推送
+    progress = len(upload_session.uploaded_chunks) / upload_session.total_chunks * 100
+    socketio_handler.publish_upload_progress(
+        str(current_user.id),
+        str(upload_session.id),
+        progress,
+        len(upload_session.uploaded_chunks),
+        upload_session.total_chunks,
+        settings.REDIS_URL
+    )
+
+    return {
+        "message": "Chunk uploaded",
+        "chunk_index": chunk_index,
+        "uploaded_chunks": len(upload_session.uploaded_chunks),
+        "total_chunks": upload_session.total_chunks,
+        "progress": progress
+    }
+
+
+@router.post("/upload-sessions/{session_id}/complete")
+async def complete_upload_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    完成分片上传，合并所有分片并创建视频
+    """
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    upload_session = session.exec(
+        select(UploadSession).where(UploadSession.id == session_uuid)
+    ).first()
+
+    if not upload_session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    if str(upload_session.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if upload_session.status != "uploading":
+        raise HTTPException(status_code=400, detail="Upload session is not active")
+
+    # 检查分片是否全部上传
+    if len(upload_session.uploaded_chunks) != upload_session.total_chunks:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing chunks. Uploaded {len(upload_session.uploaded_chunks)}/{upload_session.total_chunks}"
+        )
+
+    # 合并分片
+    temp_dir = Path(upload_session.temp_dir)
+    final_path = settings.UPLOADS_DIR / f"{session_id}.mp4"
+
+    with open(final_path, "wb") as outfile:
+        for i in range(upload_session.total_chunks):
+            chunk_path = temp_dir / f"chunk_{i}"
+            with open(chunk_path, "rb") as infile:
+                shutil.copyfileobj(infile, outfile)
+
+    # 清理临时文件
+    shutil.rmtree(temp_dir)
+
+    # 创建视频记录
+    video = Video(
+        user_id=current_user.id,
+        title=upload_session.title or upload_session.filename,
+        description=upload_session.description or "",
+        category_id=upload_session.category_id,
+        visibility=upload_session.visibility,
+        tags=upload_session.tags,
+        original_file_path=f"/static/videos/uploads/{session_id}.mp4",
+        status="pending",
+        progress=0
+    )
+    session.add(video)
+    session.commit()
+    session.refresh(video)
+
+    # 更新上传会话状态
+    upload_session.status = "completed"
+    upload_session.video_id = video.id
+    upload_session.updated_at = datetime.utcnow()
+    session.add(upload_session)
+    session.commit()
+
+    # 清理上传会话
+    session.exec(
+        select(UploadSession).where(
+            UploadSession.id == session_id,
+            UploadSession.status == "completed"
+        )
+    )
+    session.commit()
+
+    # 触发转码任务
+    transcode_video_task.delay(str(video.id))
+
+    # 推送完成事件
+    socketio_handler.publish_upload_complete(
+        str(current_user.id),
+        str(upload_session.id),
+        str(video.id),
+        settings.REDIS_URL
+    )
+
+    return {
+        "message": "Upload completed",
+        "video_id": str(video.id),
+        "status": "pending_transcode"
+    }
+
+
+@router.delete("/upload-sessions/{session_id}")
+async def cancel_upload_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    取消上传会话，删除临时文件
+    """
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    upload_session = session.exec(
+        select(UploadSession).where(UploadSession.id == session_uuid)
+    ).first()
+
+    if not upload_session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    if str(upload_session.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if upload_session.status != "uploading":
+        raise HTTPException(status_code=400, detail="Upload session is not active")
+
+    # 删除临时目录
+    temp_dir = Path(upload_session.temp_dir)
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+
+    # 更新状态为已取消
+    upload_session.status = "cancelled"
+    session.add(upload_session)
+    session.commit()
+
+    return {"message": "Upload session cancelled"}
+
+
+@router.get("/upload-sessions")
+async def get_upload_sessions(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    获取用户正在进行的上传会话
+    """
+    sessions = session.exec(
+        select(UploadSession).where(
+            UploadSession.user_id == current_user.id,
+            UploadSession.status == "uploading"
+        )
+    ).all()
+
+    result = []
+    for s in sessions:
+        result.append({
+            "session_id": str(s.id),
+            "filename": s.filename,
+            "file_size": s.file_size,
+            "total_chunks": s.total_chunks,
+            "uploaded_chunks": len(s.uploaded_chunks),
+            "progress": len(s.uploaded_chunks) / s.total_chunks * 100 if s.total_chunks > 0 else 0,
+            "title": s.title,
+            "created_at": s.created_at.isoformat()
+        })
+    return result
+
+
+@router.get("/upload-sessions/{session_id}")
+async def get_upload_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    获取特定上传会话状态
+    """
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    upload_session = session.exec(
+        select(UploadSession).where(UploadSession.id == session_uuid)
+    ).first()
+
+    if not upload_session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    if str(upload_session.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return {
+        "session_id": str(upload_session.id),
+        "filename": upload_session.filename,
+        "file_size": upload_session.file_size,
+        "total_chunks": upload_session.total_chunks,
+        "uploaded_chunks": len(upload_session.uploaded_chunks),
+        "uploaded_chunk_indexes": upload_session.uploaded_chunks,
+        "progress": len(upload_session.uploaded_chunks) / upload_session.total_chunks * 100 if upload_session.total_chunks > 0 else 0,
+        "status": upload_session.status,
+        "title": upload_session.title,
+        "created_at": upload_session.created_at.isoformat()
     }

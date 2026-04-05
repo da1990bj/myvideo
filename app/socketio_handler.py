@@ -65,6 +65,61 @@ def publish_notification_count(user_id: str, count: int, redis_url: str = None):
             logger.warning(f"Failed to publish notification count: {e}")
 
 
+def publish_upload_progress(user_id: str, session_id: str, progress: float,
+                            uploaded_chunks: int, total_chunks: int, redis_url: str = None):
+    """
+    发布上传进度更新到 Redis 频道
+
+    Args:
+        user_id: 用户ID
+        session_id: 上传会话ID
+        progress: 进度百分比 (0-100)
+        uploaded_chunks: 已上传分片数
+        total_chunks: 总分片数
+        redis_url: Redis URL
+    """
+    import json
+    client = ensure_redis_client(redis_url) if redis_url else _redis_client
+    if client:
+        try:
+            payload = json.dumps({
+                "user_id": str(user_id),
+                "session_id": session_id,
+                "progress": progress,
+                "uploaded_chunks": uploaded_chunks,
+                "total_chunks": total_chunks,
+                "type": "upload_progress"
+            })
+            client.publish("upload:progress", payload)
+        except Exception as e:
+            logger.warning(f"Failed to publish upload progress: {e}")
+
+
+def publish_upload_complete(user_id: str, session_id: str, video_id: str, redis_url: str = None):
+    """
+    发布上传完成事件到 Redis 频道
+
+    Args:
+        user_id: 用户ID
+        session_id: 上传会话ID
+        video_id: 视频ID
+        redis_url: Redis URL
+    """
+    import json
+    client = ensure_redis_client(redis_url) if redis_url else _redis_client
+    if client:
+        try:
+            payload = json.dumps({
+                "user_id": str(user_id),
+                "session_id": session_id,
+                "video_id": video_id,
+                "type": "upload_complete"
+            })
+            client.publish("upload:progress", payload)
+        except Exception as e:
+            logger.warning(f"Failed to publish upload complete: {e}")
+
+
 class ConnectionManager:
     """
     用户连接池管理器 (保留内存模式，与 socketio 实例配合使用)
@@ -189,6 +244,69 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error pushing notification count to user {user_id}: {e}")
 
+    async def push_upload_progress(self, sio, user_id: str, session_id: str, progress: float,
+                                  uploaded_chunks: int, total_chunks: int):
+        """
+        推送上传进度给用户
+
+        Args:
+            sio: Socket.IO AsyncServer实例
+            user_id: 目标用户ID
+            session_id: 上传会话ID
+            progress: 进度百分比
+            uploaded_chunks: 已上传分片数
+            total_chunks: 总分片数
+        """
+        if user_id not in self.active_connections:
+            logger.debug(f"User {user_id} not connected, skipping upload progress push")
+            return
+
+        try:
+            sid = self.active_connections[user_id]
+            await sio.emit(
+                'upload_progress',
+                {
+                    'session_id': session_id,
+                    'progress': progress,
+                    'uploaded_chunks': uploaded_chunks,
+                    'total_chunks': total_chunks,
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                room=sid
+            )
+            logger.debug(f"Pushed upload progress {progress}% for session {session_id} to user {user_id}")
+        except Exception as e:
+            logger.error(f"Error pushing upload progress to user {user_id}: {e}")
+
+    async def push_upload_complete(self, sio, user_id: str, session_id: str, video_id: str):
+        """
+        推送上传完成事件给用户
+
+        Args:
+            sio: Socket.IO AsyncServer实例
+            user_id: 目标用户ID
+            session_id: 上传会话ID
+            video_id: 视频ID
+        """
+        if user_id not in self.active_connections:
+            logger.debug(f"User {user_id} not connected, skipping upload complete push")
+            return
+
+        try:
+            sid = self.active_connections[user_id]
+            await sio.emit(
+                'upload_complete',
+                {
+                    'session_id': session_id,
+                    'video_id': video_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                room=sid
+            )
+            logger.debug(f"Pushed upload complete for session {session_id} to user {user_id}")
+        except Exception as e:
+            logger.error(f"Error pushing upload complete to user {user_id}: {e}")
+
     async def broadcast_transcode_update(self, sio, event: str, data: dict):
         """
         广播转码队列更新给所有管理员
@@ -270,6 +388,7 @@ async def start_redis_listener(sio, redis_url: str):
         await pubsub.subscribe("transcode:progress")
         await pubsub.subscribe("transcode:admin")
         await pubsub.subscribe("notifications:count")
+        await pubsub.subscribe("upload:progress")
 
         logger.info("Redis Pub/Sub listener started")
 
@@ -318,6 +437,28 @@ async def start_redis_listener(sio, redis_url: str):
                                     count=count
                                 )
 
+                        elif channel == "upload:progress":
+                            # 推送上传进度给用户
+                            user_id = payload.get("user_id")
+                            msg_type = payload.get("type")
+                            if user_id:
+                                if msg_type == "upload_complete":
+                                    await manager.push_upload_complete(
+                                        sio=sio,
+                                        user_id=str(user_id),
+                                        session_id=payload.get("session_id", ""),
+                                        video_id=payload.get("video_id", "")
+                                    )
+                                else:
+                                    await manager.push_upload_progress(
+                                        sio=sio,
+                                        user_id=str(user_id),
+                                        session_id=payload.get("session_id", ""),
+                                        progress=payload.get("progress", 0),
+                                        uploaded_chunks=payload.get("uploaded_chunks", 0),
+                                        total_chunks=payload.get("total_chunks", 0)
+                                    )
+
                     except json.JSONDecodeError:
                         logger.warning(f"Invalid JSON in Redis message: {data}")
                     except Exception as e:
@@ -331,4 +472,5 @@ async def start_redis_listener(sio, redis_url: str):
             await pubsub.unsubscribe()
             await redis_client.close()
 
-    return listen()
+    # 启动 listen 作为后台任务
+    asyncio.create_task(listen())

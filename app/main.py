@@ -83,9 +83,8 @@ async def lifespan(app: FastAPI):
 
     # 启动 Redis Pub/Sub 监听器（接收 Celery 任务进度推送）
     try:
-        listener_coroutine = await socketio_handler.start_redis_listener(sio, settings.REDIS_URL)
         import asyncio
-        asyncio.create_task(listener_coroutine)
+        asyncio.create_task(socketio_handler.start_redis_listener(sio, settings.REDIS_URL))
         logger.info("✅ Redis Pub/Sub 监听器已启动")
     except Exception as e:
         logger.warning(f"⚠️ Redis Pub/Sub 监听器启动失败: {e}")

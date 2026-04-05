@@ -383,6 +383,7 @@ class VideoUpdate(SQLModel):
     category_id: Optional[int] = None
     visibility: Optional[str] = None
     tags: Optional[List[str]] = None
+    temp_thumbnail_path: Optional[str] = None
 
 class VideoRead(SQLModel):
     id: UUID
@@ -639,3 +640,46 @@ class TranscodeTaskUpdate(SQLModel):
     priority_type: Optional[str] = None
     queue_name: Optional[str] = None
     status: Optional[str] = None
+
+
+# ==================== 分片上传会话 ====================
+
+class UploadSession(SQLModel, table=True):
+    """分片上传会话"""
+    __tablename__ = "upload_sessions"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    filename: str
+    file_size: int  # bytes
+    chunk_size: int = 5 * 1024 * 1024  # 5MB per chunk
+    total_chunks: int
+    uploaded_chunks: Optional[List[int]] = Field(default=None, sa_column=Column(JSON))  # 已上传的分片编号
+    temp_dir: str  # 临时分片存储目录
+    status: str = "uploading"  # uploading, completed, cancelled
+    video_id: Optional[UUID] = None  # 合并后关联的视频ID
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category_id: Optional[int] = None
+    visibility: Optional[str] = None
+    tags: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    owner: Optional["User"] = Relationship()
+
+
+class UploadSessionRead(SQLModel):
+    """上传会话读取"""
+    id: UUID
+    user_id: UUID
+    filename: str
+    file_size: int
+    chunk_size: int
+    total_chunks: int
+    uploaded_chunks: List[int]
+    progress: float  # 0-100
+    status: str
+    video_id: Optional[UUID] = None
+    title: Optional[str] = None
+    created_at: datetime

@@ -2,6 +2,7 @@
 管理后台路由
 """
 from typing import List, Optional
+from pydantic import BaseModel
 from uuid import uuid4
 from datetime import datetime
 import psutil
@@ -22,8 +23,13 @@ from data_models import (
 from dependencies import get_current_user, PermissionChecker, log_admin_action
 from tasks import transcode_video_task, migrate_storage_task, celery_app
 from config import settings, get_transcode_config
+import socketio_handler
 
 router = APIRouter(prefix="/admin", tags=["管理后台"])
+
+
+class BanVideoRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 # ==================== 公开配置（无需管理员权限） ====================
@@ -1306,6 +1312,7 @@ async def get_all_videos(
 @router.post("/videos/{video_id}/ban")
 async def ban_video(
     video_id: str,
+    request: BanVideoRequest = None,
     admin: User = Depends(PermissionChecker("video:ban")),
     session: Session = Depends(get_session)
 ):
@@ -1316,10 +1323,40 @@ async def ban_video(
 
     video.status = "banned"
     session.add(video)
+
+    # 记录审核日志
+    audit_log = VideoAuditLog(
+        video_id=video_id,
+        operator_id=admin.id,
+        action="ban",
+        reason=request.reason or "Video banned"
+    )
+    session.add(audit_log)
+
+    # 发送通知给视频所有者
+    if video.user_id:
+        notif = Notification(
+            sender_id=admin.id,
+            recipient_id=video.user_id,
+            type="system",
+            entity_id=str(video.id),
+            content=f"您的视频《{video.title}》因「{request.reason or '违规内容'}」已被下架"
+        )
+        session.add(notif)
+
     session.commit()
 
-    log_admin_action(session, admin.id, "ban_video", video_id, "Video banned")
-    session.commit()
+    # 发送 WebSocket 通知
+    if video.user_id:
+        unread_count = session.exec(
+            select(Notification).where(
+                Notification.recipient_id == str(video.user_id),
+                Notification.is_read == False
+            )
+        ).all()
+        socketio_handler.publish_notification_count(str(video.user_id), len(unread_count), settings.REDIS_URL)
+
+    log_admin_action(session, admin.id, "ban_video", video_id, f"Video banned: {request.reason}")
 
     return {"message": "Video banned"}
 
@@ -1335,21 +1372,42 @@ async def approve_video(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    video.status = "completed"
+    video.status = "approved"
     session.add(video)
 
     # 记录审核日志
     audit_log = VideoAuditLog(
         video_id=video_id,
+        operator_id=admin.id,
         action="approve",
-        admin_id=admin.id,
         reason="Approved by admin"
     )
     session.add(audit_log)
+
+    # 发送通知给视频所有者
+    if video.user_id:
+        notif = Notification(
+            sender_id=admin.id,
+            recipient_id=video.user_id,
+            type="system",
+            entity_id=str(video.id),
+            content=f"您的视频《{video.title}》已通过审核并上架"
+        )
+        session.add(notif)
+
     session.commit()
 
+    # 发送 WebSocket 通知
+    if video.user_id:
+        unread_count = session.exec(
+            select(Notification).where(
+                Notification.recipient_id == str(video.user_id),
+                Notification.is_read == False
+            )
+        ).all()
+        socketio_handler.publish_notification_count(str(video.user_id), len(unread_count), settings.REDIS_URL)
+
     log_admin_action(session, admin.id, "approve_video", video_id, "Video approved")
-    session.commit()
 
     return {"message": "Video approved"}
 
@@ -1372,15 +1430,44 @@ async def update_video_status(
 
     audit_log = VideoAuditLog(
         video_id=video_id,
+        operator_id=admin.id,
         action="status_change",
-        admin_id=admin.id,
         reason=f"Status changed from {old_status} to {status}"
     )
     session.add(audit_log)
+
+    # 发送通知给视频所有者
+    if video.user_id:
+        status_msg = {
+            "approved": "已通过审核并上架",
+            "banned": "已被下架",
+            "appealing": "申诉中",
+            "pending": "待审核",
+            "processing": "处理中"
+        }.get(status, f"状态变更为 {status}")
+
+        notif = Notification(
+            sender_id=admin.id,
+            recipient_id=video.user_id,
+            type="system",
+            entity_id=str(video.id),
+            content=f"您的视频《{video.title}》{status_msg}"
+        )
+        session.add(notif)
+
     session.commit()
 
+    # 发送 WebSocket 通知
+    if video.user_id:
+        unread_count = session.exec(
+            select(Notification).where(
+                Notification.recipient_id == str(video.user_id),
+                Notification.is_read == False
+            )
+        ).all()
+        socketio_handler.publish_notification_count(str(video.user_id), len(unread_count), settings.REDIS_URL)
+
     log_admin_action(session, admin.id, "update_video_status", video_id, f"Status: {old_status} -> {status}")
-    session.commit()
 
     return {"message": "Video status updated"}
 
