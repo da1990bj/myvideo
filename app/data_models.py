@@ -164,6 +164,27 @@ class UserVideoHistory(SQLModel, table=True):
     last_watched: datetime = Field(default_factory=datetime.utcnow)
     is_finished: bool = Field(default=False)
 
+# 匿名用户播放记录（防刷）
+class AnonymousViewHistory(SQLModel, table=True):
+    __tablename__ = "anonymous_view_history"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    anonymous_id: str = Field(index=True)
+    video_id: UUID = Field(foreign_key="videos.id", index=True)
+    view_count: int = Field(default=1)
+    first_viewed_at: datetime = Field(default_factory=datetime.utcnow)
+    last_viewed_at: datetime = Field(default_factory=datetime.utcnow)
+
+# 匿名播放统计Token（一次性）
+class ViewToken(SQLModel, table=True):
+    __tablename__ = "view_tokens"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    token: str = Field(unique=True, index=True)
+    video_id: UUID = Field(foreign_key="videos.id", index=True)
+    anonymous_id: str = Field(index=True)
+    used: bool = Field(default=False)
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 # 评论系统
 class Comment(SQLModel, table=True):
     __tablename__ = "comments"

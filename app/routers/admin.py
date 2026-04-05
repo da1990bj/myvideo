@@ -659,6 +659,17 @@ async def get_transcode_queue(
     # 执行查询
     tasks = session.exec(query.order_by(desc(TranscodeTask.priority), TranscodeTask.created_at)).all()
 
+    # 清理 stale 任务：如果视频已完成/批准但任务仍为 processing，自动更新任务状态
+    for task in tasks:
+        if task.status == "processing" and task.completed_at is None:
+            video = session.get(Video, task.video_id)
+            if video and video.status in ("completed", "approved", "failed", "banned"):
+                task.status = "completed" if video.status in ("completed", "approved") else video.status
+                task.completed_at = datetime.utcnow()
+                session.add(task)
+    if tasks:
+        session.commit()
+
     # 获取视频和用户信息
     result = []
     for task in tasks:

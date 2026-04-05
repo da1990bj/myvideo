@@ -4,14 +4,16 @@
 from typing import List, Optional
 from uuid import uuid4, UUID
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import json
 import os
 import shutil
+import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Query, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Query, status, Request
 from sqlmodel import Session, select
+from sqlalchemy import and_
 
 from database import get_session
 from data_models import (
@@ -363,24 +365,153 @@ async def delete_video(
     return {"message": "Video deleted"}
 
 
+@router.get("/videos/{video_id}/view-token")
+async def get_view_token(
+    video_id: str,
+    anonymous_id: Optional[str] = Query(None),
+    session: Session = Depends(get_session)
+):
+    """为匿名用户获取播放统计token"""
+    if not anonymous_id:
+        raise HTTPException(status_code=400, detail="anonymous_id required")
+
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # 检查是否已有未过期的token
+    from data_models import ViewToken
+    existing = session.exec(
+        select(ViewToken).where(
+            and_(
+                ViewToken.anonymous_id == anonymous_id,
+                ViewToken.video_id == video_id,
+                ViewToken.used == False,
+                ViewToken.expires_at > datetime.utcnow()
+            )
+        )
+    ).first()
+
+    if existing:
+        return {"token": existing.token, "expires_in": 300}
+
+    # 创建新token（5分钟有效）
+    token = ViewToken(
+        token=secrets.token_urlsafe(32),
+        video_id=video_id,
+        anonymous_id=anonymous_id,
+        expires_at=datetime.utcnow() + timedelta(minutes=5)
+    )
+    session.add(token)
+    session.commit()
+
+    return {"token": token.token, "expires_in": 300}
+
+
 @router.post("/videos/{video_id}/view")
 async def record_view(
     video_id: str,
+    anonymous_id: Optional[str] = Body(None, embed=True),
+    token: Optional[str] = Body(None, embed=True),
     current_user: Optional[User] = Depends(get_current_user_optional),
     session: Session = Depends(get_session)
 ):
     """
     记录视频播放次数
+
+    防刷规则：
+    - 已登录用户：每视频1小时最多计1次
+    - 未登录用户：每设备每视频1小时最多计1次，需有效ViewToken
     """
     video = session.get(Video, video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    video.views = (video.views or 0) + 1
+    # 已登录用户：使用 UserVideoHistory 检查1小时冷却
+    if current_user:
+        from data_models import UserVideoHistory
+        existing = session.exec(
+            select(UserVideoHistory).where(
+                and_(
+                    UserVideoHistory.user_id == current_user.id,
+                    UserVideoHistory.video_id == video_id
+                )
+            )
+        ).first()
+
+        if existing:
+            if (datetime.utcnow() - existing.last_watched).total_seconds() < 3600:
+                return {"views": video.views, "status": "cooldown"}
+            existing.last_watched = datetime.utcnow()
+            existing.progress = 0
+            session.add(existing)
+        else:
+            new_record = UserVideoHistory(
+                user_id=current_user.id,
+                video_id=video_id,
+                progress=0
+            )
+            session.add(new_record)
+
+        video.views = (video.views or 0) + 1
+
+    # 匿名用户：使用 ViewToken + AnonymousViewHistory
+    elif anonymous_id and token:
+        from data_models import ViewToken, AnonymousViewHistory
+
+        # 验证token
+        view_token = session.exec(
+            select(ViewToken).where(
+                and_(
+                    ViewToken.token == token,
+                    ViewToken.video_id == video_id,
+                    ViewToken.anonymous_id == anonymous_id,
+                    ViewToken.used == False,
+                    ViewToken.expires_at > datetime.utcnow()
+                )
+            )
+        ).first()
+
+        if not view_token:
+            return {"views": video.views, "status": "invalid_token"}
+
+        # 标记token已用
+        view_token.used = True
+        session.add(view_token)
+
+        # 检查 AnonymousViewHistory 冷却
+        anon_record = session.exec(
+            select(AnonymousViewHistory).where(
+                and_(
+                    AnonymousViewHistory.anonymous_id == anonymous_id,
+                    AnonymousViewHistory.video_id == video_id
+                )
+            )
+        ).first()
+
+        if anon_record:
+            if (datetime.utcnow() - anon_record.last_viewed_at).total_seconds() < 3600:
+                return {"views": video.views, "status": "cooldown"}
+            anon_record.last_viewed_at = datetime.utcnow()
+            anon_record.view_count += 1
+            session.add(anon_record)
+        else:
+            new_anon = AnonymousViewHistory(
+                anonymous_id=anonymous_id,
+                video_id=video_id,
+                view_count=1
+            )
+            session.add(new_anon)
+
+        video.views = (video.views or 0) + 1
+
+    else:
+        # 无token：不统计
+        return {"views": video.views}
+
     session.add(video)
     session.commit()
-
-    return {"views": video.views}
+    return {"views": video.views, "status": "ok"}
 
 
 @router.post("/videos/{video_id}/progress")

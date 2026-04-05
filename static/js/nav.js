@@ -34,6 +34,16 @@ function getAvatarUrl(avatar_path) {
     return '/static/avatars/' + avatar_path;
 }
 
+// 获取或生成匿名设备ID（用于播放统计防刷）
+function getAnonymousId() {
+    let aid = localStorage.getItem('anonymous_id');
+    if (!aid) {
+        aid = 'anon_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+        localStorage.setItem('anonymous_id', aid);
+    }
+    return aid;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     // 先获取系统配置
     await loadSiteConfig();
