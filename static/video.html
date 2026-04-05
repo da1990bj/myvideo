@@ -696,6 +696,7 @@
                 let viewRecorded = false;
                 let completedRecorded = false;
                 let viewToken = null;  // 匿名用户的view token
+                let tokenPromise = null;  // 防止重复获取token
 
                 // 匿名用户获取view token
                 const fetchViewToken = async () => {
@@ -710,7 +711,7 @@
                         }
                     } catch(e) { console.error("View token error:", e); }
                 };
-                fetchViewToken();  // 提前获取token
+                fetchViewToken();  // 页面加载时提前获取token
 
                 const recordView = async () => {
                     if (viewRecorded) return;
@@ -730,14 +731,20 @@
                                     body: JSON.stringify({ video_id: video.id, watch_percent: 0, slot_name: recSlot, impression_rank: recRank })
                                 });
                             }
-                        } else if (viewToken) {
-                            // 匿名用户发送anonymous_id和token
-                            const aid = getAnonymousId();
-                            await fetch(`/videos/${video.id}/view`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ anonymous_id: aid, token: viewToken })
-                            });
+                        } else {
+                            // 匿名用户：等待token获取完成后再发送
+                            if (!tokenPromise) {
+                                tokenPromise = fetchViewToken();
+                            }
+                            await tokenPromise;
+                            if (viewToken) {
+                                const aid = getAnonymousId();
+                                await fetch(`/videos/${video.id}/view`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ anonymous_id: aid, token: viewToken })
+                                });
+                            }
                         }
                         // 更新页面上的播放次数显示
                         const viewsEl = document.getElementById("views");
