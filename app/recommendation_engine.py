@@ -141,8 +141,8 @@ class RecommendationEngine:
 
             videos = self.session.exec(statement).all()
 
-            # 如果最近N天没有视频，扩展到30天
-            if not videos:
+            # 如果视频数量少于请求的limit，扩展到30天以获取更多热门视频
+            if len(videos) < limit:
                 cutoff_date = datetime.utcnow() - timedelta(days=30)
                 statement = (
                     select(Video)
