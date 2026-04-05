@@ -335,7 +335,7 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                     status="processing"
                 )
 
-            input_path = video.original_file_path
+            input_path = settings.fs_path(video.original_file_path)
 
             # HLS 输出目录
             base_dir = os.path.dirname(input_path).replace("uploads", "processed")
@@ -478,6 +478,10 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                 task_record.completed_at = datetime.utcnow()
                 session.add(task_record)
 
+            # 保存视频状态
+            session.add(video)
+            session.commit()
+
             # 广播转码完成
             broadcast_transcode_admin("transcode_queue_changed", {
                 "video_id": str(video.id),
@@ -548,7 +552,7 @@ def regenerate_thumbnail_task(self, video_id: str):
             return {"status": "error", "message": "Video not found"}
 
         try:
-            input_path = video.original_file_path
+            input_path = settings.fs_path(video.original_file_path)
             probe = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", input_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
