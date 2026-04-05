@@ -56,6 +56,7 @@ from routers import (
     admin_router,
     collections_router,
     recommendations_router,
+    cast_router,
 )
 
 
@@ -121,6 +122,7 @@ app.include_router(social_router)
 app.include_router(admin_router)
 app.include_router(collections_router)
 app.include_router(recommendations_router)
+app.include_router(cast_router)
 
 
 # ==================== SocketIO 应用（必须在 app 和路由注册后创建）====================

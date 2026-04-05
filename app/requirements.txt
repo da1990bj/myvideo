@@ -15,3 +15,5 @@ python-socketio>=5.9
 python-engineio>=4.7
 aioredis>=2.0
 python-socketio[asyncio_client]
+python-telegram-bot>=20.0
+upnp-client>=0.2.0

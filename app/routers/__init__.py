@@ -7,6 +7,7 @@ from .social import router as social_router
 from .admin import router as admin_router
 from .collections import router as collections_router
 from .recommendations import router as recommendations_router
+from .cast import router as cast_router
 
 __all__ = [
     "auth_router",
@@ -15,4 +16,5 @@ __all__ = [
     "admin_router",
     "collections_router",
     "recommendations_router",
+    "cast_router",
 ]

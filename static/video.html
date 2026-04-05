@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>视频详情 - MyVideo</title>
     <script src="/static/js/hls.min.js"></script>
     <style>
@@ -91,6 +92,71 @@
         .action-btn.active { background: #0f0f0f; color: #fff; }
         .action-btn svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; fill: none; transition: 0.2s; }
         .action-btn.active svg { fill: currentColor; }
+
+        /* 响应式布局 - 平板 (≤1024px) */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr !important;
+                padding: 16px;
+            }
+            .sidebar {
+                width: 100%;
+                max-width: none;
+            }
+        }
+
+        /* 响应式布局 - 手机 (≤768px) */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+            .player-wrapper {
+                border-radius: 0;
+                margin: -12px -12px 12px -12px;
+            }
+            .rec-item {
+                flex-direction: column;
+            }
+            .rec-thumb {
+                width: 100%;
+                height: auto;
+            }
+            .sidebar {
+                padding: 12px;
+            }
+            .sidebar-title {
+                font-size: 14px;
+            }
+            .comment-item {
+                flex-direction: column;
+            }
+            .action-btn {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+        }
+
+        /* 响应式布局 - 小屏手机 (≤480px) */
+        @media (max-width: 480px) {
+            .video-title {
+                font-size: 16px;
+            }
+            .author-card {
+                flex-wrap: wrap;
+            }
+            .follow-btn {
+                width: 100%;
+                margin-top: 8px;
+            }
+            .action-buttons {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .video-meta {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -103,6 +169,11 @@
             <select id="quality" class="quality-selector" style="display:none;">
                 <option value="-1">Auto</option>
             </select>
+            <div id="cast-controls" style="position: absolute; top: 10px; right: 10px; z-index: 100;">
+                <button id="cast-btn" onclick="showCastDevices()" style="background: rgba(0,0,0,0.5); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    投屏
+                </button>
+            </div>
         </div>
 
         <h1 class="video-title" id="title">加载中...</h1>
@@ -1025,6 +1096,69 @@
             }
         } catch(e) { console.error(e); }
     }
+
+    // ==================== 投屏功能 ====================
+    let castDevices = [];
+
+    async function showCastDevices() {
+        try {
+            const res = await fetch('/api/cast/devices');
+            const data = await res.json();
+            castDevices = data.devices || [];
+
+            const list = document.getElementById('device-list');
+            if (castDevices.length === 0) {
+                list.innerHTML = '<p style="padding:20px; text-align:center; color:#999;">未发现可投屏设备</p>';
+            } else {
+                list.innerHTML = castDevices.map(d =>
+                    `<div onclick="castTo('${d.id}')" style="padding: 12px; border-bottom: 1px solid #eee; cursor: pointer;">${d.name}</div>`
+                ).join('');
+            }
+            document.getElementById('cast-modal').style.display = 'block';
+        } catch(e) {
+            console.error('Cast error:', e);
+            alert('获取投屏设备失败');
+        }
+    }
+
+    async function castTo(deviceId) {
+        try {
+            const res = await fetch(`/api/cast/play?device_id=${encodeURIComponent(deviceId)}&video_id=${video.id}`, {
+                method: 'POST'
+            });
+            if (res.ok) {
+                alert('投屏成功！');
+            } else {
+                const err = await res.json();
+                alert('投屏失败: ' + (err.detail || '未知错误'));
+            }
+        } catch(e) {
+            console.error('Cast error:', e);
+            alert('投屏失败');
+        }
+        closeCastModal();
+    }
+
+    function closeCastModal() {
+        document.getElementById('cast-modal').style.display = 'none';
+    }
+
+    // 点击模态框外部关闭
+    document.addEventListener('click', (e) => {
+        const modal = document.getElementById('cast-modal');
+        if (modal && e.target === modal) {
+            closeCastModal();
+        }
+    });
 </script>
+
+<!-- 投屏设备选择模态框 -->
+<div id="cast-modal" style="display:none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background: white; margin: 100px auto; padding: 20px; border-radius: 8px; max-width: 400px;">
+        <h3 style="margin: 0 0 16px; font-size: 16px;">选择投屏设备</h3>
+        <div id="device-list" style="max-height: 300px; overflow-y: auto;"></div>
+        <button onclick="closeCastModal()" style="margin-top: 16px; width: 100%; padding: 10px; border: none; background: #f0f0f0; border-radius: 4px; cursor: pointer;">关闭</button>
+    </div>
+</div>
 </body>
 </html>
