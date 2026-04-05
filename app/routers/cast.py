@@ -100,12 +100,13 @@ async def play_video(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    if not video.processed_file_path:
-        raise HTTPException(status_code=400, detail="Video not ready for playback")
+    if not video.original_file_path:
+        raise HTTPException(status_code=400, detail="Video original file not found")
 
-    # 构建视频URL
+    # 使用原始视频文件投屏（HLS格式DLNA设备不支持）
+    # 原始文件是 mp4/mkv 格式，DLNA 设备可直接播放
     server_url = get_server_url()
-    video_url = f"{server_url}{video.processed_file_path}"
+    video_url = f"{server_url}{video.original_file_path}"
 
     logger.info(f"Casting video {video_id} to device {device_id}, URL: {video_url}")
 
