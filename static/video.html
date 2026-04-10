@@ -1937,8 +1937,18 @@
             }
         });
 
-        // 键盘快捷键 - 左右方向键快进/倒退
+        // 键盘快捷键 - 空格键播放/暂停，左右方向键快进/倒退
         document.addEventListener('keydown', (e) => {
+            // 空格键播放/暂停
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (player.paused) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
+                return;
+            }
             if (!player.duration) return;
             const seekAmount = 5; // 秒
             if (e.key === 'ArrowLeft') {

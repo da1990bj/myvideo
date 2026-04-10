@@ -1034,8 +1034,14 @@
                     <h3 style="color:#333; margin-bottom:15px;">🔒 设置私密视频密码</h3>
                     <p style="color:#666; margin-bottom:20px;">首次使用私密视频功能，请先设置密码</p>
                     <div style="max-width:400px; margin:0 auto;">
-                        <input type="password" id="new-private-password" placeholder="请输入密码（至少4位）" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:10px; box-sizing:border-box;">
-                        <input type="password" id="confirm-private-password" placeholder="确认密码" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px; box-sizing:border-box;">
+                        <div style="position:relative; margin-bottom:10px;">
+                            <input type="password" id="new-private-password" placeholder="请输入密码（至少4位）" style="width:100%; padding:10px; padding-right:40px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+                            <span class="toggle-password" onclick="togglePassword(this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; color:#999; display:flex; align-items:center;"><svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                        </div>
+                        <div style="position:relative; margin-bottom:15px;">
+                            <input type="password" id="confirm-private-password" placeholder="确认密码" style="width:100%; padding:10px; padding-right:40px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+                            <span class="toggle-password" onclick="togglePassword(this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; color:#999; display:flex; align-items:center;"><svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                        </div>
                         <button onclick="setupPrivatePassword()" style="width:100%; padding:10px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">设置密码</button>
                         <div id="setup-error" style="color:red; margin-top:10px; display:none;"></div>
                     </div>
@@ -1051,7 +1057,10 @@
                     <h3 style="color:#333; margin-bottom:15px;">🔒 私密视频</h3>
                     <p style="color:#666; margin-bottom:20px;">请输入私密视频密码解锁</p>
                     <div style="max-width:400px; margin:0 auto;">
-                        <input type="password" id="private-videos-password" placeholder="请输入私密视频密码" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px; box-sizing:border-box;">
+                        <div style="position:relative; margin-bottom:15px;">
+                            <input type="password" id="private-videos-password" placeholder="请输入私密视频密码" style="width:100%; padding:10px; padding-right:40px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+                            <span class="toggle-password" onclick="togglePassword(this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; color:#999; display:flex; align-items:center;"><svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                        </div>
                         <button onclick="unlockPrivateVideos()" style="width:100%; padding:10px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">解锁</button>
                         <div id="private-password-error" style="color:red; margin-top:10px; display:none;"></div>
                         <p style="margin-top:15px; font-size:12px; color:#999;">
@@ -1114,6 +1123,17 @@
             }
         } catch (e) {
             container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">加载失败</div>';
+        }
+    }
+
+    function togglePassword(eyeIcon) {
+        const input = eyeIcon.parentElement.querySelector('input');
+        if (input.type === "password") {
+            input.type = "text";
+            eyeIcon.innerHTML = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+        } else {
+            input.type = "password";
+            eyeIcon.innerHTML = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
         }
     }
 
