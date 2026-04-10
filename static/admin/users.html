@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 用户</title>
+    <style>
+        .container { padding: 20px; background: #fff; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 600; }
+        .btn { padding: 6px 12px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; font-size: 14px; margin-right: 8px; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-success { color: #00a1d6; border-color: #00a1d6; }
+        .btn:hover { opacity: 0.8; }
+        .role-tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin: 2px; background: #e7f5ff; color: #00a1d6; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div style="padding: 20px;">
+        <h1>用户管理</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>用户名</th>
+                    <th>邮箱</th>
+                    <th>注册时间</th>
+                    <th>状态</th>
+                    <th>角色</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+
+    <!-- 角色分配模态框 -->
+    <div id="role-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+        <div style="background:#fff; width:420px; margin:80px auto; padding:25px; border-radius:8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto;">
+            <h2 style="margin-top:0; margin-bottom:15px; color:#333;">分配角色</h2>
+            <p id="user-target" style="color: #666; margin: 0 0 20px 0; font-size: 14px;">用户：</p>
+            <label style="display:block; margin-bottom: 10px; font-size: 14px; color: #333; font-weight: 500;">
+                选择角色（可多选）
+            </label>
+            <div id="role-checkboxes" style="border: 1px solid #ddd; border-radius: 4px; padding: 10px; max-height: 250px; overflow-y: auto;">
+                <!-- Role checkboxes will be inserted here -->
+            </div>
+            <div style="text-align:right; margin-top:20px;">
+                <button onclick="closeRoleModal()" style="padding:8px 16px; margin-right:10px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 14px;">取消</button>
+                <button onclick="saveUserRole()" style="padding:8px 16px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size: 14px;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadUsers);
+
+        async function loadUsers() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/users?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const users = await res.json();
+                const tbody = document.getElementById("list");
+                tbody.innerHTML = "";
+                users.forEach(u => {
+                    const tr = document.createElement("tr");
+                    const roleTags = u.role_names && u.role_names.length > 0
+                        ? u.role_names.map(name => `<span class="role-tag">${getRoleDisplayName(name)}</span>`).join('')
+                        : '<span style="color:#999;">无角色</span>';
+                    tr.innerHTML = `
+                        <td>${u.username} ${u.is_admin ? '<span style="color:red">[管理员]</span>' : ''}</td>
+                        <td>${u.email}</td>
+                        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                        <td>${u.is_active ? '正常' : '封禁'}</td>
+                        <td>${roleTags}</td>
+                        <td>
+                            <button class="btn btn-success" onclick="showRoleModal('${u.id}', '${u.username}', ${JSON.stringify(u.role_ids || [])})">
+                                分配角色
+                            </button>
+                            ${u.is_active ?
+                                `<button class="btn btn-danger" onclick="toggleBan('${u.id}', false)">封禁</button>` :
+                                `<button class="btn btn-success" onclick="toggleBan('${u.id}', true)">解封</button>`}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function toggleBan(id, active) {
+            if (!confirm("确定要执行此操作吗？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/users/${id}/status?is_active=${active}`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadUsers();
+        }
+
+        let currentEditUserId = null;
+        let currentUserRoleIds = [];
+
+        // 从API加载所有可用的角色
+        async function loadRoles() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/roles", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                return await res.json();
+            }
+            return [];
+        }
+
+        // 打开角色分配模态框
+        async function showRoleModal(userId, userName, roleIds) {
+            currentEditUserId = userId;
+            currentUserRoleIds = roleIds;
+            document.getElementById("user-target").innerText = "用户：" + userName;
+
+            // 填充角色复选框
+            const roles = await loadRoles();
+            const container = document.getElementById("role-checkboxes");
+            container.innerHTML = "";
+            roles.forEach(role => {
+                const displayName = getRoleDisplayName(role.name);
+                const displayDesc = getRoleDisplayDesc(role.name);
+                const isChecked = roleIds.includes(role.id);
+                const div = document.createElement("div");
+                div.style.marginBottom = "8px";
+                div.innerHTML = `
+                    <label style="display:flex; align-items:center; cursor:pointer; padding: 4px 0;">
+                        <input type="checkbox" value="${role.id}" ${isChecked ? 'checked' : ''} style="margin-right: 8px; width: 16px; height: 16px;">
+                        <span>${displayName}</span>
+                        ${displayDesc ? `<span style="color:#888; font-size:12px; margin-left:8px;">- ${displayDesc}</span>` : ''}
+                    </label>
+                `;
+                container.appendChild(div);
+            });
+
+            document.getElementById("role-modal").style.display = "block";
+        }
+
+        // 关闭角色分配模态框
+        function closeRoleModal() {
+            document.getElementById("role-modal").style.display = "none";
+            currentEditUserId = null;
+            currentUserRoleIds = [];
+        }
+
+        // 保存用户角色
+        async function saveUserRole() {
+            if (!currentEditUserId) return;
+
+            // 收集选中的角色ID
+            const checkboxes = document.querySelectorAll("#role-checkboxes input[type='checkbox']");
+            const selectedRoleIds = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) selectedRoleIds.push(parseInt(cb.value));
+            });
+
+            if (selectedRoleIds.length === 0) {
+                alert("请至少选择一个角色");
+                return;
+            }
+
+            const token = localStorage.getItem("access_token");
+
+            const res = await fetch(`/admin/users/${currentEditUserId}/role`, {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ role_ids: selectedRoleIds })
+            });
+
+            if (res.ok) {
+                alert("角色分配成功");
+                closeRoleModal();
+                loadUsers();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert("分配失败：" + (err.detail || "未知错误"));
+            }
+        }
+
+        // 点击模态框外部关闭
+        document.addEventListener("click", (e) => {
+            const modal = document.getElementById("role-modal");
+            if (e.target === modal) {
+                closeRoleModal();
+            }
+        });
+    </script>
+</body>
+</html>

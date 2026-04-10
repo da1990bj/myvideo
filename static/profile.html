@@ -7,24 +7,41 @@
         body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
         .header-banner { height: 200px; background: #00a1d6; display: flex; align-items: flex-end; padding-bottom: 20px; }
         .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; display: flex; gap: 20px; }
-        
-        .profile-card { margin-top: -40px; background: #fff; padding: 20px; border-radius: 8px; width: 300px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+        .profile-card { margin-top: -40px; background: #fff; padding: 20px; border-radius: 8px; width: 300px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0; height: fit-content; }
         .avatar { width: 80px; height: 80px; border-radius: 50%; border: 4px solid #fff; margin-bottom: 10px; object-fit: cover; }
         .username { font-size: 20px; font-weight: bold; margin: 0; }
         .bio { color: #666; font-size: 14px; margin: 10px 0; }
-        
+
         .stats { display: flex; justify-content: space-around; margin: 20px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; padding: 10px 0; }
         .stat-item div:first-child { font-weight: bold; font-size: 18px; }
         .stat-item div:last-child { font-size: 12px; color: #999; }
-        
+
         .follow-btn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; background: #00a1d6; color: #fff; }
         .follow-btn.following { background: #eee; color: #666; }
-        
+        .action-buttons { display: flex; gap: 10px; margin-top: 10px; }
+        .block-btn { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; cursor: pointer; background: #fff; color: #666; }
+        .block-btn.blocked { background: #ffeaea; color: #f04c49; border-color: #f04c49; }
+
         .content-area { flex: 1; margin-top: 20px; }
+
+        .tabs { display: flex; border-bottom: 1px solid #eee; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; font-weight: 500; color: #666; border-bottom: 2px solid transparent; }
+        .tab.active { color: #00a1d6; border-bottom-color: #00a1d6; }
+        .tab:hover { color: #00a1d6; }
+
         .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
-        .video-card { background: #fff; border-radius: 6px; overflow: hidden; cursor: pointer; }
-        .thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
-        .title { padding: 10px; font-size: 14px; margin: 0; font-weight: 500; }
+        .video-card { background: #fff; border-radius: 6px; overflow: hidden; cursor: pointer; transition: 0.2s; }
+        .video-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #eee; }
+        .title { padding: 10px; font-size: 14px; margin: 0; font-weight: 500; line-height: 1.4; height: 40px; overflow: hidden; }
+
+        /* Collection Card Style */
+        .collection-card { background: #fff; border-radius: 6px; overflow: hidden; cursor: pointer; transition: 0.2s; position: relative; }
+        .collection-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .col-cover { height: 120px; background: #333; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 40px; }
+        .col-count-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .col-info { padding: 10px; }
     </style>
 </head>
 <body>
@@ -34,22 +51,39 @@
 
 <div class="container">
     <div class="profile-card">
-        <img id="avatar" src="" class="avatar">
+        <img id="avatar" src="" class="avatar" onerror="this.onerror=null; this.src=getDefaultAvatar(document.getElementById('username').innerText || '?')">
         <h2 id="username" class="username">加载中...</h2>
         <p id="bio" class="bio"></p>
-        
+
         <div class="stats">
             <div class="stat-item"><div id="follow-count">0</div><div>关注</div></div>
             <div class="stat-item"><div id="fans-count">0</div><div>粉丝</div></div>
             <div class="stat-item"><div id="video-count">0</div><div>投稿</div></div>
         </div>
-        
+
         <button id="follow-btn" class="follow-btn" onclick="toggleFollow()">+ 关注</button>
+        <div class="action-buttons">
+            <button id="block-btn" class="block-btn" onclick="toggleBlock()" style="display:none;">拉黑</button>
+        </div>
     </div>
-    
+
     <div class="content-area">
-        <h3 style="margin-top:0;">投稿视频</h3>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('videos')" id="tab-videos">投稿视频</div>
+            <div class="tab" onclick="switchTab('collections')" id="tab-collections">合集列表</div>
+            <div class="tab" onclick="switchTab('liked')" id="tab-liked" style="display:none;">喜欢的视频</div>
+            <div class="tab" onclick="switchTab('favorites')" id="tab-favorites" style="display:none;">收藏</div>
+        </div>
+
         <div id="video-list" class="video-grid"></div>
+        <div id="collection-list" class="video-grid" style="display:none;"></div>
+        <div id="liked-list" class="video-grid" style="display:none;"></div>
+        <div id="favorites-list" style="display:none;">
+            <h3 style="margin:0 0 10px; font-size:16px;">收藏的合集</h3>
+            <div id="fav-col-list" class="video-grid" style="margin-bottom:30px;"></div>
+            <h3 style="margin:0 0 10px; font-size:16px;">收藏的视频</h3>
+            <div id="fav-vid-list" class="video-grid"></div>
+        </div>
     </div>
 </div>
 
@@ -58,12 +92,49 @@
     const userId = urlParams.get('id');
     const token = localStorage.getItem("access_token");
     let isFollowing = false;
+    let currentUserProfileId = null; // Store resolved UUID
+
+    // 生成默认头像
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="${color}" rx="50"/><text x="50" y="50" dy=".35em" text-anchor="middle" fill="white" font-size="40" font-family="Arial">${initial}</text></svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         if (!userId) return alert("用户不存在");
         loadProfile();
         loadPublicVideos();
     });
+
+    function switchTab(tab) {
+        const idMap = {
+            'videos': 'video-list',
+            'collections': 'collection-list',
+            'liked': 'liked-list',
+            'favorites': 'favorites-list'
+        };
+
+        // Reset all
+        Object.keys(idMap).forEach(t => {
+            const el = document.getElementById("tab-" + t);
+            if(el) el.className = 'tab';
+            const list = document.getElementById(idMap[t]);
+            if(list) list.style.display = 'none';
+        });
+
+        document.getElementById("tab-" + tab).className = 'tab active';
+        const activeList = document.getElementById(idMap[tab]);
+        if (activeList) {
+            activeList.style.display = tab === 'favorites' ? 'block' : 'grid';
+        }
+
+        if (tab === 'collections') loadCollections();
+        if (tab === 'liked') loadLikedVideos();
+        if (tab === 'favorites') loadFavorites();
+    }
 
     async function loadPublicVideos() {
         try {
@@ -72,18 +143,63 @@
                 const videos = await res.json();
                 const container = document.getElementById("video-list");
                 if (videos.length === 0) return container.innerHTML = "<p style='color:#999; grid-column:1/-1; text-align:center;'>暂无公开视频</p>";
-                
+
+                let html = "";
                 videos.forEach(v => {
-                    const div = document.createElement("div");
-                    div.className = "video-card";
-                    div.onclick = () => location.href = `/static/video.html?id=${v.id}`;
-                    div.innerHTML = `
-                        <img src="${v.thumbnail_path}" class="thumb">
-                        <div class="title">${v.title}</div>
-                        <div style="padding:0 10px 10px; font-size:12px; color:#999;">${v.views}播放</div>
+                    html += `
+                        <div class="video-card" onclick="location.href='/static/video.html?id=${v.id}'">
+                            <img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb">
+                            <div class="title">${v.title}</div>
+                            <div style="padding:0 10px 10px; font-size:12px; color:#999;">${v.views}播放 · ${timeSince(new Date(v.created_at))}</div>
+                        </div>
                     `;
-                    container.appendChild(div);
                 });
+                container.innerHTML = html;
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadCollections() {
+        const container = document.getElementById("collection-list");
+        if (container.children.length > 0) return; // Already loaded
+
+        try {
+            // Need resolved UUID for filtering if userId is username
+            if (!currentUserProfileId) return;
+
+            const res = await fetch(`/collections?user_id=${currentUserProfileId}`);
+            if (res.ok) {
+                const collections = await res.json();
+                if (collections.length === 0) {
+                    container.innerHTML = "<p style='color:#999; grid-column:1/-1; text-align:center;'>暂无合集</p>";
+                    return;
+                }
+
+                let html = "";
+                collections.forEach(c => {
+                    // 跳转逻辑：如果有视频，跳到第一个视频并带上 collection_id
+                    // 如果没有视频，点进去也没用，或者跳到首页？暂时alert
+                    const clickAction = c.first_video_id
+                        ? `location.href='/static/video.html?id=${c.first_video_id}&collection_id=${c.id}'`
+                        : `alert('该合集暂无视频')`;
+
+                    let coverHtml = '<div class="col-cover">💿</div>';
+                    if (c.cover_image) {
+                        coverHtml = `<img src="${c.cover_image}" class="col-cover" style="object-fit:cover; width:100%;">`;
+                    }
+
+                    html += `
+                        <div class="collection-card" onclick="${clickAction}">
+                            ${coverHtml}
+                            <div class="col-count-badge">${c.video_count}个视频</div>
+                            <div class="col-info">
+                                <div class="title" style="height:auto; margin-bottom:4px;">${c.title}</div>
+                                <div style="font-size:12px; color:#999;">${c.description || "暂无简介"}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
             }
         } catch(e) { console.error(e); }
     }
@@ -94,18 +210,144 @@
             const res = await fetch(`/users/${userId}/profile`, { headers });
             if (res.ok) {
                 const data = await res.json();
+                currentUserProfileId = data.id; // Save UUID for other calls
+
                 document.getElementById("username").innerText = data.username;
                 document.getElementById("bio").innerText = data.bio || "这个人很懒...";
-                document.getElementById("avatar").src = data.avatar_path || "https://ui-avatars.com/api/?name=" + data.username;
-                
+                document.getElementById("avatar").src = getAvatarUrl(data.avatar_path) || getDefaultAvatar(data.username);
+
                 document.getElementById("fans-count").innerText = data.followers_count;
                 document.getElementById("follow-count").innerText = data.following_count;
-                document.getElementById("video-count").innerText = data.video_count;
-                
+                document.getElementById("video-count").innerText = data.videos_count;
+
                 isFollowing = data.is_following;
-                renderFollowBtn();
+
+                const btn = document.getElementById("follow-btn");
+                const blockBtn = document.getElementById("block-btn");
+                if (data.is_self) {
+                    btn.style.display = "none";
+                    blockBtn.style.display = "none";
+                    // Show private tabs
+                    document.getElementById("tab-liked").style.display = "block";
+                    document.getElementById("tab-favorites").style.display = "block";
+                } else {
+                    renderFollowBtn();
+                    // 显示拉黑按钮
+                    blockBtn.style.display = "block";
+                    // 检查是否已被对方拉黑
+                    if (data.is_blocked_by) {
+                        blockBtn.className = "block-btn blocked";
+                        blockBtn.innerText = "已被拉黑";
+                        blockBtn.disabled = true;
+                        btn.disabled = true;
+                        btn.innerText = "无法关注";
+                    }
+                }
             }
         } catch(e) { console.error(e); }
+    }
+
+    async function toggleBlock() {
+        const blockBtn = document.getElementById("block-btn");
+        const followBtn = document.getElementById("follow-btn");
+        const isBlocked = blockBtn.classList.contains("blocked");
+
+        if (isBlocked) {
+            alert("您已被该用户拉黑，无法进行操作");
+            return;
+        }
+
+        if (!confirm(isBlocked ? "解除拉黑？" : "确定拉黑该用户？拉黑后将同时取消关注关系。")) return;
+
+        try {
+            const res = await fetch(`/users/${userId}/block`, {
+                method: isBlocked ? "DELETE" : "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                if (isBlocked) {
+                    blockBtn.className = "block-btn";
+                    blockBtn.innerText = "拉黑";
+                    // 恢复关注按钮
+                    followBtn.disabled = false;
+                } else {
+                    blockBtn.className = "block-btn blocked";
+                    blockBtn.innerText = "已拉黑";
+                    blockBtn.disabled = true;
+                    // 取消关注并禁用关注按钮
+                    followBtn.disabled = true;
+                    followBtn.innerText = "已取消关注";
+                    isFollowing = false;
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadLikedVideos() {
+        const container = document.getElementById("liked-list");
+        if(container.children.length > 0) return;
+        try {
+            const res = await fetch(`/users/me/liked/videos`, { headers: { "Authorization": "Bearer " + token } });
+            if(res.ok) {
+                const videos = await res.json();
+                renderVideoList(container, videos, "暂无喜欢的视频");
+            }
+        } catch(e) {}
+    }
+
+    async function loadFavorites() {
+        const vidContainer = document.getElementById("fav-vid-list");
+        const colContainer = document.getElementById("fav-col-list");
+        if(vidContainer.children.length > 0) return;
+
+        try {
+            // Videos
+            const resV = await fetch(`/users/me/favorites/videos`, { headers: { "Authorization": "Bearer " + token } });
+            if(resV.ok) {
+                renderVideoList(vidContainer, await resV.json(), "暂无收藏视频");
+            }
+            // Collections
+            const resC = await fetch(`/users/me/favorites/collections`, { headers: { "Authorization": "Bearer " + token } });
+            if(resC.ok) {
+                const cols = await resC.json();
+                if(cols.length === 0) colContainer.innerHTML = "<p style='color:#999; text-align:center;'>暂无收藏合集</p>";
+                else {
+                    let html = "";
+                    cols.forEach(c => {
+                       const clickAction = c.first_video_id
+                            ? `location.href='/static/video.html?id=${c.first_video_id}&collection_id=${c.id}'`
+                            : `alert('该合集暂无视频')`;
+                       let coverHtml = '<div class="col-cover">💿</div>';
+                       if (c.cover_image) coverHtml = `<img src="${c.cover_image}" class="col-cover" style="object-fit:cover; width:100%;">`;
+
+                       html += `<div class="collection-card" onclick="${clickAction}">
+                            ${coverHtml}
+                            <div class="col-count-badge">${c.video_count}个视频</div>
+                            <div class="col-info">
+                                <div class="title" style="height:auto; margin-bottom:4px;">${c.title}</div>
+                                <div style="font-size:12px; color:#999;">${c.owner.username}</div>
+                            </div>
+                        </div>`;
+                    });
+                    colContainer.innerHTML = html;
+                }
+            }
+        } catch(e) {}
+    }
+
+    function renderVideoList(container, videos, emptyText) {
+        if (videos.length === 0) return container.innerHTML = `<p style='color:#999; grid-column:1/-1; text-align:center;'>${emptyText}</p>`;
+        let html = "";
+        videos.forEach(v => {
+            html += `
+                <div class="video-card" onclick="location.href='/static/video.html?id=${v.id}'">
+                    <img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb">
+                    <div class="title">${v.title}</div>
+                    <div style="padding:0 10px 10px; font-size:12px; color:#999;">${v.views}播放 · ${timeSince(new Date(v.created_at))}</div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
     }
 
     function renderFollowBtn() {
@@ -121,7 +363,7 @@
 
     async function toggleFollow() {
         if (!token) return location.href = "/static/login.html";
-        
+
         const method = isFollowing ? "DELETE" : "POST";
         try {
             const res = await fetch(`/users/${userId}/follow`, {
@@ -131,11 +373,21 @@
             if (res.ok) {
                 isFollowing = !isFollowing;
                 renderFollowBtn();
-                // 刷新粉丝数
                 const count = document.getElementById("fans-count");
                 count.innerText = parseInt(count.innerText) + (isFollowing ? 1 : -1);
             }
         } catch(e) { alert("操作失败"); }
+    }
+
+    function timeSince(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " 年前";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " 个月前";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " 天前";
+        return "近期";
     }
 </script>
 

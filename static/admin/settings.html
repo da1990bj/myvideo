@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台管理 - 系统设置</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .container { padding: 20px; max-width: 1200px; margin: 0 auto; padding-bottom: 80px; }
+        h1 { margin-bottom: 20px; color: #333; }
+
+        /* 标签页 */
+        .tabs { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+        .tab { padding: 12px 24px; cursor: pointer; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab:hover { color: #00a1d6; }
+        .tab.active { color: #00a1d6; border-bottom-color: #00a1d6; }
+
+        /* 内容区 */
+        .tab-content { display: none; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .tab-content.active { display: block; }
+
+        /* 表单 */
+        .form-group { margin-bottom: 15px; }
+        .label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; }
+        .input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; max-width: 500px; box-sizing: border-box; }
+        .input:read-only { background: #f9f9f9; }
+        .btn { padding: 10px 20px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        .btn:hover { background: #008dbd; }
+        .btn-success { background: #2f9e44; }
+        .btn-success:hover { background: #268732; }
+        .btn-warning { background: #f08c00; }
+        .btn-warning:hover { background: #d77900; }
+        .btn-danger { background: #f04c49; }
+        .btn-danger:hover { background: #d73a37; }
+
+        /* 段落 */
+        .config-section { margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .config-section:last-child { border-bottom: none; }
+        .section-title { font-size: 16px; font-weight: 600; color: #00a1d6; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid #00a1d6; }
+
+        /* 统计卡片 */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #f9f9f9; padding: 15px; border-radius: 8px; }
+        .stat-card .label { color: #888; font-size: 13px; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #00a1d6; margin-top: 5px; }
+
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 500; color: #555; }
+
+        /* 消息 */
+        .message { padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; }
+        .message.success { background: #e8f5e9; color: #2f9e44; }
+        .message.error { background: #ffebee; color: #f04c49; }
+        .message.info { background: #e3f2fd; color: #00a1d6; }
+
+        /* 浮动保存按钮 */
+        #save-btn { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; background: #2f9e44; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; display: none; }
+        #save-btn:hover { background: #268732; }
+        #save-btn.show { display: block; }
+
+        /* 任务管理 */
+        .task-list { margin: 16px 0; }
+        .task-item { display: flex; align-items: center; padding: 16px; background: #f8f9fa; border-radius: 8px; margin-bottom: 12px; }
+        .task-icon { font-size: 24px; margin-right: 16px; }
+        .task-info { flex: 1; }
+        .task-name { font-weight: 600; color: #333; }
+        .task-schedule { color: #666; font-size: 13px; margin-top: 4px; }
+        .task-desc { color: #999; font-size: 12px; margin-top: 4px; }
+        .loading { text-align: center; padding: 40px; color: #999; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div class="container">
+        <h1>系统设置</h1>
+
+        <!-- 全局通知 -->
+        <div id="global-message" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;"></div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('env')">环境配置</div>
+            <div class="tab" onclick="showTab('storage')">存储设置</div>
+            <div class="tab" onclick="showTab('transcode')">转码设置</div>
+            <div class="tab" onclick="showTab('cold-storage')">冷存储</div>
+            <div class="tab" onclick="showTab('tasks')">任务管理</div>
+        </div>
+
+        <!-- 环境配置 -->
+        <div id="tab-env" class="tab-content active">
+            <div id="env-message"></div>
+            <div id="env-config"></div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                <button class="btn" id="env-save-btn" onclick="saveEnvConfig()">保存配置</button>
+                <span style="color: #888; margin-left: 10px; font-size: 12px;">保存后配置自动热更新生效</span>
+            </div>
+        </div>
+
+        <!-- 存储设置 -->
+        <div id="tab-storage" class="tab-content">
+            <div id="storage-message"></div>
+
+            <h3>当前存储配置</h3>
+            <div id="storage-current-list" style="margin-bottom: 15px;">
+                <div style="padding: 16px; text-align: center; color: #999;">加载中...</div>
+            </div>
+
+            <h3 style="margin-top: 20px;">迁移设置</h3>
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-weight: 500; color: #555;">并发数</label>
+                    <input type="number" id="migrate-concurrency" value="2" min="1" max="10"
+                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;" title="同时迁移的视频数">
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-weight: 500; color: #555;">限速 (MB/s)</label>
+                    <input type="number" id="migrate-speed" value="0" min="0"
+                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;" title="0=不限速">
+                </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">历史目录</h3>
+            <div id="storage-history-list" style="margin-bottom: 20px;">
+                <div style="padding: 16px; text-align: center; color: #999;">暂无历史目录</div>
+            </div>
+
+            <h3 style="margin-top: 20px;">存储后端</h3>
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-weight: 500; color: #555;">存储后端</label>
+                    <select id="storage-backend" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px; min-width: 120px;">
+                        <option value="local">本地 (local)</option>
+                        <option value="s3">S3</option>
+                        <option value="oss">阿里云 OSS</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-weight: 500; color: #555;">迁移间隔 (秒)</label>
+                    <input type="number" id="storage-migration-delay" value="0.5" min="0" step="0.1"
+                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;" title="每个文件迁移后暂停时间，0=不限速">
+                </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">上传限制</h3>
+            <div class="form-group">
+                <label class="label">上传文件大小限制 (MB)</label>
+                <input type="number" class="input" id="storage-upload-limit" min="0" step="1" placeholder="0表示不限制">
+                <span style="color: #888; font-size: 12px; margin-left: 10px;">0 = 不限制，管理员和运营可绕过此限制</span>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <button class="btn" onclick="saveStorageToDb()">保存配置</button>
+                <span style="color: #888; margin-left: 10px;">保存后自动热更新</span>
+            </div>
+
+            <h3 style="margin-top: 40px;">清理孤立文件</h3>
+            <p style="color: #666; margin-bottom: 15px;">
+                孤立文件是指：数据库中已删除但磁盘上仍存在的文件（如之前手动删除视频残留的文件）
+            </p>
+            <div id="orphan-info" style="margin-bottom: 15px;">
+                <button class="btn" onclick="scanOrphanFiles()">扫描孤立文件</button>
+            </div>
+            <div id="orphan-list" style="display: none; margin-bottom: 15px;"></div>
+            <div id="orphan-actions" style="display: none;">
+                <button class="btn btn-danger" onclick="cleanupOrphanFiles()">删除所有孤立文件</button>
+                <span id="orphan-summary" style="color: #888; margin-left: 10px;"></span>
+            </div>
+        </div>
+
+        <!-- 转码设置 -->
+        <div id="tab-transcode" class="tab-content">
+            <div id="transcode-message"></div>
+
+            <h3>转码队列配置</h3>
+            <div style="padding: 15px; background: #f9f9f9; border-radius: 8px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label class="label">转码并发数</label>
+                    <input type="number" class="input" id="transcode-concurrency" min="1" max="32" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">同时进行的转码任务数（1-32）</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">普通用户优先级 aging 增速</label>
+                    <input type="number" class="input" id="transcode-aging-rate" min="0" step="0.1" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">每小时增加的优先级分值</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">最大优先级分数</label>
+                    <input type="number" class="input" id="transcode-max-priority" min="1" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">优先级分数上限</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">VIP 用户基础优先级</label>
+                    <input type="number" class="input" id="transcode-vip-priority" min="0" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">VIP任务的起始优先级</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">付费加速用户基础优先级</label>
+                    <input type="number" class="input" id="transcode-paid-priority" min="0" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">付费加速任务的起始优先级</span>
+                </div>
+                <div class="form-group">
+                    <label class="label">插队消耗积分</label>
+                    <input type="number" class="input" id="transcode-bump-cost" min="0" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">每次付费插队消耗的积分数量</span>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn" onclick="saveTranscodeConfig()">保存转码配置</button>
+                <span style="color: #888; margin-left: 10px;">部分配置需要重启 Celery worker 生效</span>
+            </div>
+        </div>
+
+        <!-- 冷存储 -->
+        <div id="tab-cold-storage" class="tab-content">
+            <div id="cold-message"></div>
+
+            <h3>冷存储配置</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="label">待迁移视频</div>
+                    <div class="value" id="cold-candidates">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">冷存储视频</div>
+                    <div class="value" id="cold-count">-</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+                <h4 style="margin-top:0;">配置参数</h4>
+                <div class="form-group">
+                    <label class="label">启用冷存储</label>
+                    <select class="input" id="cold-enable" style="max-width: 200px;">
+                        <option value="TRUE">是</option>
+                        <option value="FALSE">否</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="label">冷存储根目录（绝对路径）</label>
+                    <input type="text" class="input" id="cold-path-input" style="max-width: 400px;" placeholder="/data/myvideo/cold_storage">
+                </div>
+                <div class="form-group">
+                    <label class="label">触发冷存储天数（上传超过此天数）</label>
+                    <input type="number" class="input" id="cold-days-input" style="max-width: 200px;" min="1">
+                </div>
+                <div class="form-group">
+                    <label class="label">触发冷存储播放量阈值（低于此播放量）</label>
+                    <input type="number" class="input" id="cold-views-input" style="max-width: 200px;" min="0">
+                </div>
+                <button class="btn" onclick="saveColdStorageConfig()">保存冷存储配置</button>
+            </div>
+
+            <h3 style="margin-top:30px;">可迁移视频 <span id="candidates-count" style="font-size:14px;color:#888;font-weight:normal;">(超过设定天数且播放量低于阈值)</span></h3>
+            <div style="margin-bottom:15px;">
+                <button class="btn" onclick="scanCandidates()">扫描预览</button>
+                <span id="candidates-summary" style="margin-left:15px;color:#666;"></span>
+            </div>
+            <div id="candidates-list" style="margin-bottom:30px;"></div>
+
+            <h3>冷存储视频</h3>
+            <div id="cold-stats"></div>
+        </div>
+
+        <!-- 任务管理 -->
+        <div id="tab-tasks" class="tab-content">
+            <h3>调度任务</h3>
+            <div id="tasks-container" class="task-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 浮动保存按钮 -->
+    <button id="save-btn" onclick="saveEnvConfig()">
+        <span id="save-text">保存配置</span>
+    </button>
+
+    <script>
+        const token = localStorage.getItem("access_token");
+        const headers = { "Authorization": "Bearer " + token };
+        let envConfig = {};
+        let hasChanges = false;
+        let scannedCandidates = [];  // 扫描预览的候选视频
+
+        // 配置项中文名称映射
+        const CONFIG_NAMES = {
+            "MYVIDEO_ROOT": "项目根目录",
+            "DATABASE_HOST": "数据库主机",
+            "DATABASE_PORT": "数据库端口",
+            "DATABASE_USER": "数据库用户名",
+            "DATABASE_PASSWORD": "数据库密码",
+            "DATABASE_NAME": "数据库名称",
+            "DATABASE_ECHO": "SQL日志输出",
+            "REDIS_HOST": "Redis主机",
+            "REDIS_PORT": "Redis端口",
+            "REDIS_DB": "Redis数据库编号",
+            "REDIS_PASSWORD": "Redis密码",
+            "SECRET_KEY": "JWT密钥",
+            "ALGORITHM": "JWT加密算法",
+            "ACCESS_TOKEN_EXPIRE_MINUTES": "Token过期时间(分钟)",
+            "APP_HOST": "服务监听地址",
+            "APP_PORT": "服务监听端口",
+            "APP_DEBUG": "调试模式",
+            "SHARE_BASE_URL": "分享链接公开地址",
+            "STATIC_SUBDIR": "静态文件目录",
+            "UPLOADS_SUBDIR": "上传视频目录",
+            "PROCESSED_SUBDIR": "转码视频目录",
+            "THUMBNAILS_SUBDIR": "缩略图目录",
+            "AVATARS_SUBDIR": "用户头像目录",
+            "DATA_SUBDIR": "数据文件目录",
+            "THUMBNAILS_URL": "缩略图访问路径",
+            "VIDEOS_URL": "视频访问路径",
+            "AVATARS_URL": "头像访问路径",
+            "CORS_ORIGINS": "允许访问的域名",
+            "CORS_CREDENTIALS": "允许携带凭证",
+            "CORS_METHODS": "允许的HTTP方法",
+            "CORS_HEADERS": "允许的HTTP头",
+            "CELERY_BROKER_URL": "Celery消息代理URL",
+            "CELERY_RESULT_BACKEND": "Celery结果后端URL",
+            "LOG_LEVEL": "日志级别",
+            "LOG_FILE": "日志文件路径",
+            "SENSITIVE_WORDS_FILE": "敏感词文件路径",
+            "COLD_STORAGE_ENABLED": "启用冷存储",
+            "COLD_STORAGE_TRIGGER_DAYS": "触发冷存储天数",
+            "COLD_STORAGE_TRIGGER_VIEWS": "触发冷存储播放量阈值",
+            "COLD_STORAGE_PATH_ROOT": "冷存储根目录",
+            "STORAGE_MIGRATION_DELAY": "迁移间隔时间(秒)",
+            "MAX_UPLOAD_SIZE_MB": "上传文件大小限制(MB)",
+            "SHARE_BASE_URL": "分享链接公开地址",
+        };
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+
+            if (tabName === 'tasks') {
+                loadScheduledTasks();
+            }
+        }
+
+        // ==================== 任务管理 ====================
+        async function loadScheduledTasks() {
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/scheduled-tasks`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const container = document.getElementById("tasks-container");
+                    if (!container) return;
+
+                    if (!data.tasks || data.tasks.length === 0) {
+                        container.innerHTML = '<div class="empty">暂无调度任务</div>';
+                        return;
+                    }
+
+                    container.innerHTML = data.tasks.map(task => {
+                        const icons = {
+                            "compute-daily-trending": "⏰",
+                            "compute-category-trending": "📊",
+                            "cold-storage-migration-daily": "💾",
+                            "transcode-aging-hourly": "🔄",
+                            "zombie-ffmpeg-cleanup": "🧹"
+                        };
+                        return `
+                            <div class="task-item">
+                                <div class="task-icon">${icons[task.task_name] || "📋"}</div>
+                                <div class="task-info">
+                                    <div class="task-name">${task.description || task.task_name}</div>
+                                    <div class="task-schedule">${task.schedule}</div>
+                                    <div class="task-desc">${task.task_path}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                }
+            } catch(e) { console.error(e); }
+        }
+
+
+        // ==================== 环境配置 ====================
+        async function loadEnvConfig() {
+            // 排除存储和冷存储配置（它们在各自标签页中编辑）
+            const res = await fetch("/admin/env-config?exclude=文件存储目录,URL路径前缀,冷存储", { headers });
+            if (res.ok) {
+                const data = await res.json();
+                envConfig = data.config || data;
+                renderEnvConfig();
+            }
+        }
+
+        function renderEnvConfig() {
+            const container = document.getElementById("env-config");
+            container.innerHTML = "";
+
+            for (const [section, configs] of Object.entries(envConfig)) {
+                const sectionDiv = document.createElement("div");
+                sectionDiv.className = "config-section";
+
+                const titleDiv = document.createElement("div");
+                titleDiv.className = "section-title";
+                titleDiv.textContent = section;
+                sectionDiv.appendChild(titleDiv);
+
+                for (const [key, value] of Object.entries(configs)) {
+                    const group = document.createElement("div");
+                    group.className = "form-group";
+
+                    const isPassword = key.toLowerCase().includes('password') || key.toLowerCase().includes('secret');
+                    const inputType = isPassword ? 'password' : 'text';
+                    const displayValue = isPassword ? '••••••••' : value;
+                    const displayName = CONFIG_NAMES[key] || key;
+
+                    group.innerHTML = `
+                        <label class="label" title="${key}">${displayName}</label>
+                        <input type="${inputType}"
+                               class="input"
+                               id="env-${key}"
+                               value="${escapeHtml(value)}"
+                               data-original="${escapeHtml(value)}"
+                               placeholder="${displayName}"
+                               ${isPassword ? 'readonly onfocus="this.removeAttribute(\'readonly\')"' : ''}>
+                    `;
+                    sectionDiv.appendChild(group);
+                }
+
+                container.appendChild(sectionDiv);
+            }
+
+            // 添加变更检测
+            container.querySelectorAll('.input').forEach(input => {
+                input.addEventListener('input', () => {
+                    checkChanges();
+                });
+            });
+        }
+
+        function checkChanges() {
+            const inputs = document.querySelectorAll('#env-config .input');
+            let changed = false;
+
+            inputs.forEach(input => {
+                const original = input.dataset.original;
+                const current = input.value;
+                if (original !== current) {
+                    changed = true;
+                }
+            });
+
+            hasChanges = changed;
+            const saveBtn = document.getElementById('save-btn');
+            const envSaveBtn = document.getElementById('env-save-btn');
+            if (changed) {
+                saveBtn.classList.add('show');
+                if (envSaveBtn) envSaveBtn.style.opacity = '1';
+            } else {
+                saveBtn.classList.remove('show');
+                if (envSaveBtn) envSaveBtn.style.opacity = '0.5';
+            }
+        }
+
+        async function saveEnvConfig() {
+            console.log("saveEnvConfig called, hasChanges:", hasChanges);
+
+            if (!hasChanges) {
+                showMessage("env-message", "没有需要保存的更改", "info");
+                return;
+            }
+
+            const updates = {};
+            const inputs = document.querySelectorAll('#env-config .input');
+
+            inputs.forEach(input => {
+                const key = input.id.replace('env-', '');
+                const original = input.dataset.original;
+                const current = input.value;
+
+                if (original !== current) {
+                    updates[key] = current;
+                }
+            });
+
+            console.log("Updates to save:", updates);
+
+            if (Object.keys(updates).length === 0) {
+                showMessage("env-message", "没有需要保存的更改", "info");
+                return;
+            }
+
+            const envSaveBtn = document.getElementById('env-save-btn');
+            const saveBtn = document.getElementById('save-btn');
+            const originalText = envSaveBtn.textContent;
+            envSaveBtn.textContent = '保存中...';
+            envSaveBtn.disabled = true;
+            if (saveBtn) {
+                saveBtn.disabled = true;
+            }
+
+            try {
+                console.log("Sending request to /admin/env-config");
+                const res = await fetch("/admin/env-config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify(updates)
+                });
+                console.log("Response status:", res.status);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("Response data:", data);
+                    showMessage("env-message", "配置已保存！正在热更新...", "success");
+                    hasChanges = false;
+
+                    // 热更新运行时配置
+                    try {
+                        await fetch("/admin/reload", { method: "POST", headers: headers });
+                    } catch (e) {
+                        console.error("Hot reload failed:", e);
+                    }
+
+                    // 重新加载配置
+                    await loadEnvConfig();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    console.log("Error response:", err);
+                    showMessage("env-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                console.error("Fetch error:", err);
+                showMessage("env-message", "保存失败: " + err.message, "error");
+            }
+
+            envSaveBtn.textContent = originalText;
+            envSaveBtn.disabled = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
+        }
+
+        // ==================== 存储设置 ====================
+        async function loadStorageConfig() {
+            // 加载目录信息
+            const [dirRes, storageRes, envRes] = await Promise.all([
+                fetch("/admin/storage/directories", { headers }),
+                fetch("/admin/storage/config", { headers }),
+                fetch("/admin/env-config", { headers })
+            ]);
+
+            // 渲染当前目录
+            let currentHtml = "";
+            if (dirRes.ok) {
+                const data = await dirRes.json();
+                const current = data.current;
+                const dirs = [
+                    { key: "uploads", name: "原始视频", subdir: current.uploads.subdir, path: current.uploads.path },
+                    { key: "processed", name: "转码视频", subdir: current.processed.subdir, path: current.processed.path },
+                    { key: "thumbnails", name: "缩略图", subdir: current.thumbnails.subdir, path: current.thumbnails.path },
+                ];
+                currentHtml = `
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <th style="text-align: left; padding: 8px; color: #666; font-weight: 500;">目录</th>
+                            <th style="text-align: left; padding: 8px; color: #666; font-weight: 500;">路径</th>
+                            <th style="text-align: right; padding: 8px; color: #666; font-weight: 500;">操作</th>
+                        </tr>
+                        ${dirs.map(d => `
+                            <tr style="border-bottom: 1px solid #f5f5f5;">
+                                <td style="padding: 8px; font-weight: 500; color: #555;">${d.name}</td>
+                                <td style="padding: 8px;">
+                                    <input type="text" class="input" id="storage-${d.key}-subdir"
+                                           value="${d.subdir}" style="max-width: 300px;">
+                                </td>
+                                <td style="padding: 8px; text-align: right;">
+                                    <button class="btn" onclick="saveStorageDir('${d.key}')">保存</button>
+                                </td>
+                            </tr>
+                        `).join("")}
+                    </table>
+                `;
+                document.getElementById("storage-current-list").innerHTML = currentHtml;
+
+                // 渲染历史目录
+                const history = data.history || [];
+                if (history.length > 0) {
+                    const historyHtml = `
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th style="text-align: left; padding: 8px; color: #666; font-weight: 500;">目录</th>
+                                <th style="text-align: right; padding: 8px; color: #666; font-weight: 500;">文件数</th>
+                                <th style="text-align: right; padding: 8px; color: #666; font-weight: 500;">大小</th>
+                                <th style="text-align: right; padding: 8px; color: #666; font-weight: 500;">操作</th>
+                            </tr>
+                            ${history.map(h => `
+                                <tr style="border-bottom: 1px solid #f5f5f5;">
+                                    <td style="padding: 8px; color: #888; font-size: 13px; word-break: break-all;">${h.path}</td>
+                                    <td style="padding: 8px; text-align: right; color: #666;">${h.file_count}个</td>
+                                    <td style="padding: 8px; text-align: right; color: #00a1d6;">${h.size_display}</td>
+                                    <td style="padding: 8px; text-align: right;">
+                                        <button class="btn btn-warning" onclick="migrateStorageDir('${h.type}')"
+                                                ${h.file_count === 0 ? "disabled" : ""}>迁移</button>
+                                    </td>
+                                </tr>
+                            `).join("")}
+                        </table>
+                    `;
+                    document.getElementById("storage-history-list").innerHTML = historyHtml;
+                } else {
+                    document.getElementById("storage-history-list").innerHTML =
+                        '<div style="padding: 16px; text-align: center; color: #999;">暂无历史目录</div>';
+                }
+
+                // 加载存储后端、迁移间隔和上传限制
+                if (storageRes.ok) {
+                    const storageData = await storageRes.json();
+                    document.getElementById("storage-backend").value = storageData.STORAGE_BACKEND || "local";
+                    document.getElementById("storage-migration-delay").value = storageData.STORAGE_MIGRATION_DELAY || "0.5";
+                    document.getElementById("storage-upload-limit").value = storageData.MAX_UPLOAD_SIZE_MB || "2048";
+                }
+            }
+        }
+
+        async function saveStorageDir(dirType) {
+            const input = document.getElementById(`storage-${dirType}-subdir`);
+            const newSubdir = input.value.trim();
+            if (!newSubdir) {
+                showMessage("storage-message", "路径不能为空", "error");
+                return;
+            }
+
+            const dirTypeUpper = dirType.toUpperCase();
+            try {
+                const res = await fetch("/admin/storage/config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        [dirTypeUpper + "_SUBDIR"]: newSubdir
+                    })
+                });
+
+                if (res.ok) {
+                    showMessage("storage-message", "目录配置已保存，页面刷新后生效", "success");
+                    loadStorageConfig();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("storage-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("storage-message", "保存失败: " + err.message, "error");
+            }
+        }
+
+        async function migrateStorageDir(dirType) {
+            if (!confirm("确定要迁移该目录的数据到当前目录吗？迁移过程中请勿关闭页面。")) {
+                return;
+            }
+
+            const concurrency = parseInt(document.getElementById("migrate-concurrency").value) || 2;
+            const maxSpeed = parseFloat(document.getElementById("migrate-speed").value) || 0;
+
+            try {
+                const res = await fetch(`/admin/storage/migrate/${dirType}?concurrency=${concurrency}&max_speed=${maxSpeed}`, {
+                    method: "POST",
+                    headers: headers
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const taskId = data.task_id;
+                    showMigrationProgress(taskId, dirType);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("storage-message", "启动迁移失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("storage-message", "启动迁移失败: " + err.message, "error");
+            }
+        }
+
+        let migrationPollInterval = null;
+
+        function showMigrationProgress(taskId, dirType) {
+            // 创建进度弹窗
+            const overlay = document.createElement('div');
+            overlay.id = 'migration-overlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = `
+                <div style="background:#fff;padding:30px;border-radius:8px;min-width:400px;max-width:600px;">
+                    <h3 id="migration-title" style="margin-top:0;">正在迁移...</h3>
+                    <div id="migration-progress" style="margin:20px 0;">
+                        <div style="background:#eee;height:20px;border-radius:10px;overflow:hidden;">
+                            <div id="migration-bar" style="background:#00a1d6;height:100%;width:0%;transition:width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div id="migration-status" style="color:#666;font-size:14px;">准备中...</div>
+                    <div style="margin-top:20px;text-align:right;">
+                        <button class="btn" onclick="closeMigrationProgress()">取消</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            // 开始轮询
+            pollMigrationStatus(taskId, dirType);
+        }
+
+        function closeMigrationProgress() {
+            if (migrationPollInterval) {
+                clearInterval(migrationPollInterval);
+                migrationPollInterval = null;
+            }
+            const overlay = document.getElementById('migration-overlay');
+            if (overlay) overlay.remove();
+        }
+
+        async function pollMigrationStatus(taskId, dirType) {
+            migrationPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/admin/storage/migrate/status/${taskId}`, { headers });
+                    if (!res.ok) return;
+
+                    const data = await res.json();
+                    const title = document.getElementById('migration-title');
+                    const status = document.getElementById('migration-status');
+                    const bar = document.getElementById('migration-bar');
+
+                    if (data.state === 'PROGRESS') {
+                        const percent = data.total > 0 ? Math.round(data.current / data.total * 100) : 0;
+                        bar.style.width = percent + '%';
+                        title.textContent = `迁移中 (${percent}%)`;
+                        status.textContent = `文件: ${data.current_file || '-'}\n${data.current}/${data.total} 已迁移`;
+                    } else if (data.state === 'SUCCESS') {
+                        bar.style.width = '100%';
+                        title.textContent = '迁移完成';
+                        status.textContent = `共迁移 ${data.result.migrated} 个文件${data.result.failed > 0 ? `，失败 ${data.result.failed} 个` : ''}`;
+                        setTimeout(() => {
+                            closeMigrationProgress();
+                            loadStorageConfig();
+                            showMessage("storage-message",
+                                `迁移完成！共迁移 ${data.result.migrated} 个文件${data.result.failed > 0 ? `，失败 ${data.result.failed} 个` : ''}`,
+                                "success");
+                        }, 1500);
+                        clearInterval(migrationPollInterval);
+                    } else if (data.state === 'FAILURE') {
+                        title.textContent = '迁移失败';
+                        status.textContent = data.message;
+                        setTimeout(closeMigrationProgress, 2000);
+                        clearInterval(migrationPollInterval);
+                    }
+                } catch (err) {
+                    console.error('Poll error:', err);
+                }
+            }, 1000);
+        }
+
+        async function saveStorageToDb() {
+            const uploadLimit = document.getElementById("storage-upload-limit").value;
+            const storageBackend = document.getElementById("storage-backend").value;
+            const migrationDelay = document.getElementById("storage-migration-delay").value;
+
+            try {
+                // 保存存储配置（包含上传限制、存储后端、迁移间隔）
+                const storageRes = await fetch("/admin/storage/config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        "STORAGE_BACKEND": storageBackend,
+                        "STORAGE_MIGRATION_DELAY": migrationDelay,
+                        "MAX_UPLOAD_SIZE_MB": uploadLimit || "0"
+                    })
+                });
+
+                if (storageRes.ok) {
+                    showMessage("storage-message", "存储配置已保存！正在热更新...", "success");
+                    // 热更新
+                    try {
+                        await fetch("/admin/reload", { method: "POST", headers });
+                    } catch (e) {
+                        console.error("Hot reload failed:", e);
+                    }
+                    await loadStorageConfig();
+                } else {
+                    const err = await storageRes.json().catch(() => ({}));
+                    showMessage("storage-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("storage-message", "保存失败: " + err.message, "error");
+            }
+        }
+
+        // ==================== 孤立文件清理 ====================
+        let orphanData = null;
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function toggleSection(id) {
+            const el = document.getElementById(id);
+            const allDetails = document.querySelectorAll('[id$="-detail"]');
+            const allArrows = document.querySelectorAll('.section-arrow');
+
+            // 关闭所有其他详情区
+            allDetails.forEach(d => {
+                if (d.id !== id) d.style.display = 'none';
+            });
+
+            // 切换当前区
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        async function scanOrphanFiles() {
+            showMessage("storage-message", "正在扫描孤立文件...", "info");
+            const res = await fetch("/admin/storage/orphans", { headers });
+            if (res.ok) {
+                const data = await res.json();
+                orphanData = data;
+
+                const listDiv = document.getElementById("orphan-list");
+                const actionsDiv = document.getElementById("orphan-actions");
+                const summarySpan = document.getElementById("orphan-summary");
+
+                if (data.total_count === 0) {
+                    listDiv.style.display = 'block';
+                    listDiv.innerHTML = '<p style="color: #2f9e44;">没有发现孤立文件，存储状态良好！</p>';
+                    actionsDiv.style.display = 'none';
+                } else {
+                    listDiv.style.display = 'block';
+                    let html = `<p style="color: #f04c49;">发现 ${data.total_count} 个孤立文件，总大小 ${formatSize(data.total_size)}：</p>`;
+
+                    // 原始视频详情
+                    if (data.files.uploads.length > 0) {
+                        const size = data.files.uploads.reduce((s, f) => s + f.size, 0);
+                        html += `<div style="margin-top:16px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('uploads-detail')">
+                                <h4 style="margin:0;">📹 原始视频 (${data.files.uploads.length}个, ${formatSize(size)})</h4>
+                                <span>▼</span>
+                            </div>
+                            <div id="uploads-detail" style="display:none; max-height:200px; overflow-y:auto; background:#f9f9f9; padding:8px; border-radius:4px; margin-top:8px;">`;
+                        data.files.uploads.forEach(f => {
+                            html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px solid #eee; word-break:break-all;">${f.path}<br><span style="color:#666;">${formatSize(f.size)}</span></div>`;
+                        });
+                        html += `</div></div>`;
+                    }
+
+                    // 转码文件详情
+                    if (data.files.processed.length > 0) {
+                        const size = data.files.processed.reduce((s, d) => s + d.size, 0);
+                        html += `<div style="margin-top:16px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('processed-detail')">
+                                <h4 style="margin:0;">🎬 转码文件 (${data.files.processed.length}个, ${formatSize(size)})</h4>
+                                <span>▼</span>
+                            </div>
+                            <div id="processed-detail" style="display:none; max-height:200px; overflow-y:auto; background:#f9f9f9; padding:8px; border-radius:4px; margin-top:8px;">`;
+                        data.files.processed.forEach(d => {
+                            html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px solid #eee; word-break:break-all;">${d.path}<br><span style="color:#666;">${formatSize(d.size)}</span></div>`;
+                        });
+                        html += `</div></div>`;
+                    }
+
+                    // 缩略图详情
+                    if (data.files.thumbnails.length > 0) {
+                        const size = data.files.thumbnails.reduce((s, f) => s + f.size, 0);
+                        html += `<div style="margin-top:16px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('thumbnails-detail')">
+                                <h4 style="margin:0;">🖼️ 缩略图 (${data.files.thumbnails.length}个, ${formatSize(size)})</h4>
+                                <span>▼</span>
+                            </div>
+                            <div id="thumbnails-detail" style="display:none; max-height:200px; overflow-y:auto; background:#f9f9f9; padding:8px; border-radius:4px; margin-top:8px;">`;
+                        data.files.thumbnails.forEach(f => {
+                            html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px solid #eee; word-break:break-all;">${f.path}<br><span style="color:#666;">${formatSize(f.size)}</span></div>`;
+                        });
+                        html += `</div></div>`;
+                    }
+
+                    listDiv.innerHTML = html;
+
+                    actionsDiv.style.display = 'block';
+                    summarySpan.textContent = `将释放 ${formatSize(data.total_size)} 空间`;
+                }
+
+                showMessage("storage-message", "扫描完成", "success");
+            } else {
+                showMessage("storage-message", "扫描失败", "error");
+            }
+        }
+
+        async function cleanupOrphanFiles() {
+            if (!orphanData || orphanData.total_count === 0) return;
+
+            if (!confirm(`确定要删除 ${orphanData.total_count} 个孤立文件吗？\n\n此操作不可恢复！`)) return;
+
+            showMessage("storage-message", "正在删除孤立文件...", "info");
+
+            // 收集所有孤立文件路径
+            const paths = [
+                ...orphanData.files.uploads.map(f => f.path),
+                ...orphanData.files.processed.map(d => d.path),
+                ...orphanData.files.thumbnails.map(f => f.path)
+            ];
+
+            const res = await fetch("/admin/storage/cleanup", {
+                method: "POST",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify(paths)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                showMessage("storage-message", `已删除 ${data.deleted_count} 个孤立文件，释放 ${formatSize(data.freed_size)} 空间`, "success");
+                orphanData = null;
+                document.getElementById("orphan-list").style.display = 'none';
+                document.getElementById("orphan-actions").style.display = 'none';
+                // 刷新存储配置
+                await loadStorageConfig();
+            } else {
+                showMessage("storage-message", "清理失败", "error");
+            }
+        }
+
+        // ==================== 冷存储 ====================
+        async function loadColdStorageConfig() {
+            // 加载冷存储配置（只获取冷存储分类）
+            const resEnv = await fetch("/admin/env-config?exclude=基础配置,数据库,Redis,安全/JWT,应用服务器,文件存储目录,URL路径前缀,CORS,Celery,日志,敏感词,存储迁移", { headers });
+            if (resEnv.ok) {
+                const data = await resEnv.json();
+                const allConfig = data.config || data;
+                if (allConfig["冷存储"]) {
+                    const coldConfig = allConfig["冷存储"];
+                    const coldEnabled = coldConfig["COLD_STORAGE_ENABLED"];
+                    document.getElementById("cold-enable").value = (coldEnabled === true || coldEnabled === "true" || coldEnabled === "TRUE") ? "TRUE" : "FALSE";
+                    document.getElementById("cold-path-input").value = coldConfig["COLD_STORAGE_PATH_ROOT"] || "/data/myvideo/cold_storage";
+                    document.getElementById("cold-days-input").value = coldConfig["COLD_STORAGE_TRIGGER_DAYS"] || "180";
+                    document.getElementById("cold-views-input").value = coldConfig["COLD_STORAGE_TRIGGER_VIEWS"] || "10";
+                }
+            }
+
+            // 加载冷存储统计
+            const resStats = await fetch("/admin/cold-storage/stats", { headers });
+            if (resStats.ok) {
+                const stats = await resStats.json();
+
+                document.getElementById("cold-count").textContent = stats.cold_count + " 个";
+
+                // 渲染冷存储视频列表
+                const container = document.getElementById("cold-stats");
+                if (stats.cold_videos && stats.cold_videos.length > 0) {
+                    let html = `<table>
+                        <tr>
+                            <th>标题</th>
+                            <th>作者</th>
+                            <th>播放量</th>
+                            <th>进入冷存储时间</th>
+                            <th>操作</th>
+                        </tr>`;
+                    stats.cold_videos.forEach(v => {
+                        html += `<tr>
+                            <td>${escapeHtml(v.title)}</td>
+                            <td>${escapeHtml(v.owner)}</td>
+                            <td>${v.views}</td>
+                            <td>${formatTime(v.cold_stored_at)}</td>
+                            <td><button class="btn btn-success" onclick="restoreVideo('${v.id}')">恢复</button></td>
+                        </tr>`;
+                    });
+                    html += `</table>`;
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = "<p style='color:#888;'>暂无冷存储视频</p>";
+                }
+            }
+
+        }
+
+        async function saveColdStorageConfig() {
+            const updates = {
+                "COLD_STORAGE_ENABLED": document.getElementById("cold-enable").value,
+                "COLD_STORAGE_PATH_ROOT": document.getElementById("cold-path-input").value,
+                "COLD_STORAGE_TRIGGER_DAYS": document.getElementById("cold-days-input").value,
+                "COLD_STORAGE_TRIGGER_VIEWS": document.getElementById("cold-views-input").value,
+            };
+
+            try {
+                const res = await fetch("/admin/env-config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify(updates)
+                });
+
+                if (res.ok) {
+                    showMessage("cold-message", "冷存储配置已保存！部分配置需要重启应用生效。", "success");
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("cold-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("cold-message", "保存失败: " + err.message, "error");
+            }
+        }
+
+        async function scanCandidates() {
+            const res = await fetch("/admin/cold-storage/candidates", { headers });
+            if (!res.ok) {
+                showMessage("cold-message", "扫描失败", "error");
+                return;
+            }
+
+            const data = await res.json();
+            scannedCandidates = data.candidates || [];
+
+            document.getElementById("cold-candidates").textContent = scannedCandidates.length + " 个";
+            document.getElementById("candidates-count").textContent = `(${scannedCandidates.length} 个视频)`;
+
+            // 显示总大小
+            const totalSizeGB = (data.total_size / 1024 / 1024 / 1024).toFixed(2);
+            document.getElementById("candidates-summary").textContent =
+                scannedCandidates.length > 0 ? `总计 ${scannedCandidates.length} 个视频，约 ${totalSizeGB} GB` : "";
+
+            const container = document.getElementById("candidates-list");
+            if (scannedCandidates.length > 0) {
+                let html = `<table>
+                    <tr>
+                        <th>标题</th>
+                        <th>作者</th>
+                        <th>播放量</th>
+                        <th>创建时间</th>
+                        <th>文件大小</th>
+                        <th>操作</th>
+                    </tr>`;
+                scannedCandidates.forEach(v => {
+                    const sizeMB = (v.file_size / 1024 / 1024).toFixed(1);
+                    html += `<tr>
+                        <td>${escapeHtml(v.title)}</td>
+                        <td>${escapeHtml(v.owner)}</td>
+                        <td>${v.views}</td>
+                        <td>${formatTime(v.created_at)}</td>
+                        <td>${sizeMB} MB</td>
+                        <td><button class="btn btn-primary" onclick="migrateToCold('${v.id}')">迁移</button></td>
+                    </tr>`;
+                });
+                html += `</table>
+                <button class="btn btn-danger" style="margin-top:15px;" onclick="migrateAllCandidates()">执行迁移全部 (${scannedCandidates.length} 个)</button>
+                <span style="color:#888;margin-left:10px;">将移动约 ${totalSizeGB} GB 数据</span>`;
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = "<p style='color:#888;'>暂无符合冷存储条件的视频</p>";
+            }
+        }
+
+        async function migrateToCold(videoId) {
+            if (!confirm("确定要将该视频迁移到冷存储吗？")) return;
+
+            const res = await fetch(`/admin/cold-storage/migrate/${videoId}`, {
+                method: "POST",
+                headers
+            });
+
+            if (res.ok) {
+                alert("视频已迁移到冷存储");
+                loadColdStorageConfig();
+            } else {
+                const err = await res.json();
+                alert("迁移失败: " + (err.detail || "未知错误"));
+            }
+        }
+
+        async function migrateAllCandidates() {
+            const totalSizeGB = (scannedCandidates.reduce((sum, v) => sum + (v.file_size || 0), 0) / 1024 / 1024 / 1024).toFixed(2);
+            if (!confirm(`确定要将 ${scannedCandidates.length} 个符合条件的视频迁移到冷存储吗？\n\n将移动约 ${totalSizeGB} GB 数据。\n\n注意：迁移后原始文件将被删除，请确保已备份！`)) return;
+
+            const res = await fetch("/admin/cold-storage/migrate-all", {
+                method: "POST",
+                headers
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                alert(`批量迁移完成：成功 ${result.migrated} 个`);
+                scannedCandidates = [];
+                document.getElementById("candidates-summary").textContent = "";
+                scanCandidates();  // 重新扫描
+            } else {
+                const err = await res.json();
+                alert("批量迁移失败: " + (err.detail || "未知错误"));
+            }
+        }
+
+        async function restoreVideo(videoId) {
+            if (!confirm("确定要恢复该视频吗？")) return;
+
+            const res = await fetch(`/admin/cold-storage/restore/${videoId}`, {
+                method: "POST",
+                headers
+            });
+
+            if (res.ok) {
+                alert("视频已恢复");
+                loadColdStorageConfig();
+            } else {
+                const err = await res.json();
+                alert("恢复失败: " + (err.detail || "未知错误"));
+            }
+        }
+
+        // ==================== 工具 ====================
+        function showMessage(containerId, text, type) {
+            console.log("showMessage called:", containerId, text, type);
+
+            // 显示在指定容器中
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = `<div class="message ${type}">${text}</div>`;
+                setTimeout(() => { container.innerHTML = ""; }, 5000);
+            }
+
+            // 同时显示在全局通知区域（固定在右上角）
+            const globalContainer = document.getElementById("global-message");
+            if (globalContainer) {
+                globalContainer.innerHTML = `<div class="message ${type}" style="box-shadow: 0 4px 12px rgba(0,0,0,0.15);">${text}</div>`;
+                setTimeout(() => { globalContainer.innerHTML = ""; }, 5000);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return "-";
+            const d = new Date(isoString);
+            return d.getFullYear() + "-" +
+                (d.getMonth() + 1).toString().padStart(2, '0') + "-" +
+                d.getDate().toString().padStart(2, '0') + " " +
+                d.getHours().toString().padStart(2, '0') + ":" +
+                d.getMinutes().toString().padStart(2, '0');
+        }
+
+        // ==================== 转码设置 ====================
+        async function loadTranscodeConfig() {
+            const res = await fetch("/admin/transcode/config", { headers });
+            if (res.ok) {
+                const config = await res.json();
+                document.getElementById("transcode-concurrency").value = config.concurrency || 4;
+                document.getElementById("transcode-aging-rate").value = config.aging_rate || 0.5;
+                document.getElementById("transcode-max-priority").value = config.max_priority || 40;
+                document.getElementById("transcode-vip-priority").value = config.vip_base_priority || 10;
+                document.getElementById("transcode-paid-priority").value = config.paid_base_priority || 30;
+                document.getElementById("transcode-bump-cost").value = config.bump_cost || 5;
+            }
+        }
+
+        async function saveTranscodeConfig() {
+            const updates = {
+                "TRANSCODE_CONCURRENCY": document.getElementById("transcode-concurrency").value,
+                "TRANSCODE_AGING_RATE": document.getElementById("transcode-aging-rate").value,
+                "TRANSCODE_MAX_PRIORITY": document.getElementById("transcode-max-priority").value,
+                "TRANSCODE_VIP_BASE_PRIORITY": document.getElementById("transcode-vip-priority").value,
+                "TRANSCODE_PAID_BASE_PRIORITY": document.getElementById("transcode-paid-priority").value,
+                "TRANSCODE_BUMP_COST": document.getElementById("transcode-bump-cost").value,
+            };
+
+            try {
+                const res = await fetch("/admin/env-config", {
+                    method: "PUT",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify(updates)
+                });
+
+                if (res.ok) {
+                    showMessage("transcode-message", "转码配置已保存！部分配置需要重启 Celery worker 生效。", "success");
+                    loadTranscodeConfig();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showMessage("transcode-message", "保存失败: " + (err.detail || "未知错误"), "error");
+                }
+            } catch (err) {
+                showMessage("transcode-message", "保存失败: " + err.message, "error");
+            }
+        }
+
+        // 页面加载
+        document.addEventListener("DOMContentLoaded", () => {
+            // 检查 URL 参数切换标签
+            const params = new URLSearchParams(window.location.search);
+            const tabParam = params.get("tab");
+            if (tabParam) {
+                showTab(tabParam);
+            }
+
+            loadEnvConfig();
+            loadStorageConfig();
+            loadTranscodeConfig();
+            loadColdStorageConfig();
+        });
+    </script>
+</body>
+</html>

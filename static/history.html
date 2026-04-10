@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>观看历史 - MyVideo</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f5f7; color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+        .video-card { background: #fff; border-radius: 6px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
+        .video-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .thumb-wrapper { position: relative; padding-top: 56.25%; background: #f0f0f0; }
+        .thumb-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .duration-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+        .info-wrapper { padding: 10px 12px; }
+        .video-title { font-size: 15px; font-weight: 500; color: #18191c; margin: 0 0 6px; line-height: 1.4; height: 42px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-meta { font-size: 12px; color: #9499a0; display: flex; align-items: center; justify-content: space-between; }
+        .author-name { display: flex; align-items: center; gap: 4px; }
+        .loading { text-align: center; padding: 40px; color: #999; }
+        .page-title { font-size: 24px; margin-bottom: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+        .page-actions { margin-left: auto; display: flex; gap: 10px; }
+        .btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn-danger { background: #dc3545; color: #fff; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-secondary { background: #6c757d; color: #fff; }
+        .btn-secondary:hover { background: #5a6268; }
+        .video-card-wrapper { position: relative; }
+        .delete-btn { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: none; align-items: center; justify-content: center; font-size: 16px; z-index: 10; }
+        .video-card-wrapper:hover .delete-btn { display: flex; }
+        .delete-btn:hover { background: #dc3545; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <div class="page-title">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+        观看历史
+        <div class="page-actions">
+            <button id="clear-all-btn" class="btn btn-danger" onclick="clearAllHistory()" style="display:none;">清空全部</button>
+        </div>
+    </div>
+
+    <div class="video-grid" id="video-grid"></div>
+    <div id="loading" class="loading">正在加载历史记录...</div>
+</div>
+
+<script>
+    let historyToken = null;
+    let historyData = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            location.href = "/static/login.html";
+            return;
+        }
+        historyToken = token;
+        loadHistory(token);
+    });
+
+    async function loadHistory(token) {
+        const grid = document.getElementById("video-grid");
+        const loading = document.getElementById("loading");
+        const clearAllBtn = document.getElementById("clear-all-btn");
+
+        try {
+            const res = await fetch("/users/me/history?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                const videos = await res.json();
+                historyData = videos;
+                loading.style.display = "none";
+
+                if (videos.length === 0) {
+                    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:#999;">暂无观看历史</div>`;
+                    clearAllBtn.style.display = "none";
+                    return;
+                }
+
+                clearAllBtn.style.display = "block";
+
+                videos.forEach(v => {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "video-card-wrapper";
+
+                    const card = document.createElement("div");
+                    card.className = "video-card";
+                    card.onclick = () => location.href = `/static/video.html?id=${v.id}`;
+
+                    const thumb = v.thumbnail_path || "https://via.placeholder.com/320x180?text=Processing";
+                    const duration = v.duration ? formatDuration(v.duration) : "00:00";
+                    const date = new Date(v.created_at).toLocaleDateString();
+
+                    card.innerHTML = `
+                        <div class="thumb-wrapper">
+                            <img src="${thumb}" class="thumb-img" loading="lazy">
+                            <div class="duration-badge">${duration}</div>
+                        </div>
+                        <div class="info-wrapper">
+                            <h3 class="video-title">${v.title}</h3>
+                            <div class="video-meta">
+                                <span class="author-name">
+                                    ${v.owner ? v.owner.username : '用户'}
+                                </span>
+                                <span>${v.views || 0}播放</span>
+                            </div>
+                        </div>
+                    `;
+
+                    const deleteBtn = document.createElement("button");
+                    deleteBtn.className = "delete-btn";
+                    deleteBtn.innerHTML = "×";
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteHistory(v.id, wrapper);
+                    };
+
+                    wrapper.appendChild(card);
+                    wrapper.appendChild(deleteBtn);
+                    grid.appendChild(wrapper);
+                });
+            } else {
+                loading.innerText = "加载失败，可能需要重新登录";
+            }
+        } catch (e) {
+            console.error(e);
+            loading.innerText = "网络错误";
+        }
+    }
+
+    async function deleteHistory(videoId, element) {
+        if (!confirm("确定删除这条历史记录？")) return;
+
+        try {
+            const res = await fetch(`/users/me/history/${videoId}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + historyToken }
+            });
+
+            if (res.ok) {
+                element.remove();
+                historyData = historyData.filter(v => v.id !== videoId);
+                if (historyData.length === 0) {
+                    document.getElementById("video-grid").innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:#999;">暂无观看历史</div>`;
+                    document.getElementById("clear-all-btn").style.display = "none";
+                }
+            } else {
+                alert("删除失败");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("删除失败");
+        }
+    }
+
+    async function clearAllHistory() {
+        if (!confirm("确定清空全部历史记录？此操作不可恢复！")) return;
+
+        try {
+            const res = await fetch(`/users/me/history`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + historyToken }
+            });
+
+            if (res.ok) {
+                historyData = [];
+                document.getElementById("video-grid").innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:#999;">暂无观看历史</div>`;
+                document.getElementById("clear-all-btn").style.display = "none";
+            } else {
+                alert("清空失败");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("清空失败");
+        }
+    }
+
+    function formatDuration(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+</script>
+</body>
+</html>

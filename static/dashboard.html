@@ -2,11 +2,28 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>创作者中心 - MyVideo</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Socket.IO 客户端库 (v4.x) -->
+    <script src="/static/js/socket.io.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        @keyframes subtitlePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
         .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         h1 { margin-top: 0; color: #333; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Stats Dashboard */
+        .stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #eee; text-align: center; }
+        .stat-card h3 { margin: 0 0 10px; font-size: 14px; color: #666; font-weight: normal; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #333; }
+        .stat-card .icon { width: 28px; height: 28px; margin-bottom: 5px; display: block; color: #666; }
+        .stat-card .icon svg { width: 100%; height: 100%; }
+
         .upload-btn { background: #fb7299; color: #fff; text-decoration: none; padding: 8px 20px; border-radius: 4px; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
@@ -26,7 +43,7 @@
         .modal-actions { text-align: right; margin-top: 20px; }
         .refresh-indicator { font-size: 12px; color: #999; margin-left: 10px; opacity: 0; transition: opacity 0.5s; }
         .refresh-indicator.show { opacity: 1; }
-        
+
         /* 标签组件样式 */
         .tags-container { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #fff; min-height: 42px; cursor: text; }
         .tags-container:focus-within { border-color: #00a1d6; }
@@ -34,32 +51,138 @@
         .tag-chip .remove { cursor: pointer; font-weight: bold; opacity: 0.6; }
         .tag-chip .remove:hover { opacity: 1; }
         .tag-input { border: none !important; outline: none !important; padding: 4px !important; flex: 1; min-width: 60px; background: transparent; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stats-overview { grid-template-columns: 1fr; }
+            .container { margin: 10px; padding: 15px; }
+            table { font-size: 13px; }
+            .thumb { width: 80px; height: 45px; }
+        }
     </style>
 </head>
 <body>
 <script src="/static/js/nav.js"></script>
 
 <div class="container">
-    <h1>
-        <span>稿件管理 <span id="refresh-hint" class="refresh-indicator">自动刷新中...</span></span>
-        <a href="/static/upload.html" class="upload-btn">投稿</a>
+    <div class="stats-overview">
+        <div class="stat-card">
+            <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg></span>
+            <h3>总播放量</h3>
+            <div class="value" id="total-views">...</div>
+        </div>
+        <div class="stat-card">
+            <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></span>
+            <h3>获赞总数</h3>
+            <div class="value" id="total-likes">...</div>
+        </div>
+        <div class="stat-card">
+            <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>
+            <h3>获藏总数</h3>
+            <div class="value" id="total-favs">...</div>
+        </div>
+    </div>
+
+    <h1 style="display:flex; justify-content:space-between; align-items:center;">
+        <span>内容管理 <span id="refresh-hint" class="refresh-indicator">自动刷新中...</span></span>
+        <div style="display:flex; gap:10px;">
+             <button id="tab-btn-videos" class="upload-btn" onclick="switchTab('videos')" style="background:#00a1d6;">我的视频</button>
+             <button id="tab-btn-collections" class="upload-btn" onclick="switchTab('collections')" style="background:#fff; color:#666; border:1px solid #ddd;">我的合集</button>
+             <button id="tab-btn-uploads" class="upload-btn" onclick="switchTab('uploads')" style="background:#fff; color:#666; border:1px solid #ddd;">上传管理</button>
+             <button id="tab-btn-private" class="upload-btn" onclick="switchTab('private')" style="background:#fff; color:#666; border:1px solid #ddd;">🔒 私密视频</button>
+             <a href="/static/upload.html" class="upload-btn" style="background:#fb7299;">投稿</a>
+        </div>
     </h1>
-    
-    <table>
-        <thead>
-            <tr>
-                <th width="40%">视频信息</th>
-                <th>数据 (播放/完播)</th>
-                <th>状态</th>
-                <th>时间</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody id="video-list">
-            <tr><td colspan="5" style="text-align:center;">加载中...</td></tr>
-        </tbody>
-    </table>
+
+    <!-- Videos Tab -->
+    <div id="tab-videos">
+        <table>
+            <thead>
+                <tr>
+                    <th width="40%">视频信息</th>
+                    <th>数据 (播放/完播)</th>
+                    <th>转码状态</th>
+                    <th>审核状态</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="video-list">
+                <tr><td colspan="6" style="text-align:center;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Private Videos Tab -->
+    <div id="tab-private" style="display:none;">
+        <div id="private-videos-content">
+            <div style="text-align:center; padding:40px; color:#999;">加载中...</div>
+        </div>
+    </div>
+
+    <!-- Collections Tab -->
+    <div id="tab-collections" style="display:none;">
+        <div style="text-align:right; margin:10px 0;">
+            <button class="upload-btn" onclick="openCollectionModal()" style="background:#2f9e44;">+ 新建合集</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="50%">合集信息</th>
+                    <th>视频数</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="collection-list">
+                <tr><td colspan="4" style="text-align:center;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Uploads Tab -->
+    <div id="tab-uploads" style="display:none;">
+        <input type="file" id="resumeFileInput" accept="video/*" style="display:none;" onchange="handleResumeFileSelect(event)">
+        <input type="hidden" id="resumeSessionId">
+        <table>
+            <thead>
+                <tr>
+                    <th width="35%">文件信息</th>
+                    <th>分片进度</th>
+                    <th>上传状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="upload-list">
+                <tr><td colspan="5" style="text-align:center;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<!-- Collection Modal -->
+<div id="collectionModal" class="modal">
+    <div class="modal-content">
+        <h2 id="colModalTitle">创建合集</h2>
+        <form id="collectionForm" onsubmit="handleCollectionSubmit(event)">
+            <input type="hidden" id="colId">
+            <div class="form-group">
+                <label>合集标题</label>
+                <input type="text" id="colTitle" required placeholder="例如：Python教程系列">
+            </div>
+            <div class="form-group">
+                <label>简介描述</label>
+                <textarea id="colDesc" rows="3" placeholder="介绍一下这个合集..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" onclick="document.getElementById('collectionModal').style.display='none'" style="padding:8px 16px; margin-right:10px; background:#eee; border:none; border-radius:4px; cursor:pointer;">取消</button>
+                <button type="submit" style="padding:8px 16px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 
 <!-- 编辑弹窗 -->
 <div id="editModal" class="modal">
@@ -70,10 +193,6 @@
             <div class="form-group">
                 <label>标题</label>
                 <input type="text" id="editTitle" required>
-            </div>
-            <div class="form-group">
-                <label>描述</label>
-                <textarea id="editDescription" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;"></textarea>
             </div>
             
             <div class="form-group">
@@ -116,6 +235,52 @@
     </div>
 </div>
 
+<!-- 字幕管理弹窗 -->
+<div id="subtitleModal" class="modal">
+    <div class="modal-content" style="width: 500px;">
+        <h2>字幕管理</h2>
+        <div id="subtitleList" style="margin-bottom: 20px;"></div>
+        <hr style="border:none; border-top:1px solid #eee; margin:20px 0;">
+        <h4>上传字幕</h4>
+        <div class="form-group">
+            <label>字幕语言</label>
+            <select id="subLanguage">
+                <option value="en">English</option>
+                <option value="zh-Hans">简体中文</option>
+                <option value="zh-Hant">繁体中文</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>字幕文件 (.vtt, .srt)</label>
+            <input type="file" id="subtitleFile" accept=".vtt,.srt" style="width:100%;">
+        </div>
+        <button class='action-btn' style="background:#00a1d6; color:#fff; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="uploadSubtitle()">上传字幕</button>
+        <hr style="border:none; border-top:1px solid #eee; margin:20px 0;">
+        <h4>自动生成字幕 (AI)</h4>
+        <div class="form-group">
+            <label>语言</label>
+            <select id="autoSubLanguage">
+                <option value="en">English</option>
+                <option value="zh">中文</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+            </select>
+        </div>
+        <button class='action-btn' style="background:#9c27b0; color:#fff; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;" onclick="generateSubtitles()">使用AI生成</button>
+        <div class="modal-actions" style="margin-top:20px;">
+            <button onclick="document.getElementById('subtitleModal').style.display='none'" style="padding:8px 16px; background:#eee; border:none; border-radius:4px; cursor:pointer;">关闭</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let refreshTimer = null;
     let categories = [];
@@ -123,16 +288,550 @@
     const colors = ['#e7f5ff', '#fff0f6', '#ebfbee', '#fff9db', '#f3f0ff'];
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
+    let currentTab = 'videos';
+    let socket;
+    const videoStateMap = {};  // 缓存视频状态 {video_id: {progress, status}}
+    const uploadStateMap = {};  // 缓存上传状态 {session_id: {progress, uploaded_chunks, total_chunks}}
+
+    /**
+     * 初始化 WebSocket 连接
+     */
+    function initWebSocket() {
+        const token = localStorage.getItem("access_token");
+
+        const socketOptions = {
+            auth: { token: token },
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: 10,
+            transports: ['websocket', 'polling']
+        };
+
+        console.log('Initializing WebSocket connection via Nginx proxy...');
+
+        try {
+            socket = io('/', socketOptions);
+
+            socket.on('connect', () => {
+                console.log('✅ WebSocket connected (dashboard):', socket.id);
+                // 停止轮询
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
+                }
+            });
+
+            socket.on('transcode_progress', (data) => {
+                onTranscodeProgress(data);
+            });
+
+            socket.on('subtitle_progress', (data) => {
+                onSubtitleProgress(data);
+            });
+
+            socket.on('upload_progress', (data) => {
+                onUploadProgress(data);
+            });
+
+            socket.on('upload_complete', (data) => {
+                onUploadComplete(data);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('WebSocket disconnected (dashboard):', reason);
+                // 启用轮询作为降级
+                if (!refreshTimer) {
+                    refreshTimer = setInterval(() => loadMyVideos(true), 5000);
+                }
+            });
+
+            socket.on('error', (error) => {
+                console.error('WebSocket error:', error);
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connect_error:', error);
+            });
+
+        } catch (e) {
+            console.error('Failed to initialize WebSocket:', e);
+            // Fallback: 启用轮询
+            if (!refreshTimer) {
+                refreshTimer = setInterval(() => loadMyVideos(true), 5000);
+            }
+        }
+    }
+
+    /**
+     * 处理转码进度更新
+     */
+    function onTranscodeProgress(data) {
+        const { video_id, progress, status } = data;
+        videoStateMap[video_id] = { progress, status };
+
+        // 只有视频列表标签处于活跃时才更新UI
+        if (currentTab === 'videos') {
+            const row = document.querySelector(`tr[data-video-id="${video_id}"]`);
+            if (row) {
+                const statusCell = row.querySelector('td:nth-child(3)');
+
+                if (status === "processing") {
+                    const progressHtml = "<div style='font-size:12px; color:#00a1d6;'>转码中 " + progress + "%</div>" +
+                                        "<div style='width:100px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
+                                        "<div style='width:" + progress + "%; height:100%; background:#00a1d6; border-radius:2px;'></div></div>";
+                    statusCell.innerHTML = progressHtml;
+                } else if (status === "completed") {
+                    statusCell.innerHTML = "<span class='status-badge status-completed'>已发布</span>";
+                } else if (status === "failed") {
+                    statusCell.innerHTML = "<span class='status-badge' style='color:red; background:#ffe6e6;'>处理失败</span>";
+                }
+            }
+        }
+    }
+
+    /**
+     * 处理字幕生成进度更新
+     */
+    function onSubtitleProgress(data) {
+        const { video_id, progress, status, language } = data;
+
+        if (status === "completed") {
+            // 字幕生成完成，刷新列表
+            loadMyVideos(true);
+        } else if (status === "failed") {
+            // 字幕生成失败，恢复正常状态
+            if (currentTab === 'videos') {
+                const row = document.querySelector(`tr[data-video-id="${video_id}"]`);
+                if (row) {
+                    const statusCell = row.querySelector('td:nth-child(3)');
+                    statusCell.innerHTML = "<span class='status-badge status-completed'>已发布</span>";
+                }
+            }
+        } else {
+            // 显示字幕生成进度
+            if (currentTab === 'videos') {
+                const row = document.querySelector(`tr[data-video-id="${video_id}"]`);
+                if (row) {
+                    const statusCell = row.querySelector('td:nth-child(3)');
+                    const langNames = {
+                        "en": "英文", "zh": "中文", "zh-Hans": "简体中文",
+                        "zh-Hant": "繁体中文", "ja": "日文", "ko": "韩文",
+                        "es": "西班牙文", "fr": "法文", "de": "德文"
+                    };
+                    const langName = langNames[language] || language;
+                    statusCell.innerHTML = `<div style='font-size:12px; color:#9c27b0;'>字幕生成中 (${langName}) ${progress}%</div>` +
+                                         `<div style='width:100px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>` +
+                                         `<div style='width:${progress}%; height:100%; background:#9c27b0; border-radius:2px;'></div></div>`;
+                }
+            }
+        }
+    }
+
+    /**
+     * 处理上传进度更新
+     */
+    function onUploadProgress(data) {
+        const { session_id, progress, uploaded_chunks, total_chunks } = data;
+        uploadStateMap[session_id] = { progress, uploaded_chunks, total_chunks };
+
+        if (currentTab === 'uploads') {
+            renderUploadSessions();
+        }
+    }
+
+    /**
+     * 处理上传完成事件
+     */
+    function onUploadComplete(data) {
+        const { session_id, video_id } = data;
+        delete uploadStateMap[session_id];
+
+        if (currentTab === 'uploads') {
+            loadUploadSessions();
+        }
+
+        // 如果在视频标签页，也刷新视频列表
+        if (currentTab === 'videos') {
+            loadMyVideos(true);
+        }
+    }
+
+    /**
+     * 加载上传会话列表
+     */
+    async function loadUploadSessions() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/upload-sessions", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const sessions = await res.json();
+                sessions.forEach(s => {
+                    uploadStateMap[s.session_id] = {
+                        progress: s.progress,
+                        uploaded_chunks: s.uploaded_chunks,
+                        total_chunks: s.total_chunks
+                    };
+                });
+                renderUploadSessions(sessions);
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    /**
+     * 渲染上传会话列表
+     */
+    function renderUploadSessions(sessions) {
+        const tbody = document.getElementById("upload-list");
+        if (!tbody) return;
+
+        if (!sessions || sessions.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:40px;'>暂无正在上传的文件</td></tr>";
+            return;
+        }
+
+        let html = "";
+        sessions.forEach(s => {
+            const state = uploadStateMap[s.session_id] || {};
+            const progress = state.progress || s.progress || 0;
+            const uploaded = state.uploaded_chunks || s.uploaded_chunks || 0;
+            const total = state.total_chunks || s.total_chunks || 0;
+
+            html += `<tr data-upload-session="${s.session_id}">` +
+                "<td><div style='font-weight:500;'>" + s.title + "</div>" +
+                "<div style='font-size:12px; color:#999;'>" + s.filename + " (" + formatSize(s.file_size) + ")</div></td>" +
+                "<td>" + uploaded + " / " + total + " 分片</td>" +
+                "<td><div style='font-size:12px; color:#00a1d6;'>上传中 " + Math.round(progress) + "%</div>" +
+                "<div style='width:120px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
+                `<div id="resume-progress-${s.session_id}" style="width:` + progress + `%; height:100%; background:#00a1d6; border-radius:2px;"></div></div></td>` +
+                "<td>" + new Date(s.created_at).toLocaleString() + "</td>" +
+                "<td>" +
+                "<button class='action-btn' onclick='triggerResumeUpload(\"" + s.session_id + "\")' style='margin-right:5px;'>继续上传</button>" +
+                "<button class='action-btn' onclick='cancelUploadSession(\"" + s.session_id + "\")' style='color:#f04c49;'>取消</button>" +
+                "</td>" +
+                "</tr>";
+        });
+        tbody.innerHTML = html;
+    }
+
+    // 触发恢复上传 - 弹出文件选择
+    function triggerResumeUpload(sessionId) {
+        document.getElementById('resumeSessionId').value = sessionId;
+        document.getElementById('resumeFileInput').click();
+    }
+
+    // 取消上传会话
+    async function cancelUploadSession(sessionId) {
+        if (!confirm('确定要取消上传吗？\n\n注意：取消后将删除已上传的分片数据，需要重新上传整个文件。')) return;
+
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/upload-sessions/${sessionId}`, {
+                method: 'DELETE',
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                // 从列表移除
+                delete uploadStateMap[sessionId];
+                // 清理 localStorage
+                const pending = JSON.parse(localStorage.getItem('pendingUploadSessions') || '{}');
+                delete pending[sessionId];
+                localStorage.setItem('pendingUploadSessions', JSON.stringify(pending));
+                loadUploadSessions();
+            } else {
+                const err = await res.json();
+                alert('取消失败: ' + (err.detail || '未知错误'));
+            }
+        } catch (e) {
+            console.error('Cancel failed:', e);
+            alert('取消失败，请重试');
+        }
+    }
+
+    // 处理恢复上传的文件选择
+    async function handleResumeFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const sessionId = document.getElementById('resumeSessionId').value;
+        const token = localStorage.getItem("access_token");
+
+        // 更新状态显示
+        const row = document.querySelector(`tr[data-upload-session="${sessionId}"]`);
+        const CHUNK_SIZE = 5 * 1024 * 1024;
+
+        const updateProgress = (uploaded, total) => {
+            const pct = Math.round(uploaded / total * 100);
+            const progressBar = document.getElementById(`resume-progress-${sessionId}`);
+            if (progressBar) progressBar.style.width = pct + '%';
+            const statusText = document.getElementById(`resume-status-${sessionId}`);
+            if (statusText) statusText.innerText = `上传中 ${pct}% (${uploaded}/${total} 分片)`;
+        };
+
+        try {
+            // 获取会话详情
+            const sessionRes = await fetch(`/upload-sessions/${sessionId}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (!sessionRes.ok) throw new Error('获取会话失败');
+
+            const sessionData = await sessionRes.json();
+
+            // 检查文件名是否匹配
+            if (sessionData.filename !== file.name) {
+                alert('请选择相同的文件: ' + sessionData.filename);
+                return;
+            }
+
+            // 已上传的分片
+            let uploadedChunks = sessionData.uploaded_chunk_indexes || [];
+            const totalChunks = sessionData.total_chunks;
+
+            // 更新状态显示
+            if (row) {
+                const statusCell = row.querySelector('td:nth-child(3)');
+                statusCell.innerHTML =
+                    `<div id="resume-status-${sessionId}" style="font-size:12px; color:#00a1d6;">准备恢复 (${uploadedChunks.length}/${totalChunks})...</div>` +
+                    `<div style="width:120px; height:4px; background:#eee; border-radius:2px; margin-top:4px;">` +
+                    `<div id="resume-progress-${sessionId}" style="width:${Math.round(uploadedChunks.length/totalChunks*100)}%; height:100%; background:#00a1d6; border-radius:2px;"></div></div>`;
+
+                // 更新按钮为上传中状态
+                const actionCell = row.querySelector('td:nth-child(5)');
+                actionCell.innerHTML =
+                    `<button class='action-btn' disabled style='margin-right:5px; opacity:0.6;'>上传中...</button>` +
+                    `<button class='action-btn' onclick='cancelUploadSession("${sessionId}")' style='color:#f04c49;'>取消</button>`;
+            }
+
+            // 上传缺失的分片
+            for (let i = uploadedChunks.length; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append("chunk", chunk);
+
+                const chunkRes = await fetch(`/upload-sessions/${sessionId}/chunks/${i}`, {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + token },
+                    body: formData
+                });
+
+                if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 上传失败`);
+
+                const chunkData = await chunkRes.json();
+                uploadedChunks = chunkData.uploaded_chunks; // 更新已上传分片数
+                updateProgress(uploadedChunks, totalChunks);
+            }
+
+            // 完成上传
+            const completeRes = await fetch(`/upload-sessions/${sessionId}/complete`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (completeRes.ok) {
+                // 从列表移除（上传完成不再是进行中的会话）
+                loadUploadSessions();
+            } else {
+                const err = await completeRes.json();
+                throw new Error(err.detail || '完成上传失败');
+            }
+
+        } catch (e) {
+            console.error('Resume upload failed:', e);
+            alert('恢复上传失败: ' + e.message);
+            loadUploadSessions();
+        }
+    }
+
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
-        console.log('Dashboard Page JS Version: 1.0.2'); // 添加版本号
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
-        
+
+        // 初始化 WebSocket 连接
+        initWebSocket();
+
+        loadStats();
         await loadCategories();
-        loadMyVideos();
-        refreshTimer = setInterval(loadMyVideos, 3000);
+        loadMyVideos(true);  // 初始加载，不显示轮询提示
         initTagInput();
     });
+
+    async function loadStats() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/users/me/stats", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("total-views").innerText = data.total_views;
+                document.getElementById("total-likes").innerText = data.total_likes;
+                document.getElementById("total-favs").innerText = data.total_favorites;
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.getElementById("tab-videos").style.display = tab === 'videos' ? 'block' : 'none';
+        document.getElementById("tab-collections").style.display = tab === 'collections' ? 'block' : 'none';
+        document.getElementById("tab-uploads").style.display = tab === 'uploads' ? 'block' : 'none';
+        document.getElementById("tab-private").style.display = tab === 'private' ? 'block' : 'none';
+
+        const btnVideos = document.getElementById("tab-btn-videos");
+        const btnCols = document.getElementById("tab-btn-collections");
+        const btnUploads = document.getElementById("tab-btn-uploads");
+        const btnPrivate = document.getElementById("tab-btn-private");
+
+        // 重置所有按钮样式
+        [btnVideos, btnCols, btnUploads, btnPrivate].forEach(btn => {
+            btn.style.background = "#fff";
+            btn.style.color = "#666";
+            btn.style.border = "1px solid #ddd";
+        });
+
+        if (tab === 'videos') {
+            btnVideos.style.background = "#00a1d6";
+            btnVideos.style.color = "#fff";
+            btnVideos.style.border = "none";
+            loadMyVideos();
+        } else if (tab === 'collections') {
+            btnCols.style.background = "#00a1d6";
+            btnCols.style.color = "#fff";
+            btnCols.style.border = "none";
+            loadMyCollections();
+        } else if (tab === 'uploads') {
+            btnUploads.style.background = "#00a1d6";
+            btnUploads.style.color = "#fff";
+            btnUploads.style.border = "none";
+            loadUploadSessions();
+        } else if (tab === 'private') {
+            btnPrivate.style.background = "#00a1d6";
+            btnPrivate.style.color = "#fff";
+            btnPrivate.style.border = "none";
+            loadPrivateVideos();
+        }
+    }
+
+    async function loadMyCollections() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/collections?user_id=" + parseJwt(token).sub, { // Need to resolve username to ID or backend supports "me"
+                 // Actually backend /collections takes user_id. But "me" logic is better.
+                 // Backend: get_collections(user_id=...). If I pass nothing, it lists all? No, existing code:
+                 // if user_id: filter.
+                 // So I need to pass my user_id.
+            });
+            // Wait, /collections expects user_id param to filter by user. If not provided, it returns all?
+            // Let's check backend code again.
+            // Yes.
+
+            // To be safe, let's use /users/me to get ID first or use a new endpoint /users/me/collections.
+            // I'll use /users/me first.
+            const userRes = await fetch("/users/me", { headers: { "Authorization": "Bearer " + token } });
+            const user = await userRes.json();
+
+            const res2 = await fetch("/collections?user_id=" + user.id, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res2.ok) {
+                const cols = await res2.json();
+                renderCollections(cols);
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function parseJwt (token) {
+        var base64Url = token.split('.')[1];
+        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    }
+
+    function renderCollections(cols) {
+        const tbody = document.getElementById("collection-list");
+        if (cols.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='4' style='text-align:center; padding:40px;'>暂无合集</td></tr>";
+            return;
+        }
+
+        let html = "";
+        cols.forEach(c => {
+             html += `<tr>
+                <td>
+                    <div style="font-weight:bold; font-size:16px;">${c.title}</div>
+                    <div style="color:#999; font-size:12px; margin-top:4px;">${c.description || "暂无简介"}</div>
+                </td>
+                <td>${c.video_count} 个视频</td>
+                <td>${new Date(c.created_at).toLocaleDateString()}</td>
+                <td>
+                    <button class='action-btn' onclick='location.href="/static/collection_manage.html?id=${c.id}"'>管理内容</button>
+                    <button class='action-btn' onclick='openCollectionModal("${c.id}", "${c.title}", "${c.description || ""}")'>编辑</button>
+                    <button class='action-btn delete' onclick='deleteCollection("${c.id}")'>删除</button>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function openCollectionModal(id, title, description) {
+        document.getElementById("colId").value = id || "";
+        document.getElementById("colTitle").value = title || "";
+        document.getElementById("colDesc").value = description || "";
+        document.getElementById("colModalTitle").innerText = id ? "编辑合集" : "创建合集";
+        document.getElementById("collectionModal").style.display = "flex";
+    }
+
+    async function handleCollectionSubmit(e) {
+        e.preventDefault();
+        const colId = document.getElementById("colId").value;
+        const title = document.getElementById("colTitle").value;
+        const description = document.getElementById("colDesc").value;
+        const token = localStorage.getItem("access_token");
+
+        try {
+            const url = colId ? `/collections/${colId}` : "/collections";
+            const method = colId ? "PUT" : "POST";
+            const res = await fetch(url, {
+                method: method,
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ title, description })
+            });
+            if (res.ok) {
+                document.getElementById("collectionModal").style.display = "none";
+                loadMyCollections();
+            } else {
+                alert(colId ? "更新失败" : "创建失败");
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function deleteCollection(id) {
+        if(!confirm("确定删除此合集吗？合集内的视频不会被删除。")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/collections/" + id, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadMyCollections();
+            else alert("删除失败");
+        } catch(e) { alert("网络错误"); }
+    }
 
     async function loadCategories() {
         try {
@@ -151,23 +850,49 @@
         } catch(e) {}
     }
 
-    async function loadMyVideos() {
+    async function loadMyVideos(skipPolling = false) {
         const token = localStorage.getItem("access_token");
         try {
-            document.getElementById("refresh-hint").classList.add("show");
+            // 只在手动刷新或轮询时显示提示
+            if (!skipPolling) {
+                document.getElementById("refresh-hint").classList.add("show");
+            }
+
             const res = await fetch("/users/me/videos", {
                 headers: { "Authorization": "Bearer " + token }
             });
-            setTimeout(() => document.getElementById("refresh-hint").classList.remove("show"), 500);
+
+            if (!skipPolling) {
+                setTimeout(() => document.getElementById("refresh-hint").classList.remove("show"), 500);
+            }
 
             if (res.ok) {
                 const videos = await res.json();
-                renderTable(videos);
-                
-                const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
-                if (!hasProcessing && refreshTimer) {
+                // 只传给 renderTable 非私密视频
+                renderTable(videos.filter(v => v.visibility !== "private"));
+
+                // 加载队列信息
+                videos.filter(v => v.visibility !== "private").forEach(v => {
+                    if (v.status === "pending" || v.status === "processing") {
+                        loadQueueInfo(v.id);
+                    }
+                });
+
+                // 仅在WebSocket未连接时启用轮询
+                if (!socket || !socket.connected) {
+                    const hasProcessing = videos.some(v => v.status === "processing" || v.status === "pending");
+                    if (hasProcessing && !refreshTimer) {
+                        // 有处理中的视频且没有定时器，启动轮询
+                        refreshTimer = setInterval(() => loadMyVideos(true), 5000);
+                    } else if (!hasProcessing && refreshTimer) {
+                        // 没有处理中的视频，停止轮询
+                        clearInterval(refreshTimer);
+                        refreshTimer = null;
+                    }
+                } else if (refreshTimer) {
+                    // WebSocket已连接，停止轮询
                     clearInterval(refreshTimer);
-                    refreshTimer = setInterval(loadMyVideos, 10000); 
+                    refreshTimer = null;
                 }
             }
         } catch (e) { console.error(e); }
@@ -175,76 +900,564 @@
 
     function renderTable(videos) {
         const tbody = document.getElementById("video-list");
-        if (videos.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:40px;'>暂无稿件</td></tr>";
-            return;
+        // 只显示非私密视频
+        const publicVideos = videos.filter(v => v.visibility !== "private");
+
+        if (publicVideos.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:40px;'>暂无稿件</td></tr>";
+        } else {
+            let html = "";
+            publicVideos.forEach(v => {
+                html += renderVideoRow(v);
+            });
+            tbody.innerHTML = html;
         }
-        
-        let html = "";
-        videos.forEach(v => {
-            console.log('Video ID:', v.id, 'Original category_id:', v.category_id, 'Type:', typeof v.category_id); // 添加日志
-            const statusClass = v.status === "completed" ? "status-completed" : "";
-            const rate = v.views > 0 ? Math.round((v.complete_views / v.views) * 100) + "%" : "0%";
-            
-            let statusHtml = "";
-            if (v.status === "processing") {
-                statusHtml = "<div style='font-size:12px; color:#00a1d6;'>转码中 " + (v.progress || 0) + "%</div>" +
-                             "<div style='width:100px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
-                             "<div style='width:" + (v.progress || 0) + "%; height:100%; background:#00a1d6; border-radius:2px;'></div></div>";
-            } else if (v.status === "failed") {
-                statusHtml = "<span class='status-badge' style='color:red; background:#ffe6e6;'>处理失败</span>";
-            } else if (v.status === "pending") {
-                statusHtml = "<span class='status-badge'>等待处理</span>";
-            } else {
-                statusHtml = "<span class='status-badge " + statusClass + "'>已发布</span>";
-            }
-            
-            // 安全处理 tags
-            const tagArray = Array.isArray(v.tags) ? v.tags : [];
-            const tagsStr = tagArray.join(",").replace(/"/g, "&quot;");
-            const titleSafe = v.title.replace(/"/g, "&quot;");
-            
-            html += "<tr>" +
-                "<td><div class='video-cell'>" +
-                "<img src='" + (v.thumbnail_path || "/static/default_thumb.jpg") + "' class='thumb'>" +
-                "<div class='video-info'>" +
-                "<h4><a href='/static/video.html?id=" + v.id + "' target='_blank'>" + v.title + "</a></h4>" +
-                "<span style='font-size:12px; color:#999;'>" + (v.visibility === "private" ? "🔒 私密" : "🌍 公开") + "</span>" +
-                "</div></div></td>" +
-                "<td><div>" + v.views + " 播放 / " + v.complete_views + " 完播</div>" +
-                "<div style='font-size:12px; color:#999;'>完播率: " + rate + "</div></td>" +
-                "<td>" + statusHtml + "</td>" +
-                "<td>" + new Date(v.created_at).toLocaleDateString() + "</td>" +
-                "<td><button class='action-btn' onclick='openEdit(\"" + v.id + "\", \"" + titleSafe + "\", \"" + (v.description ? v.description.replace(/\\'/g, "&apos;").replace(/\\"/g, "&quot;") : "") + "\", \"" + v.visibility + "\", \"" + (v.category ? v.category.id : "") + "\", \"" + tagsStr + "\", \"" + (v.thumbnail_path || "") + "\")'>编辑</button>" +
-                "<button class='action-btn delete' onclick='deleteVideo(\"" + v.id + "\")'>删除</button></td>" +
-                "</tr>";
-        });
-        tbody.innerHTML = html;
     }
 
-    async function openEdit(id, title, description, visibility, categoryId, tagsStr, thumbPath) {
-        console.log('openEdit called for video ID:', id);
-        console.log('Received categoryId:', categoryId, 'Type:', typeof categoryId);
+    function renderVideoRow(v) {
+        const statusClass = v.status === "completed" ? "status-completed" : "";
+        const rate = v.views > 0 ? Math.round((v.complete_views / v.views) * 100) + "%" : "0%";
 
+        // 优先使用 WebSocket 推送的进度
+        const progress = videoStateMap[v.id]?.progress || v.progress || 0;
+        const status = videoStateMap[v.id]?.status || v.status;
+
+        // 转码状态
+        let transcodeHtml = "";
+        if (status === "processing") {
+            transcodeHtml = "<div style='font-size:12px; color:#00a1d6;'>转码中 " + progress + "%</div>" +
+                         "<div style='width:80px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
+                         "<div style='width:" + progress + "%; height:100%; background:#00a1d6; border-radius:2px;'></div></div>";
+        } else if (status === "failed") {
+            transcodeHtml = "<span class='status-badge' style='color:red; background:#ffe6e6;'>转码失败</span>";
+        } else if (status === "pending") {
+            transcodeHtml = `<span class='status-badge'>等待中</span>`;
+        } else {
+            transcodeHtml = "<span class='status-badge'>已完成</span>";
+        }
+
+        // 审核状态
+        let auditHtml = "";
+        if (v.is_approved === 'pending') {
+            auditHtml = "<span class='status-badge' style='color:#f08c00; background:#fff9db;'>待审核</span>";
+        } else if (v.is_approved === 'banned') {
+            auditHtml = `<span class='status-badge' style='color:white; background:#f04c49;'>已下架</span><div style="font-size:11px; color:#f04c49; margin-top:2px;">${v.ban_reason || ""}</div>`;
+        } else if (v.is_approved === 'appealing') {
+            auditHtml = "<span class='status-badge' style='color:#f08c00; background:#fff9db;'>申诉中</span>";
+        } else if (v.is_approved === 'approved') {
+            auditHtml = "<span class='status-badge' style='color:#2f9e44; background:#e7f5ff;'>已发布</span>";
+        } else {
+            auditHtml = "<span class='status-badge'>" + v.is_approved + "</span>";
+        }
+
+        // 字幕状态（叠加在转码完成时显示）
+        if (v.subtitle_task_id && status === "completed") {
+            transcodeHtml += `<div style='font-size:11px; color:#9c27b0; margin-top:4px;'>字幕生成中...</div>`;
+        }
+
+        // 安全处理 tags
+        const tagArray = Array.isArray(v.tags) ? v.tags : [];
+        const tagsStr = tagArray.join(",").replace(/"/g, "&quot;");
+        const titleSafe = v.title.replace(/"/g, "&quot;");
+
+        let buttons = `<button class='action-btn' onclick='openEdit("${v.id}", "${titleSafe}", "${v.visibility}", "${(v.category ? v.category.id : "")}", "${tagsStr}", "${(v.thumbnail_path || "")}")'>编辑</button>`;
+
+        if (v.is_approved === 'approved') {
+            buttons += `<button class='action-btn' onclick='openSubtitleModal("${v.id}")'>字幕</button>`;
+        }
+
+        if (v.is_approved === 'banned') {
+            buttons += `<button class='action-btn' style='color:#f08c00;' onclick='appealVideo("${v.id}")'>申诉</button>`;
+        } else if (status === "failed") {
+            buttons += `<button class='action-btn' style='color:#00a1d6;' onclick='retryVideo("${v.id}")'>重试</button>`;
+        } else if (status === "pending") {
+            buttons += `<button class='action-btn' style='color:#9c27b6;' onclick='bumpVideo("${v.id}")'>付费插队</button>`;
+        }
+
+        buttons += `<button class='action-btn delete' onclick='deleteVideo("${v.id}")'>删除</button>`;
+
+        return "<tr data-video-id='" + v.id + "'>" +
+            "<td><div class='video-cell'>" +
+            "<img src='" + (v.thumbnail_path || "/static/default_thumb.jpg") + "' class='thumb'>" +
+            "<div class='video-info'>" +
+            "<h4><a href='/static/video.html?id=" + v.id + "' target='_blank'>" + v.title + "</a></h4>" +
+            "<span style='font-size:12px; color:#999;'>🌍 公开</span>" +
+            "</div></div></td>" +
+            "<td><div>" + v.views + " 播放 / " + v.complete_views + " 完播</div>" +
+            "<div style='font-size:12px; color:#999;'>完播率: " + rate + "</div></td>" +
+            "<td>" + transcodeHtml + "</td>" +
+            "<td>" + auditHtml + "</td>" +
+            "<td>" + new Date(v.created_at).toLocaleDateString() + "</td>" +
+            "<td>" + buttons + "</td>" +
+            "</tr>";
+    }
+
+    // 私密视频区域状态
+    let privateVideosUnlocked = false;
+    let privateVideosPasswordSet = false;
+
+    // 页面加载时检查是否有有效的解锁状态
+    function checkPrivateUnlockStatus() {
+        const privateToken = localStorage.getItem("private_token");
+        const unlockTime = localStorage.getItem("private_unlock_time");
+        const unlockTimeout = parseInt(localStorage.getItem("private_unlock_timeout") || "600"); // 默认10分钟
+
+        if (privateToken && unlockTime) {
+            const elapsed = (Date.now() - parseInt(unlockTime)) / 1000; // 秒
+            if (elapsed < unlockTimeout) {
+                return true; // 仍在有效期内
+            }
+        }
+        return false;
+    }
+
+    // 初始化私密视频解锁状态
+    privateVideosUnlocked = checkPrivateUnlockStatus();
+
+    async function loadPrivateVideos() {
+        const container = document.getElementById("private-videos-content");
+        const token = localStorage.getItem("access_token");
+
+        // 先检查用户是否设置了私密视频密码
+        try {
+            const userRes = await fetch("/users/me", { headers: { "Authorization": "Bearer " + token } });
+            if (userRes.ok) {
+                const userData = await userRes.json();
+                privateVideosPasswordSet = !!userData.has_private_videos_password;
+            }
+        } catch (e) {}
+
+        if (!privateVideosPasswordSet) {
+            // 没有设置密码，显示设置密码界面
+            container.innerHTML = `
+                <div style="background:#f8f9fa; padding:30px; border-radius:8px; text-align:center; margin-top:20px;">
+                    <h3 style="color:#333; margin-bottom:15px;">🔒 设置私密视频密码</h3>
+                    <p style="color:#666; margin-bottom:20px;">首次使用私密视频功能，请先设置密码</p>
+                    <div style="max-width:400px; margin:0 auto;">
+                        <input type="password" id="new-private-password" placeholder="请输入密码（至少4位）" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:10px; box-sizing:border-box;">
+                        <input type="password" id="confirm-private-password" placeholder="确认密码" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px; box-sizing:border-box;">
+                        <button onclick="setupPrivatePassword()" style="width:100%; padding:10px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">设置密码</button>
+                        <div id="setup-error" style="color:red; margin-top:10px; display:none;"></div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        if (!privateVideosUnlocked) {
+            // 已设置密码但未解锁，显示解锁界面
+            container.innerHTML = `
+                <div style="background:#f8f9fa; padding:30px; border-radius:8px; text-align:center; margin-top:20px;">
+                    <h3 style="color:#333; margin-bottom:15px;">🔒 私密视频</h3>
+                    <p style="color:#666; margin-bottom:20px;">请输入私密视频密码解锁</p>
+                    <div style="max-width:400px; margin:0 auto;">
+                        <input type="password" id="private-videos-password" placeholder="请输入私密视频密码" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px; box-sizing:border-box;">
+                        <button onclick="unlockPrivateVideos()" style="width:100%; padding:10px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">解锁</button>
+                        <div id="private-password-error" style="color:red; margin-top:10px; display:none;"></div>
+                        <p style="margin-top:15px; font-size:12px; color:#999;">
+                            忘记密码？<a href="/static/admin/settings.html" style="color:#00a1d6;">在设置中重置</a>
+                        </p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // 已解锁，加载私密视频列表
+        try {
+            const res = await fetch("/users/me/videos/private", { headers: { "Authorization": "Bearer " + token } });
+            if (res.ok) {
+                const videos = await res.json();
+                if (videos.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align:center; padding:60px 20px; color:#999;">
+                            <div style="font-size:48px; margin-bottom:15px;">🔒</div>
+                            <p>暂无私密视频</p>
+                        </div>
+                    `;
+                } else {
+                    // 获取每个视频的分享信息
+                    const videosWithShares = await Promise.all(videos.map(async (v) => {
+                        try {
+                            const shareRes = await fetch(`/videos/${v.id}/share`, {
+                                headers: { "Authorization": "Bearer " + token }
+                            });
+                            if (shareRes.ok) {
+                                const shareData = await shareRes.json();
+                                return { ...v, shares: shareData.shares || [] };
+                            }
+                        } catch (e) {}
+                        return { ...v, shares: [] };
+                    }));
+
+                    container.innerHTML = `
+                        <div style="margin-top:20px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th width="40%">视频信息</th>
+                                        <th>转码状态</th>
+                                        <th>审核状态</th>
+                                        <th>时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${videosWithShares.map(v => renderPrivateVideoRow(v)).join("")}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+            } else {
+                container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">加载失败</div>';
+            }
+        } catch (e) {
+            container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">加载失败</div>';
+        }
+    }
+
+    async function setupPrivatePassword() {
+        const password = document.getElementById("new-private-password").value;
+        const confirm = document.getElementById("confirm-private-password").value;
+        const errorDiv = document.getElementById("setup-error");
+
+        if (password.length < 4) {
+            errorDiv.style.display = "block";
+            errorDiv.textContent = "密码至少4位";
+            return;
+        }
+        if (password !== confirm) {
+            errorDiv.style.display = "block";
+            errorDiv.textContent = "两次密码不一致";
+            return;
+        }
+
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/users/me/private-videos-password", {
+                method: "PUT",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ password })
+            });
+
+            if (res.ok) {
+                privateVideosPasswordSet = true;
+                privateVideosUnlocked = true;
+                alert("密码设置成功！");
+                loadPrivateVideos();
+            } else {
+                errorDiv.style.display = "block";
+                errorDiv.textContent = "设置失败";
+            }
+        } catch (e) {
+            errorDiv.style.display = "block";
+            errorDiv.textContent = "设置失败：" + e.message;
+        }
+    }
+
+    async function unlockPrivateVideos() {
+        const password = document.getElementById("private-videos-password").value;
+        const token = localStorage.getItem("access_token");
+        const errorDiv = document.getElementById("private-password-error");
+
+        try {
+            const res = await fetch("/users/me/verify-private-password", {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ password })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.temp_token) {
+                    localStorage.setItem("private_token", data.temp_token);
+                }
+                // 记录解锁时间
+                localStorage.setItem("private_unlock_time", Date.now().toString());
+                // 默认10分钟有效期
+                localStorage.setItem("private_unlock_timeout", "600");
+                privateVideosUnlocked = true;
+                loadPrivateVideos();
+            } else {
+                errorDiv.style.display = "block";
+                errorDiv.textContent = "密码错误";
+            }
+        } catch (e) {
+            errorDiv.style.display = "block";
+            errorDiv.textContent = "验证失败";
+        }
+    }
+
+    function renderPrivateVideoRow(v) {
+        const status = v.status;
+        let transcodeHtml = "";
+        if (status === "completed") {
+            transcodeHtml = "<span class='status-badge'>已完成</span>";
+        } else if (status === "failed") {
+            transcodeHtml = "<span class='status-badge' style='color:red; background:#ffe6e6;'>转码失败</span>";
+        } else if (status === "pending") {
+            transcodeHtml = `<span class='status-badge'>等待中</span>`;
+        } else if (status === "processing") {
+            transcodeHtml = "<span class='status-badge'>转码中</span>";
+        }
+
+        let auditHtml = "";
+        if (v.is_approved === 'pending') {
+            auditHtml = "<span class='status-badge' style='color:#f08c00; background:#fff9db;'>待审核</span>";
+        } else if (v.is_approved === 'approved') {
+            auditHtml = "<span class='status-badge' style='color:#2f9e44; background:#e7f5ff;'>已发布</span>";
+        } else if (v.is_approved === 'banned') {
+            auditHtml = "<span class='status-badge' style='color:white; background:#f04c49;'>已下架</span>";
+        }
+
+        const shares = v.shares || [];
+        const validShares = shares.filter(s => !s.is_expired);
+        const shareCount = validShares.length;
+
+        const titleSafe = v.title.replace(/"/g, "&quot;");
+        let buttons = `<button class='action-btn' onclick='openEdit("${v.id}", "${titleSafe}", "${v.visibility}", "${(v.category ? v.category.id : "")}", "", "${(v.thumbnail_path || "")}")'>编辑</button>`;
+        buttons += `<button class='action-btn' style='color:#2f9e44;' onclick='shareVideo("${v.id}")'>分享</button>`;
+
+        // 分享链接下拉列表
+        if (shareCount > 0) {
+            const dropdownId = `share-dropdown-${v.id}`;
+            buttons += `<div style="position:relative; display:inline-block;">
+                <button class='action-btn' onclick='toggleShareDropdown("${dropdownId}")' style='color:#2f9e44;'>链接(${shareCount})</button>
+                <div id='${dropdownId}' style='display:none; position:absolute; right:0; top:100%; background:#fff; border:1px solid #ddd; border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:100; min-width:300px; max-width:500px; max-height:300px; overflow-y:auto;'>
+                    ${validShares.map(s => {
+                        const expires = s.expires_at ? new Date(s.expires_at).toLocaleString() : "永不过期";
+                        return `<div style='padding:10px; border-bottom:1px solid #eee; font-size:12px;'>
+                            <div style='word-break:break-all; margin-bottom:5px;'>
+                                <a href='${s.share_url}' target='_blank' style='color:#00a1d6;'>${s.share_url}</a>
+                            </div>
+                            <div style='color:#666;'>到期: ${expires} <button onclick='invalidateShare("${v.id}", "${s.token}")' style='margin-left:10px; padding:2px 8px; font-size:11px; background:#f04c49; color:#fff; border:none; border-radius:3px; cursor:pointer;'>失效</button></div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }
+
+        buttons += `<button class='action-btn delete' onclick='deleteVideo("${v.id}")'>删除</button>`;
+
+        return "<tr>" +
+            "<td><div class='video-cell'>" +
+            "<img src='" + (v.thumbnail_path || "/static/default_thumb.jpg") + "' class='thumb'>" +
+            "<div class='video-info'>" +
+            "<h4><a href='/static/video.html?id=" + v.id + "' target='_blank'>" + v.title + "</a></h4>" +
+            "<span style='font-size:12px; color:#999;'>🔒 私密</span>" +
+            "</div></div></td>" +
+            "<td>" + transcodeHtml + "</td>" +
+            "<td>" + auditHtml + "</td>" +
+            "<td>" + new Date(v.created_at).toLocaleDateString() + "</td>" +
+            "<td>" + buttons + "</td>" +
+            "</tr>";
+    }
+
+    function toggleShareDropdown(id) {
+        // 关闭其他下拉
+        document.querySelectorAll('.share-dropdown-content').forEach(el => {
+            if (el.id !== id) el.style.display = 'none';
+        });
+        const dropdown = document.getElementById(id);
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+
+    // 点击其他地方关闭分享下拉
+    document.addEventListener('click', function(e) {
+        if (!e.target.matches('[onclick^="toggleShareDropdown"]') && !e.target.closest('[id^="share-dropdown-"]')) {
+            document.querySelectorAll('[id^="share-dropdown-"]').forEach(el => {
+                el.style.display = 'none';
+            });
+        }
+    });
+
+    async function invalidateShare(videoId, shareToken) {
+        if (!confirm("确定要让该分享链接失效吗？")) return;
+
+        const authToken = localStorage.getItem("access_token");
+        try {
+            // 删除指定token的分享链接
+            const res = await fetch(`/videos/${videoId}/share?token=${encodeURIComponent(shareToken)}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + authToken }
+            });
+
+            if (res.ok) {
+                alert("分享链接已失效");
+                loadPrivateVideos(); // 重新加载
+            } else {
+                const err = await res.json();
+                alert("操作失败：" + (err.detail || "未知错误"));
+            }
+        } catch (e) {
+            alert("操作失败：" + e.message);
+        }
+    }
+
+    async function shareVideo(videoId) {
+        const hours = prompt("请输入链接有效期（小时），不填则永不过期：", "24");
+        if (hours === null) return;
+
+        const token = localStorage.getItem("access_token");
+        let url = `/videos/${videoId}/share`;
+        if (hours) {
+            url += `?expires_hours=${parseInt(hours)}`;
+        }
+
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const shareUrl = data.share_url;
+                // 显示分享对话框
+                showShareDialog(shareUrl, data.expires_at);
+            } else {
+                const err = await res.json();
+                alert("创建分享链接失败：" + (err.detail || "未知错误"));
+            }
+        } catch (e) {
+            alert("创建分享链接失败：" + e.message);
+        }
+    }
+
+    function showShareDialog(shareUrl, expiresAt) {
+        // 移除已存在的对话框
+        const existing = document.getElementById("share-dialog-overlay");
+        if (existing) existing.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "share-dialog-overlay";
+        overlay.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;";
+        overlay.onclick = function(e) {
+            if (e.target === overlay) overlay.remove();
+        };
+
+        const dialog = document.createElement("div");
+        dialog.style.cssText = "background:#fff;border-radius:8px;padding:24px;max-width:500px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.2);";
+        dialog.innerHTML = `
+            <h3 style="margin-top:0;color:#333;">分享链接已创建</h3>
+            <p style="color:#666;margin-bottom:10px;">链接：</p>
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <input type="text" id="share-url-input" value="${shareUrl}" readonly
+                    style="flex:1;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;background:#f9f9f9;">
+                <button id="copy-share-url" style="padding:10px 16px;background:#00a1d6;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;">复制</button>
+            </div>
+            <p style="color:#666;font-size:13px;">过期时间：${expiresAt || "永不过期"}</p>
+            <button onclick="document.getElementById('share-dialog-overlay').remove()" style="margin-top:16px;padding:10px 24px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;width:100%;">关闭</button>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // 复制按钮事件
+        document.getElementById("copy-share-url").onclick = function() {
+            const input = document.getElementById("share-url-input");
+            input.select();
+            if (document.execCommand("copy")) {
+                this.textContent = "已复制!";
+                this.style.background = "#2f9e44";
+                setTimeout(() => {
+                    this.textContent = "复制";
+                    this.style.background = "#00a1d6";
+                }, 2000);
+            }
+        };
+    }
+
+    async function appealVideo(id) {
+        const reason = prompt("请输入申诉理由：");
+        if (!reason) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${id}/appeal`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) {
+                alert("申诉已提交");
+                loadMyVideos();
+            } else {
+                alert("提交失败");
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function retryVideo(id) {
+        if (!confirm("确定要重试转码吗？每个任务仅允许重试一次。")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${id}/retry`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert("重试已提交");
+                loadMyVideos();
+            } else {
+                const err = await res.json();
+                alert("重试失败: " + (err.detail || "未知错误"));
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    async function loadQueueInfo(videoId) {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${videoId}/queue_info`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const queueInfoEl = document.getElementById(`queue-info-${videoId}`);
+                if (queueInfoEl) {
+                    if (data.status === "processing") {
+                        queueInfoEl.textContent = "转码处理中...";
+                    } else if (data.in_queue) {
+                        queueInfoEl.textContent = `排队位置: 第${data.position}位 | 预计等待: ${data.estimated_minutes}分钟`;
+                    }
+                }
+            }
+        } catch(e) {}
+    }
+
+    async function bumpVideo(id) {
+        if (!confirm("确定要付费插队吗？将消耗5积分。")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos/${id}/bump`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert(`已插队到优先级队列，消耗 ${data.credits_deducted} 积分`);
+                loadMyVideos();
+            } else {
+                const err = await res.json();
+                alert("插队失败: " + (err.detail || "积分不足"));
+            }
+        } catch(e) { alert("网络错误"); }
+    }
+
+    function openEdit(id, title, visibility, categoryId, tagsStr, thumbPath) {
         document.getElementById("editId").value = id;
         document.getElementById("editTitle").value = title;
-        document.getElementById("editDescription").value = description; // 填充描述
         document.getElementById("editVisibility").value = visibility;
-        
-        await loadCategories(); // 确保分类数据已加载
-        const editCategorySelect = document.getElementById("editCategory");
-        console.log('Category Select Options HTML before setting value:', editCategorySelect.outerHTML);
-
-        if (categoryId) {
-            const numericCategoryId = Number(categoryId);
-            editCategorySelect.value = numericCategoryId;
-            console.log('Attempted to set categoryId to:', numericCategoryId);
-        } else {
-            editCategorySelect.selectedIndex = 0;
-            console.log('No categoryId, setting selectedIndex to 0.');
-        }
-        console.log('Category Select current value after setting:', editCategorySelect.value);
-        console.log('Category Select current selectedIndex after setting:', editCategorySelect.selectedIndex);
+        if(categoryId) document.getElementById("editCategory").value = categoryId;
         
         // 恢复标签 (稳健解析)
         currentTags = tagsStr ? tagsStr.split(",").filter(t => t) : [];
@@ -261,6 +1474,22 @@
             if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 const val = input.value.trim();
+
+                // 限制检查
+                if (currentTags.length >= 5) {
+                    alert("最多只能添加 5 个标签");
+                    return;
+                }
+                if (val.length > 20) {
+                    alert("单个标签不能超过 20 个字符");
+                    return;
+                }
+                // 正则检查: 中文、字母、数字、下划线、空格、横杠、点、加号、井号
+                if (!/^[\w\u4e00-\u9fa5\s\-\.\+\#]+$/.test(val)) {
+                    alert("标签包含非法字符 (仅允许中文、字母、数字、下划线、空格、横杠、点、加号、井号)");
+                    return;
+                }
+
                 if (val && !currentTags.includes(val)) {
                     currentTags.push(val);
                     renderTags();
@@ -276,7 +1505,7 @@
     function renderTags() {
         const container = document.querySelector(".tags-container");
         const input = document.getElementById("tagInput");
-        
+
         Array.from(container.children).forEach(child => {
             if (child !== input) container.removeChild(child);
         });
@@ -290,6 +1519,16 @@
             chip.style.color = textColors[colorIdx];
             container.insertBefore(chip, input);
         });
+
+        // 数量达到上限时禁用输入
+        if (currentTags.length >= 5) {
+            input.disabled = true;
+            input.placeholder = "已达标签上限 (5/5)";
+        } else {
+            input.disabled = false;
+            input.placeholder = "输入标签，按空格生成";
+            input.focus();
+        }
     }
     
     window.removeTag = function(index) {
@@ -306,9 +1545,8 @@
         e.preventDefault();
         const id = document.getElementById("editId").value;
         const title = document.getElementById("editTitle").value;
-        const description = document.getElementById("editDescription").value; // 获取描述内容
         const visibility = document.getElementById("editVisibility").value;
-        const category_id = document.getElementById("editCategory").value;
+        const category_id = document.getElementById("editCategory").value.toString(); // 确保是字符串
         const token = localStorage.getItem("access_token");
 
         const currentThumbnailPath = document.getElementById("editThumbPreview").src;
@@ -321,7 +1559,7 @@
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({ 
-                    title, description, visibility, category_id, // 增加 description
+                    title, visibility, category_id, 
                     tags: currentTags, // 提交数组
                     temp_thumbnail_path // 添加正确的临时封面路径字段名
                 })
@@ -339,30 +1577,32 @@
     async function regenerateThumb() {
         const id = document.getElementById("editId").value;
         const token = localStorage.getItem("access_token");
-        if(confirm("确定重新生成封面吗？这将覆盖现有封面。")) {
-            try {
-                const res = await fetch("/videos/" + id + "/thumbnail/regenerate", {
-                    method: "POST",
-                    headers: { "Authorization": "Bearer " + token }
-                });
-                if(res.ok) {
-                    const data = await res.json();
-                    document.getElementById("editThumbPreview").src = data.url; // 将新临时封面赋值给预览图
-                    alert("新封面已生成，请点击保存更改。"); // 提示用户保存
-                } else alert("请求失败");
-            } catch(e) { alert("请求失败"); }
-        }
+        try {
+            const res = await fetch("/videos/" + id + "/thumbnail/regenerate", {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if(res.ok) {
+                const data = await res.json();
+                if(data.url) {
+                    document.getElementById("editThumbPreview").src = data.url;
+                }
+            } else {
+                const err = await res.json();
+                alert("生成失败: " + (err.detail || "未知错误"));
+            }
+        } catch(e) { alert("请求失败: " + e.message); }
     }
 
     async function uploadThumb() {
         const id = document.getElementById("editId").value;
         const file = document.getElementById("thumbInput").files[0];
         if(!file) return;
-        
+
         const formData = new FormData();
         formData.append("file", file);
         const token = localStorage.getItem("access_token");
-        
+
         try {
             const res = await fetch("/videos/" + id + "/thumbnail/upload", {
                 method: "POST",
@@ -371,8 +1611,7 @@
             });
             if(res.ok) {
                 const data = await res.json();
-                document.getElementById("editThumbPreview").src = data.url;
-                alert("封面上传成功，请点击保存更改。");
+                document.getElementById("editThumbPreview").src = data.thumbnail_path;
             } else {
                 alert("上传失败");
             }
@@ -388,11 +1627,136 @@
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) {
+                alert("删除成功");
                 loadMyVideos();
             } else {
                 alert("删除失败");
             }
         } catch(e) { alert("网络错误"); }
+    }
+
+    // ==================== 字幕管理 ====================
+    let currentSubtitleVideoId = null;
+
+    async function openSubtitleModal(videoId) {
+        currentSubtitleVideoId = videoId;
+        await loadSubtitlesForVideo(videoId);
+        document.getElementById('subtitleModal').style.display = 'flex';
+    }
+
+    async function loadSubtitlesForVideo(videoId) {
+        try {
+            const res = await fetch(`/videos/${videoId}/subtitles`);
+            if (res.ok) {
+                const subs = await res.json();
+                displayCurrentSubtitles(subs);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function displayCurrentSubtitles(subs) {
+        const container = document.getElementById('subtitleList');
+        if (!subs || subs.length === 0) {
+            container.innerHTML = '<p style="color:#666;">暂无字幕</p>';
+            return;
+        }
+        const langNames = {
+            "en": "English", "zh": "中文", "zh-Hans": "简体中文",
+            "zh-Hant": "繁体中文", "ja": "日本語", "ko": "한국어"
+        };
+        container.innerHTML = subs.map(sub => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 8px 0; border-bottom: 1px solid #eee;">
+                <span>${langNames[sub.language] || sub.language} ${sub.is_auto_generated ? '(自动生成)' : ''}</span>
+                <button onclick="deleteSubtitle('${sub.language}')" style="color: #ff4d4f; border: none; background: none; cursor: pointer;">删除</button>
+            </div>
+        `).join('');
+    }
+
+    async function uploadSubtitle() {
+        const fileInput = document.getElementById('subtitleFile');
+        const language = document.getElementById('subLanguage').value;
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('请选择字幕文件');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('language', language);
+
+        const token = localStorage.getItem('access_token');
+        try {
+            const res = await fetch(`/videos/${currentSubtitleVideoId}/subtitles`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: formData
+            });
+            if (res.ok) {
+                alert('字幕上传成功');
+                fileInput.value = '';
+                await loadSubtitlesForVideo(currentSubtitleVideoId);
+            } else {
+                const err = await res.json();
+                alert('上传失败: ' + (err.detail || '未知错误'));
+            }
+        } catch (e) {
+            alert('上传失败');
+        }
+    }
+
+    async function generateSubtitles() {
+        const language = document.getElementById('autoSubLanguage').value;
+        const token = localStorage.getItem('access_token');
+
+        console.log('generateSubtitles called, videoId:', currentSubtitleVideoId, 'language:', language);
+
+        if (!confirm(`确定要使用AI为视频生成字幕吗？这可能需要几分钟时间。`)) {
+            return;
+        }
+
+        try {
+            console.log('Calling API:', `/videos/${currentSubtitleVideoId}/subtitles/generate`);
+            const res = await fetch(`/videos/${currentSubtitleVideoId}/subtitles/generate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ language })
+            });
+            if (res.ok) {
+                document.getElementById('subtitleModal').style.display = 'none';
+                loadMyVideos(true);  // 刷新列表，显示"字幕生成中"状态
+            } else {
+                const err = await res.json();
+                alert('启动失败: ' + (err.detail || '未知错误'));
+            }
+        } catch (e) {
+            alert('启动失败');
+        }
+    }
+
+    async function deleteSubtitle(language) {
+        if (!confirm('确定删除这个字幕？')) return;
+
+        const token = localStorage.getItem('access_token');
+        try {
+            const res = await fetch(`/videos/${currentSubtitleVideoId}/subtitles/${language}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (res.ok) {
+                await loadSubtitlesForVideo(currentSubtitleVideoId);
+            } else {
+                alert('删除失败');
+            }
+        } catch (e) {
+            alert('删除失败');
+        }
     }
 </script>
 

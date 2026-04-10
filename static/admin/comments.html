@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 评论</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; }
+        .btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div style="padding: 20px;">
+        <h1>评论管理</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>用户</th>
+                    <th>内容</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadComments);
+
+        async function loadComments() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/comments?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const comments = await res.json();
+                const tbody = document.getElementById("list");
+                tbody.innerHTML = "";
+                comments.forEach(c => {
+                    const tr = document.createElement("tr");
+                    const isDeleted = c.is_deleted;
+                    tr.innerHTML = `
+                        <td>${c.user.username}</td>
+                        <td style="max-width:400px;">${c.content}</td>
+                        <td>${new Date(c.created_at).toLocaleString()}</td>
+                        <td>
+                            ${isDeleted
+                                ? '<button class="btn btn-secondary" onclick="restoreComment(\'' + c.id + '\')">恢复</button>'
+                                : '<button class="btn btn-danger" onclick="deleteComment(\'' + c.id + '\')">删除</button>'
+                            }
+                            <a href="/static/video.html?id=${c.video_id}" target="_blank" class="btn">查看视频</a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function deleteComment(id) {
+            if (!confirm("确定要删除这条评论吗？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/comments/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadComments();
+        }
+
+        async function restoreComment(id) {
+            if (!confirm("确定要恢复这条评论吗？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/comments/${id}/restore`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadComments();
+        }
+    </script>
+</body>
+</html>

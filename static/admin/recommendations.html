@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>推荐系统管理 - MyVideo 管理后台</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 0; background: #f5f7fa; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .header h1 { margin: 0; font-size: 24px; color: #18191c; }
+
+        /* Tab 切换 */
+        .tabs { display: flex; gap: 16px; border-bottom: 2px solid #f0f0f0; margin-bottom: 20px; }
+        .tab { padding: 12px 16px; background: none; border: none; font-size: 14px; cursor: pointer; color: #999; border-bottom: 3px solid transparent; transition: 0.2s; }
+        .tab.active { color: #00a1d6; border-bottom-color: #00a1d6; }
+
+        /* 内容区 */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 表单 */
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #18191c; }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: #00a1d6; box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.1); }
+        .form-button { background: #00a1d6; color: #fff; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .form-button:hover { background: #0088b0; }
+        .form-button.danger { background: #ff6b6b; }
+        .form-button.danger:hover { background: #ff5252; }
+
+        /* 表格 */
+        .table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { background: #f5f7fa; padding: 12px; text-align: left; font-size: 14px; font-weight: 600; color: #18191c; border-bottom: 1px solid #f0f0f0; }
+        .table td { padding: 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        .table tr:hover { background: #f5f7fa; }
+
+        /* 按钮组 */
+        .actions { display: flex; gap: 8px; }
+        .btn-sm { padding: 4px 12px; font-size: 12px; }
+
+        /* 统计卡片 */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .stat-value { font-size: 24px; font-weight: 600; color: #00a1d6; margin-bottom: 4px; }
+        .stat-label { font-size: 12px; color: #999; }
+
+        /* 模态框 */
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: #fff; border-radius: 8px; padding: 20px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+        .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+        /* 加载和空状态 */
+        .loading { text-align: center; padding: 40px; color: #999; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+
+        /* 搜索框 */
+        .search-container { margin-bottom: 16px; display: flex; gap: 8px; }
+        .search-container input { flex: 1; }
+
+        /* 任务管理 */
+        .task-list { margin: 16px 0; }
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+    </style>
+</head>
+<body>
+<script src="/static/admin/admin.js"></script>
+<div class="container">
+    <div class="header">
+        <h1>📊 推荐系统管理</h1>
+    </div>
+
+    <!-- Tab 导航 -->
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab(this, 'slots')">推荐位配置</button>
+        <button class="tab" onclick="switchTab(this, 'recommendations')">推荐视频管理</button>
+        <button class="tab" onclick="switchTab(this, 'analytics')">效果分析</button>
+    </div>
+
+    <!-- 推荐位管理 -->
+    <div id="slots" class="tab-content active">
+        <button class="form-button" onclick="showSlotModal()">+ 新建推荐位</button>
+        <div class="table-wrapper" style="margin-top:16px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>显示标题</th>
+                        <th>最大数量</th>
+                        <th>推荐策略</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="slots-list">
+                    <tr><td colspan="5" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 推荐视频管理 -->
+    <div id="recommendations" class="tab-content">
+        <div class="search-container">
+            <input type="text" id="search-rec" placeholder="搜索视频标题..." class="form-input">
+            <button class="form-button" onclick="showRecommendationModal()">+ 添加推荐</button>
+            <button class="form-button" style="background:#666;" onclick="recomputeRecommendations()">🔄 重新计算</button>
+        </div>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>视频标题</th>
+                        <th>推荐类型</th>
+                        <th>优先级</th>
+                        <th>过期时间</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="recommendations-list">
+                    <tr><td colspan="6" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 效果分析 -->
+    <div id="analytics" class="tab-content">
+        <div style="margin-bottom:20px; display:flex; gap:10px">
+            <select id="analytics-slot" class="form-select" style="max-width:200px;">
+                <option value="">-- 全部推荐位 --</option>
+            </select>
+            <input type="date" id="date-from" class="form-input" style="max-width:150px;">
+            <input type="date" id="date-to" class="form-input" style="max-width:150px;">
+            <button class="form-button" onclick="loadAnalytics()">查询</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-impressions">--</div>
+                <div class="stat-label">总展示次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-clicks">--</div>
+                <div class="stat-label">总点击次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-ctr">--</div>
+                <div class="stat-label">点击率 (%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-watched">--</div>
+                <div class="stat-label">观看次数</div>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <h3 style="padding:16px 12px 0; margin:0;">表现最好的视频</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>视频</th>
+                        <th>分类</th>
+                        <th>作者</th>
+                        <th>展示</th>
+                        <th>点击</th>
+                        <th>点击率</th>
+                    </tr>
+                </thead>
+                <tbody id="top-videos">
+                    <tr><td colspan="6" class="empty">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-wrapper" style="margin-top:20px;">
+            <h3 style="padding:16px 12px 0; margin:0;">按推荐位统计</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>推荐位</th>
+                        <th>展示</th>
+                        <th>点击</th>
+                        <th>点击率</th>
+                    </tr>
+                </thead>
+                <tbody id="by-source">
+                    <tr><td colspan="6" class="empty">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 推荐位编辑模态框 -->
+<div id="slot-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header" id="slot-modal-title">新建推荐位</div>
+        <div class="form-group">
+            <label class="form-label">推荐位ID（系统标识，创建后不可修改）</label>
+            <input type="text" id="slot-name" class="form-input" placeholder="如: home_carousel (只能字母、数字、下划线)">
+            <small style="color: #999; font-size: 12px; display: block; margin-top: 4px;">
+                用于API调用，请使用英文小写。<br>
+                <strong>推荐位命名约定：</strong><br>
+                • home_carousel - 主页轮播区（5个视频）<br>
+                • category_featured - 分类推荐区（每个分类）<br>
+                • sidebar_related - 侧边栏相关推荐（10个视频）<br>
+                • trending - 热门推荐区<br>
+                • personalized - 个性化推荐（仅登录用户）
+            </small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">显示标题（管理员界面显示）</label>
+            <input type="text" id="slot-title" class="form-input" placeholder="如: 首页精选轮播">
+            <small style="color: #999; font-size: 12px; display: block; margin-top: 4px;">这是您在管理后台看到的名称</small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">最大显示数量</label>
+            <input type="number" id="slot-max" class="form-input" value="10" min="1">
+        </div>
+        <div class="form-group">
+            <label class="form-label">推荐策略</label>
+            <select id="slot-strategy" class="form-select">
+                <option value="manual_first">手动优先 (manual_first)</option>
+                <option value="algorithm_only">仅算法 (algorithm_only)</option>
+                <option value="mixed">混合 (mixed)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">启用状态</label>
+            <select id="slot-enabled" class="form-select">
+                <option value="true">✓ 启用</option>
+                <option value="false">✗ 禁用</option>
+            </select>
+        </div>
+        <div class="modal-footer">
+            <button class="form-button" style="background:#666;" onclick="closeModal('slot-modal')">取消</button>
+            <button class="form-button" onclick="saveSlot()">保存</button>
+            <button class="form-button danger" id="delete-slot-btn" style="display:none;" onclick="deleteSlot()">删除</button>
+        </div>
+    </div>
+</div>
+
+<!-- 推荐编辑模态框 -->
+<div id="recommendation-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">添加推荐</div>
+        <div class="form-group">
+            <label class="form-label">搜索视频</label>
+            <input type="text" id="video-search" class="form-input" placeholder="搜索视频标题...">
+            <div id="video-list" style="margin-top:8px; max-height:200px; overflow-y:auto; border:1px solid #f0f0f0; border-radius:4px;"></div>
+        </div>
+        <div id="selected-video" style="display:none; padding:10px; background:#f5f7fa; border-radius:4px; margin-bottom:16px;"></div>
+        <div class="form-group">
+            <label class="form-label">推荐位置</label>
+            <select id="rec-type" class="form-select">
+                <option value="home_carousel">首页轮播</option>
+                <option value="sidebar_related">侧边栏相关推荐</option>
+                <option value="category_featured">分类精选</option>
+                <option value="trending">热门推荐</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">优先级 (1-10)</label>
+            <input type="number" id="rec-priority" class="form-input" value="5" min="1" max="10">
+        </div>
+        <div class="form-group">
+            <label class="form-label">推荐理由</label>
+            <input type="text" id="rec-reason" class="form-input" placeholder="例: 优质内容推荐">
+        </div>
+        <div class="form-group">
+            <label class="form-label">过期时间（可选）</label>
+            <input type="datetime-local" id="rec-expires" class="form-input">
+        </div>
+        <div class="modal-footer">
+            <button class="form-button" style="background:#666;" onclick="closeModal('recommendation-modal')">取消</button>
+            <button class="form-button" onclick="saveRecommendation()">添加</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = "/admin";
+    let currentSlotId = null;
+    let selectedVideoId = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        if (!localStorage.getItem("access_token")) {
+            location.href = "/static/login.html";
+            return;
+        }
+        loadSlots();
+        loadRecommendations();
+        loadAnalytics();
+    });
+
+    // ==================== Tab 切换 ====================
+    function switchTab(btn, tabId) {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(tabId).classList.add("active");
+    }
+
+    // ==================== 推荐位管理 ====================
+    async function loadSlots() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`${API_BASE}/recommendation-slots`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const slots = await res.json();
+                const tbody = document.getElementById("slots-list");
+                tbody.innerHTML = "";
+
+                slots.forEach(slot => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><strong>${slot.display_title}</strong></td>
+                        <td>${slot.max_items}</td>
+                        <td>${getStrategyName(slot.recommendation_strategy)}</td>
+                        <td>${slot.enabled ? '✓ 启用' : '✗ 禁用'}</td>
+                        <td class="actions">
+                            <button class="form-button btn-sm" onclick="editSlot(${slot.id}, '${slot.slot_name}')">编辑</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // 更新分析中的推荐位选择
+                const select = document.getElementById("analytics-slot");
+                slots.forEach(slot => {
+                    const option = document.createElement("option");
+                    option.value = slot.slot_name;
+                    option.text = slot.display_title;
+                    select.appendChild(option);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function getStrategyName(strategy) {
+        const names = {
+            "manual_first": "手动优先",
+            "algorithm_only": "仅算法",
+            "mixed": "混合"
+        };
+        return names[strategy] || strategy;
+    }
+
+    function getRecommendationTypeName(type) {
+        const names = {
+            "featured_carousel": "首页轮播",
+            "category_featured": "分类推荐",
+            "sidebar": "侧边栏",
+            "trending": "热门推荐"
+        };
+        return names[type] || type;
+    }
+
+    function showSlotModal() {
+        currentSlotId = null;
+        document.getElementById("slot-modal-title").textContent = "新建推荐位";
+        document.getElementById("slot-name").value = "";
+        document.getElementById("slot-name").disabled = false;
+        document.getElementById("slot-title").value = "";
+        document.getElementById("slot-max").value = "10";
+        document.getElementById("slot-strategy").value = "manual_first";
+        document.getElementById("slot-enabled").value = "true";
+        document.getElementById("delete-slot-btn").style.display = "none";
+        document.getElementById("slot-modal").classList.add("active");
+    }
+
+    function editSlot(id, name) {
+        currentSlotId = id;
+        document.getElementById("slot-modal-title").textContent = "编辑推荐位";
+        document.getElementById("slot-name").disabled = true;
+        document.getElementById("delete-slot-btn").style.display = "inline-block";
+        loadSlotDetails(id);
+        document.getElementById("slot-modal").classList.add("active");
+    }
+
+    async function loadSlotDetails(id) {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`${API_BASE}/recommendation-slots`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const slots = await res.json();
+                const slot = slots.find(s => s.id === id);
+                if (slot) {
+                    document.getElementById("slot-name").value = slot.slot_name;
+                    document.getElementById("slot-title").value = slot.display_title;
+                    document.getElementById("slot-max").value = slot.max_items;
+                    document.getElementById("slot-strategy").value = slot.recommendation_strategy;
+                    document.getElementById("slot-enabled").value = slot.enabled ? "true" : "false";
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function saveSlot() {
+        const token = localStorage.getItem("access_token");
+        const data = {
+            display_title: document.getElementById("slot-title").value,
+            max_items: parseInt(document.getElementById("slot-max").value),
+            recommendation_strategy: document.getElementById("slot-strategy").value,
+            enabled: document.getElementById("slot-enabled").value === "true"
+        };
+
+        try {
+            let url = `${API_BASE}/recommendation-slots`;
+            let method = "POST";
+            let successMsg = "推荐位创建成功";
+
+            if (currentSlotId) {
+                url += `/${currentSlotId}`;
+                method = "PUT";
+                successMsg = "推荐位更新成功";
+            } else {
+                data.slot_name = document.getElementById("slot-name").value;
+                if (!data.slot_name) {
+                    alert("请输入推荐位名称");
+                    return;
+                }
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert(successMsg);
+                closeModal("slot-modal");
+                loadSlots();
+            } else {
+                const error = await res.json();
+                alert("操作失败: " + (error.detail || error.message || "未知错误"));
+            }
+        } catch(e) { console.error(e); alert("错误: " + e.message); }
+    }
+
+    async function deleteSlot() {
+        if (!currentSlotId) return;
+        if (!confirm("确认删除此推荐位? 这不会影响已有的推荐数据。")) return;
+
+        const token = localStorage.getItem("access_token");
+        try {
+            // 注意：API可能不支持DELETE，如果不支持可以用enabled=false来禁用
+            const res = await fetch(`${API_BASE}/recommendation-slots/${currentSlotId}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                alert("推荐位删除成功");
+                closeModal("slot-modal");
+                loadSlots();
+            } else {
+                alert("删除失败，请稍后重试");
+            }
+        } catch(e) { console.error(e); alert("错误: " + e.message); }
+    }
+
+    // ==================== 推荐管理 ====================
+    async function loadRecommendations() {
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`${API_BASE}/recommendations`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const recommendations = await res.json();
+                const tbody = document.getElementById("recommendations-list");
+                tbody.innerHTML = "";
+
+                if (recommendations.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="empty">暂无推荐</td></tr>`;
+                    return;
+                }
+
+                recommendations.forEach(rec => {
+                    const tr = document.createElement("tr");
+                    const expires = rec.expires_at ? new Date(rec.expires_at).toLocaleDateString() : "永久";
+                    const videoTitle = rec.video ? rec.video.title : "已删除的视频";
+                    const recTypeName = getRecommendationTypeName(rec.recommendation_type);
+                    tr.innerHTML = `
+                        <td><strong>${videoTitle}</strong></td>
+                        <td>${recTypeName}</td>
+                        <td>${rec.priority}</td>
+                        <td>${expires}</td>
+                        <td>${rec.enabled ? '✓' : '✗'}</td>
+                        <td class="actions">
+                            <button class="form-button btn-sm danger" onclick="deleteRecommendation('${rec.id}')">删除</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function showRecommendationModal() {
+        selectedVideoId = null;
+        document.getElementById("video-search").value = "";
+        document.getElementById("video-list").innerHTML = "";
+        document.getElementById("selected-video").style.display = "none";
+        document.getElementById("rec-reason").value = "";
+        document.getElementById("rec-priority").value = "5";
+        document.getElementById("recommendation-modal").classList.add("active");
+    }
+
+    async function saveRecommendation() {
+        if (!selectedVideoId) {
+            alert("请选择视频");
+            return;
+        }
+
+        const token = localStorage.getItem("access_token");
+        const data = {
+            video_id: selectedVideoId,
+            recommendation_type: document.getElementById("rec-type").value,
+            priority: parseInt(document.getElementById("rec-priority").value),
+            reason: document.getElementById("rec-reason").value
+        };
+
+        const expiresInput = document.getElementById("rec-expires").value;
+        if (expiresInput) {
+            data.expires_at = new Date(expiresInput).toISOString();
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/recommendations`, {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert("推荐添加成功");
+                closeModal("recommendation-modal");
+                loadRecommendations();
+            } else {
+                alert("添加失败");
+            }
+        } catch(e) { console.error(e); alert("错误: " + e.message); }
+    }
+
+    async function deleteRecommendation(id) {
+        if (!confirm("确认删除此推荐?")) return;
+
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`${API_BASE}/recommendations/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                alert("删除成功");
+                loadRecommendations();
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function recomputeRecommendations() {
+        if (!confirm("确认重新计算所有用户的推荐? 这可能需要几分钟...")) return;
+
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`${API_BASE}/recommendations/recompute-all`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                alert(`计算已启动! 任务ID: ${data.task_id}`);
+            }
+        } catch(e) { console.error(e); alert("错误: " + e.message); }
+    }
+
+    async function recomputeTrending() {
+        if (!confirm("确认重新计算热门视频? 这将更新 Redis 缓存...")) return;
+
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`${API_BASE}/recommendations/recompute-trending`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                alert(`热门计算完成! 每日热门: ${data.daily_trending?.processed_count || 0} 个视频, 分类热门: ${data.category_trending?.processed_count || 0} 个视频`);
+            } else {
+                alert("计算失败，请稍后重试");
+            }
+        } catch(e) { console.error(e); alert("错误: " + e.message); }
+    }
+
+    // ==================== 分析 ====================
+    async function loadAnalytics() {
+        const token = localStorage.getItem("access_token");
+        const slotName = document.getElementById("analytics-slot").value;
+
+        try {
+            let url = `/admin/recommendations/analytics`;
+            if (slotName) url += `?slot_name=${slotName}`;
+
+            const res = await fetch(url, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+
+                // 更新统计
+                document.getElementById("stat-impressions").textContent = data.user_engagement.total_impressions;
+                document.getElementById("stat-clicks").textContent = data.user_engagement.total_clicks;
+                document.getElementById("stat-ctr").textContent = (data.user_engagement.click_through_rate * 100).toFixed(2);
+                document.getElementById("stat-watched").textContent = data.user_engagement.total_watched;
+
+                // 表现最好的视频
+                const topBody = document.getElementById("top-videos");
+                topBody.innerHTML = "";
+                data.top_performing.slice(0, 5).forEach(v => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${v.video_title || v.video_id.substring(0, 8)}</td>
+                        <td>${v.category || '-'}</td>
+                        <td>${v.author || '-'}</td>
+                        <td>${v.impressions}</td>
+                        <td>${v.clicks}</td>
+                        <td>${(v.ctr * 100).toFixed(2)}%</td>
+                    `;
+                    topBody.appendChild(tr);
+                });
+
+                // 按来源统计
+                const sourceBody = document.getElementById("by-source");
+                sourceBody.innerHTML = "";
+                Object.entries(data.by_source).forEach(([source, stats]) => {
+                    const tr = document.createElement("tr");
+                    const ctr = stats.impressions > 0 ? (stats.clicks / stats.impressions) : 0;
+                    tr.innerHTML = `
+                        <td>${stats.source}</td>
+                        <td>${stats.impressions}</td>
+                        <td>${stats.clicks}</td>
+                        <td>${(ctr * 100).toFixed(2)}%</td>
+                    `;
+                    sourceBody.appendChild(tr);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function getRecommendationBadge(source) {
+        const badges = {
+            "manual": "手动推荐",
+            "collaborative": "协同过滤",
+            "trending": "热门推荐",
+            "category": "分类推荐",
+            "tag": "标签推荐"
+        };
+        return badges[source] || source;
+    }
+
+    // ==================== 通用函数 ====================
+    function closeModal(id) {
+        document.getElementById(id).classList.remove("active");
+    }
+
+    document.getElementById("video-search")?.addEventListener("input", async (e) => {
+        const keyword = e.target.value;
+        if (keyword.length < 2) return;
+
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/videos?keyword=${encodeURIComponent(keyword)}&size=5`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (res.ok) {
+                const videos = await res.json();
+                const list = document.getElementById("video-list");
+                list.innerHTML = "";
+
+                videos.forEach(v => {
+                    const div = document.createElement("div");
+                    div.style.cssText = "padding:8px; cursor:pointer; border-bottom:1px solid #f0f0f0; hover: background:#f5f7fa;";
+                    div.textContent = v.title;
+                    div.onclick = () => {
+                        selectedVideoId = v.id;
+                        document.getElementById("selected-video").textContent = `✓ 已选择: ${v.title}`;
+                        document.getElementById("selected-video").style.display = "block";
+                        list.innerHTML = "";
+                    };
+                    list.appendChild(div);
+                });
+            }
+        } catch(e) { console.error(e); }
+    });
+
+    // 初始化日期
+    const today = new Date();
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    document.getElementById("date-from").value = sevenDaysAgo.toISOString().split("T")[0];
+    document.getElementById("date-to").value = today.toISOString().split("T")[0];
+</script>
+</body>
+</html>

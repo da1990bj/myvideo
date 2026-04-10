@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>MyVideo - 首页</title>
     <style>
-        /* CSS 样式保持不变 */
         * { box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f5f7; color: #333; }
         header { background: #fff; height: 64px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
@@ -18,54 +17,271 @@
         .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: #ccc; cursor: pointer; object-fit: cover; }
         .login-btn { color: #00a1d6; text-decoration: none; font-size: 14px; cursor: pointer; }
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .category-bar { display: flex; gap: 12px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
-        .category-item { padding: 6px 14px; border-radius: 16px; background: #fff; color: #666; font-size: 14px; cursor: pointer; transition: 0.2s; white-space: nowrap; user-select: none; border: 1px solid transparent; }
-        .category-item:hover { color: #00a1d6; background: #e5f4fa; }
+
+        /* 轮播区 */
+        .carousel-section { margin-bottom: 20px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); position: relative; }
+        .carousel-wrapper { position: relative; overflow: hidden; height: 380px; background: #f8f9fa; }
+        .carousel-inner { display: flex; transition: transform 0.3s ease; height: 100%; }
+        .carousel-item { flex: 0 0 100%; position: relative; height: 100%; }
+        .carousel-content { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .carousel-thumb { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+        .carousel-info { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0)); padding: 60px 30px 20px; color: #fff; }
+        .carousel-title { font-size: 24px; font-weight: 600; margin-bottom: 8px; cursor: pointer; }
+        .carousel-meta { font-size: 14px; opacity: 0.8; }
+        .carousel-controls { position: absolute; bottom: 20px; right: 20px; display: flex; gap: 8px; }
+        .carousel-btn { background: rgba(255,255,255,0.3); color: #fff; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-size: 16px; }
+        .carousel-btn:hover { background: rgba(255,255,255,0.5); }
+        .carousel-dots { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+        .carousel-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; transition: 0.2s; }
+        .carousel-dot.active { background: #fff; transform: scale(1.2); }
+
+        /* 横向分类导航 */
+        .category-bar { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding: 12px 16px; background: #fff; border-radius: 8px; scrollbar-width: none; }
+        .category-bar::-webkit-scrollbar { display: none; }
+        .category-item { padding: 8px 16px; border-radius: 20px; background: #f4f5f7; color: #666; font-size: 14px; cursor: pointer; transition: 0.2s; white-space: nowrap; user-select: none; border: none; }
+        .category-item:hover { background: #e5f4fa; color: #00a1d6; }
         .category-item.active { background: #00a1d6; color: #fff; }
-        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
-        .video-card { background: #fff; border-radius: 6px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
+
+        /* 内容区两栏布局 */
+        .content-area { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+        .main-content {}
+        .sidebar { position: sticky; top: 84px; height: fit-content; }
+
+        /* 主内容区标题 */
+        .section-header { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+        .section-title { font-size: 18px; font-weight: bold; display: flex; align-items: center; gap: 8px; color: #18191c; }
+        .section-title .icon { color: #00a1d6; }
+        .section-subtitle { font-size: 13px; color: #999; }
+
+        /* 视频网格 */
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .video-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
         .video-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .thumb-wrapper { position: relative; padding-top: 56.25%; background: #f0f0f0; }
-        .thumb-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        .duration-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
-        .info-wrapper { padding: 10px 12px; }
-        .video-title { font-size: 15px; font-weight: 500; color: #18191c; margin: 0 0 6px; line-height: 1.4; height: 42px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .thumb-wrapper { position: relative; padding-top: 56.25%; background: #f0f0f0; overflow: hidden; }
+        .thumb-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+        .video-card:hover .thumb-img { transform: scale(1.05); }
+        .duration-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+        .info-wrapper { padding: 12px; }
+        .video-title { font-size: 14px; font-weight: 500; color: #18191c; margin: 0 0 8px; line-height: 1.4; height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .video-meta { font-size: 12px; color: #9499a0; display: flex; align-items: center; justify-content: space-between; }
         .author-name { display: flex; align-items: center; gap: 4px; }
+        .video-desc { font-size: 11px; color: #888; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* 侧边栏 */
+        .side-section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .side-title { font-size: 16px; font-weight: bold; color: #18191c; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #00a1d6; display: flex; align-items: center; gap: 6px; }
+        .side-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; overflow: hidden; }
+        .side-item:last-child { border-bottom: none; }
+        .side-item:last-child { border-bottom: none; }
+        .side-item:hover .side-video-title { color: #00a1d6; }
+        .side-thumb { width: 100px; height: 56px; border-radius: 4px; overflow: hidden; flex-shrink: 0; position: relative; background: #f0f0f0; }
+        .side-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .side-thumb .duration-badge { font-size: 10px; padding: 1px 4px; }
+        .side-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+        .side-video-title { font-size: 13px; color: #18191c; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; transition: color 0.2s; }
+        .side-video-author { font-size: 11px; color: #666; margin-top: 2px; }
+        .side-video-stats { font-size: 11px; color: #9499a0; margin-top: 2px; }
+
+        /* 加载状态 */
         .loading { text-align: center; padding: 40px; color: #999; }
+        .empty { text-align: center; padding: 60px 20px; color: #999; background: #fff; border-radius: 8px; }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .content-area { grid-template-columns: 1fr; }
+            .sidebar { position: static; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+            .side-section { margin-bottom: 0; }
+        }
+        @media (max-width: 640px) {
+            .video-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .sidebar { grid-template-columns: 1fr; }
+            .carousel-wrapper { height: 200px; }
+            .carousel-title { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
 <script src="/static/js/nav.js"></script>
 
-
 <div class="container">
-    <div class="category-bar" id="category-bar">
-        <div class="category-item active" onclick="filterCategory(null, this)">全部</div>
+    <!-- 轮播区 -->
+    <div class="carousel-section" id="carousel-section" style="display:none;">
+        <div class="carousel-wrapper">
+            <div class="carousel-inner" id="carousel-inner"></div>
+            <div class="carousel-controls">
+                <button class="carousel-btn" onclick="prevCarousel()">❮</button>
+                <button class="carousel-btn" onclick="nextCarousel()">❯</button>
+            </div>
+            <div class="carousel-dots" id="carousel-dots"></div>
+        </div>
     </div>
 
-    <div class="video-grid" id="video-grid"></div>
-    
-    <div id="loading" class="loading">正在加载精彩内容...</div>
+    <!-- 横向分类导航 -->
+    <div class="category-bar" id="category-bar">
+        <button class="category-item active" onclick="filterCategory(null, null, this)">全部</button>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="content-area">
+        <!-- 左侧主内容 -->
+        <div class="main-content">
+            <!-- 热门推荐 -->
+            <div id="trending-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <span class="icon">🔥</span>
+                        <span id="main-title">热门推荐</span>
+                    </div>
+                    <div class="section-subtitle" id="main-subtitle">根据热度为你推荐</div>
+                </div>
+                <div class="video-grid" id="trending-grid"></div>
+            </div>
+
+            <!-- 最近发布 -->
+            <div style="margin-top: 24px;">
+                <div class="section-header">
+                    <div class="section-title">
+                        <span class="icon">📅</span>
+                        <span>最近发布</span>
+                    </div>
+                </div>
+                <div class="video-grid" id="latest-grid"></div>
+                <div id="loading" class="loading">正在加载...</div>
+            </div>
+        </div>
+
+        <!-- 右侧边栏 -->
+        <div class="sidebar">
+            <!-- 热门榜单 -->
+            <div class="side-section">
+                <div class="side-title">🔥 热门榜单</div>
+                <div id="sidebar-trending"></div>
+            </div>
+
+            <!-- 为你推荐 -->
+            <div class="side-section" id="personalized-section" style="display:none;">
+                <div class="side-title">✨ 为你推荐</div>
+                <div id="sidebar-personalized"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- 直接内联 JS，确保逻辑必执行 -->
 <script>
-    // 全局变量
     let currentCategory = null;
+    let carouselIndex = 0;
+    let carouselItems = [];
 
-    // 页面入口
     document.addEventListener("DOMContentLoaded", async () => {
-        // 1. 加载分类
         loadCategories();
-        // 2. 加载视频
-        loadVideos();
-        // 注意：导航栏逻辑已移交 nav.js 处理
+        loadCarousel();
+        loadSidebarTrending();
+        loadSidebarPersonalized();
+        loadTrendingContent();
+        loadLatestContent();
     });
 
-    // 移除 checkUserStatus 和 renderNav，它们现在由 nav.js 接管
-    
-    // 加载分类
+    // ==================== 轮播推荐 ====================
+    async function loadCarousel() {
+        try {
+            const token = localStorage.getItem("access_token");
+            const headers = token ? { "Authorization": "Bearer " + token } : {};
+
+            const res = await fetch("/recommendations?slot_name=home_carousel&limit=5", { headers });
+            if (res.ok) {
+                const data = await res.json();
+                carouselItems = data.recommendations;
+
+                if (carouselItems.length > 0) {
+                    renderCarousel();
+                    document.getElementById("carousel-section").style.display = "block";
+                }
+            }
+        } catch(e) { console.error("Carousel load error:", e); }
+    }
+
+    function renderCarousel() {
+        const inner = document.getElementById("carousel-inner");
+        const dots = document.getElementById("carousel-dots");
+
+        inner.innerHTML = "";
+        dots.innerHTML = "";
+
+        carouselItems.forEach((rec, idx) => {
+            const item = document.createElement("div");
+            item.className = "carousel-item";
+            item.style.cursor = "pointer";
+            item.onclick = async (e) => {
+                if (e.target.closest(".carousel-controls") || e.target.closest(".carousel-dots")) return;
+                // 追踪推荐点击
+                const token = localStorage.getItem("access_token");
+                if (token) {
+                    try {
+                        await fetch("/recommendations/click", {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                            body: JSON.stringify({ video_id: rec.video.id, slot_name: "home_carousel", impression_rank: idx })
+                        });
+                    } catch(e) { console.error("Track click error:", e); }
+                }
+                location.href = '/static/video.html?id=' + rec.video.id + '&rec_slot=home_carousel&rec_rank=' + idx;
+            };
+            const thumb = rec.video.thumbnail_path || "https://via.placeholder.com/1400x380?text=Video";
+
+            const infoDiv = document.createElement("div");
+            infoDiv.className = "carousel-info";
+            infoDiv.innerHTML = `
+                <div class="carousel-title">${rec.video.title}</div>
+                <div class="carousel-meta">${rec.reason || ''} · ${rec.video.views}次播放</div>
+            `;
+
+            const contentDiv = document.createElement("div");
+            contentDiv.className = "carousel-content";
+            contentDiv.innerHTML = `<img src="${thumb}" class="carousel-thumb">`;
+            contentDiv.appendChild(infoDiv);
+            item.appendChild(contentDiv);
+            inner.appendChild(item);
+
+            const dot = document.createElement("div");
+            dot.className = "carousel-dot" + (idx === 0 ? " active" : "");
+            dot.onclick = () => goToCarouselItem(idx);
+            dots.appendChild(dot);
+        });
+
+        updateCarousel();
+
+        // 自动轮播
+        setInterval(() => {
+            carouselIndex = (carouselIndex + 1) % carouselItems.length;
+            updateCarousel();
+        }, 5000);
+    }
+
+    function nextCarousel() {
+        carouselIndex = (carouselIndex + 1) % carouselItems.length;
+        updateCarousel();
+    }
+
+    function prevCarousel() {
+        carouselIndex = (carouselIndex - 1 + carouselItems.length) % carouselItems.length;
+        updateCarousel();
+    }
+
+    function goToCarouselItem(idx) {
+        carouselIndex = idx;
+        updateCarousel();
+    }
+
+    function updateCarousel() {
+        const inner = document.getElementById("carousel-inner");
+        inner.style.transform = `translateX(-${carouselIndex * 100}%)`;
+
+        document.querySelectorAll(".carousel-dot").forEach((dot, idx) => {
+            dot.classList.toggle("active", idx === carouselIndex);
+        });
+    }
+
+    // ==================== 分类导航 ====================
     async function loadCategories() {
         try {
             const res = await fetch("/categories");
@@ -73,89 +289,276 @@
                 const categories = await res.json();
                 const bar = document.getElementById("category-bar");
                 categories.forEach(cat => {
-                    const el = document.createElement("div");
+                    const el = document.createElement("button");
                     el.className = "category-item";
                     el.innerText = cat.name;
-                    el.onclick = () => filterCategory(cat.id, el);
+                    el.onclick = () => filterCategory(cat.id, cat.name, el);
                     bar.appendChild(el);
                 });
             }
         } catch(e) { console.error(e); }
     }
 
-    function filterCategory(id, el) {
+    function filterCategory(id, name, el) {
         currentCategory = id;
+
+        // 更新分类按钮状态
         document.querySelectorAll(".category-item").forEach(i => i.classList.remove("active"));
-        el.classList.add("active");
-        loadVideos();
-    }
+        if (el) el.classList.add("active");
 
-    function handleSearch(e) {
-        if (e.key === "Enter") {
-            loadVideos(e.target.value);
+        // 更新标题
+        const titleEl = document.getElementById("main-title");
+        const subtitleEl = document.getElementById("main-subtitle");
+        if (id && name) {
+            titleEl.textContent = `${name} 热门`;
+            subtitleEl.textContent = `${name}分类下的热门视频`;
+        } else {
+            titleEl.textContent = "热门推荐";
+            subtitleEl.textContent = "根据热度为你推荐";
         }
+
+        // 只刷新热门推荐和最近发布（都按分类过滤）
+        loadTrendingContent();
+        loadLatestContent();
     }
 
-    async function loadVideos(keyword = "") {
-        const grid = document.getElementById("video-grid");
-        const loading = document.getElementById("loading");
-        
+    // ==================== 热门推荐 ====================
+    async function loadTrendingContent() {
+        const grid = document.getElementById("trending-grid");
         grid.innerHTML = "";
-        loading.style.display = "block";
-
-        let url = `/videos?size=20&sort_by=latest`;
-        if (currentCategory) url += `&category_id=${currentCategory}`;
-        if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
 
         try {
-            const res = await fetch(url);
+            let url = `/recommendations?slot_name=trending&limit=12`;
+            if (currentCategory) {
+                url += `&category_id=${currentCategory}`;
+            }
+
+            const token = localStorage.getItem("access_token");
+            const headers = token ? { "Authorization": "Bearer " + token } : {};
+
+            const res = await fetch(url, { headers });
             if (res.ok) {
-                const videos = await res.json();
-                loading.style.display = "none";
-                
+                const data = await res.json();
+                const videos = data.recommendations;
+
                 if (videos.length === 0) {
-                    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:#999;">没有找到相关视频</div>`;
+                    grid.innerHTML = `<div class="empty">暂无热门内容</div>`;
                     return;
                 }
 
-                videos.forEach(v => {
-                    const card = document.createElement("div");
-                    card.className = "video-card";
-                    card.onclick = () => location.href = `/static/video.html?id=${v.id}`;
-                    
-                    const thumb = v.thumbnail_path || "https://via.placeholder.com/320x180?text=Processing";
-                    const duration = v.duration ? formatDuration(v.duration) : "00:00";
-                    const date = new Date(v.created_at).toLocaleDateString();
-
-                    card.innerHTML = `
-                        <div class="thumb-wrapper">
-                            <img src="${thumb}" class="thumb-img" loading="lazy">
-                            <div class="duration-badge">${duration}</div>
-                        </div>
-                        <div class="info-wrapper">
-                            <h3 class="video-title">${v.title}</h3>
-                            <div class="video-meta">
-                                <span class="author-name">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                                    ${v.owner ? v.owner.username : '用户'}
-                                </span>
-                                <span>${v.views}次播放 · ${date}</span>
-                            </div>
-                        </div>
-                    `;
+                videos.forEach((rec, idx) => {
+                    rec.rank = idx;
+                    const card = createVideoCard(rec, "trending");
                     grid.appendChild(card);
                 });
             }
         } catch (e) {
             console.error(e);
-            loading.innerText = "加载失败，请检查网络";
         }
+    }
+
+    // ==================== 最近发布 ====================
+    async function loadLatestContent() {
+        const grid = document.getElementById("latest-grid");
+        const loading = document.getElementById("loading");
+
+        grid.innerHTML = "";
+        loading.style.display = "block";
+
+        try {
+            let url = `/videos?size=12&sort_by=latest`;
+            if (currentCategory) {
+                url += `&category_id=${currentCategory}`;
+            }
+
+            const res = await fetch(url);
+            if (res.ok) {
+                const videos = await res.json();
+                loading.style.display = "none";
+
+                if (videos.length === 0) {
+                    grid.innerHTML = `<div class="empty">暂无最新内容</div>`;
+                    return;
+                }
+
+                videos.forEach(v => {
+                    const card = createVideoCard({ video: v });
+                    grid.appendChild(card);
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            loading.innerText = "加载失败";
+        }
+    }
+
+    // ==================== 侧边栏热门 ====================
+    async function loadSidebarTrending() {
+        try {
+            const res = await fetch("/recommendations?slot_name=trending&limit=5");
+            if (res.ok) {
+                const data = await res.json();
+                const container = document.getElementById("sidebar-trending");
+                container.innerHTML = "";
+
+                data.recommendations.forEach((rec, idx) => {
+                    const item = document.createElement("div");
+                    item.className = "side-item";
+                    item.onclick = async () => {
+                        const token = localStorage.getItem("access_token");
+                        if (token) {
+                            try {
+                                await fetch("/recommendations/click", {
+                                    method: "POST",
+                                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ video_id: rec.video.id, slot_name: "trending", impression_rank: idx })
+                                });
+                            } catch(e) {}
+                        }
+                        location.href = `/static/video.html?id=${rec.video.id}&rec_slot=trending&rec_rank=${idx}`;
+                    };
+
+                    const thumb = rec.video.thumbnail_path || "https://via.placeholder.com/100x56?text=Video";
+                    const duration = rec.video.duration ? formatDuration(rec.video.duration) : "";
+                    const uploadDate = rec.video.created_at ? new Date(rec.video.created_at).toLocaleDateString() : "";
+
+                    item.innerHTML = `
+                        <div class="side-thumb">
+                            <img src="${thumb}" alt="">
+                            ${duration ? `<span class="duration-badge">${duration}</span>` : ""}
+                        </div>
+                        <div class="side-info">
+                            <div class="side-video-title">${rec.video.title}</div>
+                            <div class="side-video-author">${rec.video.owner ? rec.video.owner.username : '未知作者'}</div>
+                            <div class="side-video-stats">${rec.video.views}次播放 ${uploadDate ? '· ' + uploadDate : ''}</div>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    // ==================== 侧边栏为你推荐 ====================
+    async function loadSidebarPersonalized() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return;
+
+        try {
+            const res = await fetch("/recommendations?slot_name=personalized&limit=5", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const container = document.getElementById("sidebar-personalized");
+                const section = document.getElementById("personalized-section");
+
+                if (data.recommendations.length > 0) {
+                    container.innerHTML = "";
+                    data.recommendations.forEach((rec, idx) => {
+                        const item = document.createElement("div");
+                        item.className = "side-item";
+                        item.onclick = async () => {
+                            const t = localStorage.getItem("access_token");
+                            if (t) {
+                                try {
+                                    await fetch("/recommendations/click", {
+                                        method: "POST",
+                                        headers: { "Authorization": "Bearer " + t, "Content-Type": "application/json" },
+                                        body: JSON.stringify({ video_id: rec.video.id, slot_name: "personalized", impression_rank: idx })
+                                    });
+                                } catch(e) {}
+                            }
+                            location.href = `/static/video.html?id=${rec.video.id}&rec_slot=personalized&rec_rank=${idx}`;
+                        };
+
+                        const thumb = rec.video.thumbnail_path || "https://via.placeholder.com/100x56?text=Video";
+                        const duration = rec.video.duration ? formatDuration(rec.video.duration) : "";
+                        const uploadDate = rec.video.created_at ? new Date(rec.video.created_at).toLocaleDateString() : "";
+
+                        item.innerHTML = `
+                            <div class="side-thumb">
+                                <img src="${thumb}" alt="">
+                                ${duration ? `<span class="duration-badge">${duration}</span>` : ""}
+                            </div>
+                            <div class="side-info">
+                                <div class="side-video-title">${rec.video.title}</div>
+                                <div class="side-video-author">${rec.video.owner ? rec.video.owner.username : '未知作者'}</div>
+                                <div class="side-video-stats">${rec.video.views}次播放 ${uploadDate ? '· ' + uploadDate : ''}</div>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                    section.style.display = "block";
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    // ==================== 创建视频卡片 ====================
+    function createVideoCard(rec, recSlot) {
+        const card = document.createElement("div");
+        card.className = "video-card";
+        card.onclick = async (e) => {
+            if (recSlot) {
+                const token = localStorage.getItem("access_token");
+                if (token) {
+                    try {
+                        await fetch("/recommendations/click", {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                            body: JSON.stringify({ video_id: rec.video.id, slot_name: recSlot, impression_rank: rec.rank !== undefined ? rec.rank : 0 })
+                        });
+                    } catch(e) {}
+                }
+                location.href = `/static/video.html?id=${rec.video.id}&rec_slot=${recSlot}&rec_rank=${rec.rank !== undefined ? rec.rank : 0}`;
+            } else {
+                location.href = `/static/video.html?id=${rec.video.id}`;
+            }
+        };
+
+        const v = rec.video;
+        const thumb = v.thumbnail_path || "https://via.placeholder.com/320x180?text=Processing";
+        const duration = v.duration ? formatDuration(v.duration) : "";
+        const uploadDate = v.created_at ? new Date(v.created_at).toLocaleDateString() : "";
+
+        card.innerHTML = `
+            <div class="thumb-wrapper">
+                <img src="${thumb}" class="thumb-img" loading="lazy">
+                ${duration ? `<span class="duration-badge">${duration}</span>` : ""}
+            </div>
+            <div class="info-wrapper">
+                <h3 class="video-title">${v.title}</h3>
+                <div class="video-meta">
+                    <span class="author-name">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        ${v.owner ? v.owner.username : '用户'}
+                    </span>
+                    <span>${v.views}播放</span>
+                    ${uploadDate ? `<span>${uploadDate}</span>` : ''}
+                </div>
+                ${v.description ? `<div class="video-desc">${v.description.length > 60 ? v.description.substring(0, 60) + '...' : v.description}</div>` : ''}
+            </div>
+        `;
+
+        return card;
     }
 
     function formatDuration(seconds) {
         const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
+        const s = Math.floor(seconds % 60);
         return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function formatTimeAgo(date) {
+        const now = new Date();
+        const diff = Math.floor((now - date) / 1000);
+        if (diff < 60) return '刚刚';
+        if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+        if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+        if (diff < 2592000) return Math.floor(diff / 86400) + '天前';
+        if (diff < 31536000) return Math.floor(diff / 2592000) + '个月前';
+        return Math.floor(diff / 31536000) + '年前';
     }
 </script>
 </body>

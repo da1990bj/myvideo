@@ -1,0 +1,103 @@
+# MyVideo 应用服务 Docker Compose 配置
+# 使用方式:
+#   单实例: docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d
+#   多实例: docker-compose -f docker-compose.yml -f docker-compose.app.yml up -d --scale app=2 --scale celery_worker=2
+
+version: '3.9'
+
+services:
+  # ==================== FastAPI 应用 ====================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: myvideo_app
+    restart: unless-stopped
+    environment:
+      - MYVIDEO_ROOT=/app
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=myvideo
+      - DATABASE_PASSWORD=myvideo_password
+      - DATABASE_NAME=myvideo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+    volumes:
+      - ./static:/app/static:ro
+      - ./data:/app/data
+      - ./cold_storage:/app/cold_storage
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - myvideo_network
+
+  # ==================== Celery Worker ====================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: myvideo_celery_worker
+    restart: unless-stopped
+    command: celery -A celery_config worker --loglevel=info --hostname=worker@%h
+    environment:
+      - MYVIDEO_ROOT=/app
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=myvideo
+      - DATABASE_PASSWORD=myvideo_password
+      - DATABASE_NAME=myvideo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    volumes:
+      - ./static:/app/static:ro
+      - ./data:/app/data
+      - ./cold_storage:/app/cold_storage
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - myvideo_network
+
+  # ==================== Celery Beat (定时任务) ====================
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: myvideo_celery_beat
+    restart: unless-stopped
+    command: celery -A celery_config beat --loglevel=info
+    environment:
+      - MYVIDEO_ROOT=/app
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=myvideo
+      - DATABASE_PASSWORD=myvideo_password
+      - DATABASE_NAME=myvideo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    volumes:
+      - ./static:/app/static:ro
+      - ./data:/app/data
+      - ./cold_storage:/app/cold_storage
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - myvideo_network
+
+networks:
+  myvideo_network:
+    driver: bridge

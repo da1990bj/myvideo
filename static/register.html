@@ -11,6 +11,10 @@
         label { display: block; margin-bottom: 8px; font-weight: 500; color: #555; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 16px; outline: none; transition: 0.2s; }
         input:focus { border-color: #00a1d6; }
+        .password-wrapper { position: relative; }
+        .password-wrapper input { padding-right: 40px; }
+        .toggle-password { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #999; font-size: 18px; }
+        .toggle-password:hover { color: #00a1d6; }
         .btn { width: 100%; background: #00a1d6; color: #fff; border: none; padding: 12px; border-radius: 4px; font-size: 16px; cursor: pointer; transition: 0.2s; }
         .btn:hover { background: #00b5e5; }
         .footer { margin-top: 20px; font-size: 14px; color: #666; }
@@ -21,7 +25,7 @@
 
 <div class="auth-card">
     <a href="/static/index.html" class="logo">MyVideo</a>
-    
+
     <form onsubmit="handleRegister(event)">
         <div class="form-group">
             <label>用户名</label>
@@ -33,22 +37,54 @@
         </div>
         <div class="form-group">
             <label>密码</label>
-            <input type="password" id="reg-password" required placeholder="设置密码">
+            <div class="password-wrapper">
+                <input type="password" id="reg-password" required placeholder="设置密码">
+                <span class="toggle-password" onclick="togglePassword('reg-password', this)">👁</span>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>确认密码</label>
+            <div class="password-wrapper">
+                <input type="password" id="reg-password-confirm" required placeholder="再次输入密码">
+                <span class="toggle-password" onclick="togglePassword('reg-password-confirm', this)">👁</span>
+            </div>
         </div>
         <button type="submit" class="btn">注册</button>
     </form>
-    
+
     <div class="footer">
         已有账号？<a href="/static/login.html">直接登录</a>
     </div>
 </div>
 
 <script>
+    function togglePassword(inputId, eyeIcon) {
+        const input = document.getElementById(inputId);
+        if (input.type === "password") {
+            input.type = "text";
+            eyeIcon.textContent = "🙈";
+        } else {
+            input.type = "password";
+            eyeIcon.textContent = "👁";
+        }
+    }
+
     async function handleRegister(e) {
         e.preventDefault();
         const username = document.getElementById("reg-username").value;
         const email = document.getElementById("reg-email").value;
         const password = document.getElementById("reg-password").value;
+        const passwordConfirm = document.getElementById("reg-password-confirm").value;
+
+        if (password !== passwordConfirm) {
+            alert("两次输入的密码不一致");
+            return;
+        }
+
+        if (password.length < 6) {
+            alert("密码长度不能少于6位");
+            return;
+        }
 
         try {
             const response = await fetch("/users/register", {

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 视频</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; }
+        .btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-success { color: #00a1d6; border-color: #00a1d6; }
+        .btn-warning { color: #f08c00; border-color: #f08c00; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+
+    <div style="padding: 20px;">
+        <h1>视频管理</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>封面</th>
+                    <th>标题</th>
+                    <th>分类</th>
+                    <th>作者</th>
+                    <th>转码状态</th>
+                    <th>审核状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadVideos);
+
+        async function loadVideos() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/videos?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const videos = await res.json();
+                const tbody = document.getElementById("list");
+                tbody.innerHTML = "";
+                videos.forEach(v => {
+                    const tr = document.createElement("tr");
+
+                    // 转码状态
+                    let transcodeLabel = "";
+                    let transcodeColor = "#666";
+                    if (v.status === 'pending') {
+                        transcodeLabel = "等待转码";
+                        transcodeColor = "#888";
+                    } else if (v.status === 'processing') {
+                        transcodeLabel = "转码中";
+                        transcodeColor = "#00a1d6";
+                    } else if (v.status === 'completed') {
+                        transcodeLabel = "转码完成";
+                        transcodeColor = "#2f9e44";
+                    } else if (v.status === 'failed') {
+                        transcodeLabel = "转码失败";
+                        transcodeColor = "#f04c49";
+                    } else {
+                        transcodeLabel = v.status;
+                    }
+
+                    // 审核状态
+                    let auditLabel = "";
+                    let auditColor = "#666";
+                    if (v.is_approved === 'pending') {
+                        auditLabel = "待审核";
+                        auditColor = "#f08c00";
+                    } else if (v.is_approved === 'banned') {
+                        auditLabel = "已下架";
+                        auditColor = "#f04c49";
+                    } else if (v.is_approved === 'appealing') {
+                        auditLabel = "申诉中";
+                        auditColor = "#e67700";
+                    } else if (v.is_approved === 'approved') {
+                        auditLabel = "已审核";
+                        auditColor = "#2f9e44";
+                    } else {
+                        auditLabel = v.is_approved;
+                    }
+
+                    tr.innerHTML = `
+                        <td><img src="${v.thumbnail_path}" style="height:40px; border-radius:4px;"></td>
+                        <td><a href="/static/video.html?id=${v.id}" target="_blank">${v.title}</a></td>
+                        <td>${v.category ? v.category.name : '-'}</td>
+                        <td>${v.owner ? v.owner.username : '-'}</td>
+                        <td style="color:${transcodeColor}; font-weight:bold;">${transcodeLabel}</td>
+                        <td style="color:${auditColor}; font-weight:bold;">${auditLabel}</td>
+                        <td>
+                            ${v.status === 'completed' && v.is_approved === 'pending' ?
+                                `<button class="btn btn-success" onclick="approveVideo('${v.id}')">通过</button>` : ''
+                            }
+
+                            ${v.is_approved === 'approved' ?
+                                `<button class="btn btn-danger" onclick="banVideo('${v.id}')">下架</button>` : ''
+                            }
+
+                            ${v.is_approved === 'banned' || v.is_approved === 'appealing' ?
+                                `<button class="btn btn-success" onclick="approveVideo('${v.id}')">恢复上架</button>` : ''
+                            }
+                            <button class="btn" onclick="showLogs('${v.id}')">记录</button>
+                            <button class="btn btn-warning" onclick="triggerTranscode('${v.id}')">重新转码</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function banVideo(id) {
+            const reason = prompt("请输入下架原因：");
+            if (!reason) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/videos/${id}/ban`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ reason })
+            });
+            if (res.ok) loadVideos();
+        }
+
+        async function approveVideo(id) {
+            if(!confirm("确定通过审核并上架？")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/videos/${id}/approve`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) loadVideos();
+        }
+
+        async function showLogs(id) {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/videos/${id}/audit-logs`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const logs = await res.json();
+                if (logs.length === 0) return alert("暂无记录");
+                let msg = "";
+                logs.forEach(l => {
+                    const actionMap = {"ban": "下架", "approve": "上架", "appeal": "申诉"};
+                    msg += `${new Date(l.created_at).toLocaleString()} - ${l.operator_name} [${actionMap[l.action] || l.action}]\n${l.reason || ''}\n----------------\n`;
+                });
+                alert(msg);
+            }
+        }
+
+        async function triggerTranscode(id) {
+            if (!confirm("确定要重新转码该视频吗？\n\n这将删除旧的转码文件并重新生成。")) return;
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`/admin/videos/${id}/transcode`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                alert("已触发重新转码");
+                loadVideos();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert("操作失败: " + (err.detail || "未知错误"));
+            }
+        }
+    </script>
+</body>
+</html>

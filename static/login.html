@@ -59,7 +59,10 @@
             if (response.ok) {
                 const data = await response.json();
                 localStorage.setItem("access_token", data.access_token);
-                window.location.href = "/static/index.html";
+                // 检查是否有返回URL
+                const params = new URLSearchParams(window.location.search);
+                const returnUrl = params.get('return_url');
+                window.location.href = returnUrl || "/static/index.html";
             } else {
                 alert("登录失败: 用户名或密码错误");
             }

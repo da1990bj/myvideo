@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>消息中心 - MyVideo</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; background: #fff; min-height: 500px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
+        .header h2 { margin: 0; font-size: 20px; }
+        .read-all-btn { color: #666; font-size: 14px; cursor: pointer; text-decoration: none; }
+        .read-all-btn:hover { color: #00a1d6; }
+
+        .notif-item { display: flex; gap: 15px; padding: 15px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: 0.2s; }
+        .notif-item:hover { background: #fafafa; }
+        .notif-item.unread { background: #eef6fc; }
+        .notif-item:last-child { border-bottom: none; }
+
+        .sender-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+        .notif-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .notif-text { font-size: 15px; color: #333; margin-bottom: 4px; }
+        .notif-time { font-size: 12px; color: #999; }
+
+        .loading { text-align: center; color: #999; padding: 40px; }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <div class="header">
+        <h2>消息通知</h2>
+        <a class="read-all-btn" onclick="markAllRead()">一键已读</a>
+    </div>
+    <div id="notif-list"></div>
+    <div id="loading" class="loading">加载中...</div>
+</div>
+
+<script>
+    // 生成默认头像
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+        await loadNotifications(token);
+    });
+
+    async function loadNotifications(token) {
+        try {
+            const res = await fetch("/notifications?size=50", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const list = await res.json();
+                document.getElementById("loading").style.display = "none";
+                const container = document.getElementById("notif-list");
+
+                if (list.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:#ccc; padding:50px;">暂无消息</div>`;
+                    return;
+                }
+
+                container.innerHTML = "";
+                list.forEach(n => {
+                    const div = document.createElement("div");
+                    div.className = `notif-item ${n.is_read ? '' : 'unread'}`;
+                    div.onclick = () => handleNotifClick(n, token);
+
+                    const avatar = getAvatarUrl(n.sender.avatar_path) || getDefaultAvatar(n.sender.username);
+                    const text = getNotifText(n);
+                    const time = new Date(n.created_at).toLocaleString();
+
+                    div.innerHTML = `
+                        <img src="${avatar}" class="sender-avatar">
+                        <div class="notif-content">
+                            <div class="notif-text">${text}</div>
+                            <div class="notif-time">${time}</div>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function getNotifText(n) {
+        const user = `<span style="font-weight:bold; color:#333;">${n.sender.username}</span>`;
+        let text = "";
+
+        switch(n.type) {
+            case "follow": text = `${user} 关注了你`; break;
+            case "comment": text = `${user} 评论了你的视频`; break;
+            case "reply": text = `${user} 回复了你的评论`; break;
+            case "like_video": text = `${user} 赞了你的视频`; break;
+            case "system": text = `<span style="font-weight:bold; color:#f04c49;">系统通知</span>`; break;
+            default: text = `${user} 发来了新消息`;
+        }
+
+        if (n.content) {
+            text += `<div style="margin-top:4px; font-size:14px; color:#666; background:#f9f9f9; padding:8px; border-radius:4px;">${n.content}</div>`;
+        }
+        return text;
+    }
+
+    async function handleNotifClick(n, token) {
+        // Mark read
+        if (!n.is_read) {
+            fetch(`/notifications/${n.id}/read`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+        }
+
+        // Navigate
+        if (n.type === "follow") {
+            location.href = `/static/profile.html?id=${n.entity_id}`;
+        } else if (n.type === "comment" || n.type === "reply") {
+            if (n.entity_id.includes("#")) {
+                const parts = n.entity_id.split("#");
+                const videoId = parts[0];
+                const commentId = parts[1];
+                location.href = `/static/video.html?id=${videoId}#comment-${commentId}`;
+            } else {
+                // Fallback for old notifications
+                location.href = `/static/video.html?id=${n.entity_id}`;
+            }
+        } else if (n.type === "like_video" || n.type === "system") {
+            if (n.entity_id && n.entity_id.length > 20) { // Check if valid UUID length approx
+                 location.href = `/static/video.html?id=${n.entity_id}`;
+            }
+        }
+    }
+
+    async function markAllRead() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return;
+        await fetch("/notifications/read-all", {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + token }
+        });
+        location.reload();
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理 - 角色权限</title>
+    <style>
+        .container { padding: 20px; background: #fff; }
+        table { width: 100%; border-collapse: collapse; background: #fff; margin-top: 20px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+        th { background: #fafafa; font-weight: 600; }
+        .desc-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .btn { padding: 8px 16px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn:hover { background: #008dbd; }
+        .perm-checkbox { margin-right: 15px; margin-bottom: 10px; display: inline-block; }
+        .perm-checkbox input { margin-right: 6px; cursor: pointer; }
+        .perm-checkbox label { cursor: pointer; user-select: none; }
+        .perm-name { color: #333; font-weight: 500; font-size: 14px; }
+        .perm-desc { color: #999; font-size: 12px; margin-top: 2px; }
+        .perm-grid { display: flex; flex-wrap: wrap; gap: 15px; }
+    </style>
+</head>
+<body>
+    <script src="/static/admin/admin.js"></script>
+    <div class="container">
+        <h1>角色权限管理</h1>
+        <p>注意：修改权限可能会影响系统功能。请谨慎操作。勾选下方权限复选框即可配置此角色的权限。</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>角色名称</th>
+                    <th>描述</th>
+                    <th>权限配置</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="roles-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // 权限下拉列表 - 用于权限复选框
+        const PERMISSION_LIST = [
+            { code: "admin:super", name: "超级管理员", desc: "拥有所有权限，可以管理系统配置和角色权限" },
+            { code: "video:upload", name: "视频上传", desc: "允许用户上传和发布视频" },
+            { code: "video:audit", name: "视频审核", desc: "可以查看待审核视频和系统统计" },
+            { code: "video:ban", name: "视频下架", desc: "可以下架和恢复视频" },
+            { code: "user:ban", name: "用户封禁", desc: "可以封禁和解封用户账户" },
+            { code: "comment:create", name: "创建评论", desc: "允许用户发表和回复评论" },
+            { code: "comment:delete", name: "删除评论", desc: "可以删除用户评论和清理垃圾评论" },
+            { code: "social:interaction", name: "社交互动", desc: "允许关注、点赞和收藏等互动操作" }
+        ];
+
+        async function loadRoles() {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch("/admin/roles", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const roles = await res.json();
+                const tbody = document.getElementById("roles-body");
+                tbody.innerHTML = "";
+                roles.forEach(role => {
+                    const tr = document.createElement("tr");
+
+                    // 解析当前角色的权限
+                    let selectedPerms = [];
+                    if (role.permissions === "*") {
+                        selectedPerms = PERMISSION_LIST.map(p => p.code);
+                    } else if (role.permissions) {
+                        selectedPerms = role.permissions.split(",").map(p => p.trim()).filter(p => p);
+                    }
+
+                    // 生成权限复选框HTML
+                    const permCheckboxesHTML = PERMISSION_LIST.map(perm => `
+                        <div class="perm-checkbox">
+                            <input type="checkbox" id="perm-${role.id}-${perm.code}" value="${perm.code}"
+                                   ${selectedPerms.includes(perm.code) ? 'checked' : ''}>
+                            <label for="perm-${role.id}-${perm.code}">
+                                <div class="perm-name">${perm.name}</div>
+                                <div class="perm-desc">${perm.desc}</div>
+                            </label>
+                        </div>
+                    `).join("");
+
+                    tr.innerHTML = `
+                        <td style="width: 50px;">${role.id}</td>
+                        <td style="width: 150px; font-weight: 500;">
+                            <div style="color: #333; font-weight: 600;">${getRoleDisplayName(role.name)}</div>
+                            <div style="color: #999; font-size: 12px; margin-top: 4px;">${getRoleDisplayDesc(role.name)}</div>
+                            ${role.name !== getRoleDisplayName(role.name) ? `<div style="color: #ccc; font-size: 11px; margin-top: 2px;">（英文名: ${role.name}）</div>` : ''}
+                        </td>
+                        <td style="width: 200px;">
+                            <div style="margin-bottom: 8px;">
+                                <div style="color: #666; font-size: 12px; margin-bottom: 4px;">角色系统描述</div>
+                                <div style="color: #333; padding: 8px; background: #f9f9f9; border-radius: 4px; border-left: 3px solid #00a1d6;">
+                                    ${getRoleDisplayDesc(role.name)}
+                                </div>
+                            </div>
+                            <div>
+                                <label style="color: #666; font-size: 12px; margin-bottom: 4px; display: block;">自定义描述（可选）</label>
+                                <input type="text" class="desc-input" value="${role.description || ''}" id="desc-${role.id}" placeholder="管理员可以添加额外的自定义描述">
+                            </div>
+                        </td>
+                        <td>
+                            <div class="perm-grid" id="perms-${role.id}">
+                                ${permCheckboxesHTML}
+                            </div>
+                        </td>
+                        <td style="width: 100px;">
+                            <button class="btn" onclick="saveRole(${role.id})">保存</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                alert("加载失败");
+            }
+        }
+
+        async function saveRole(roleId) {
+            const token = localStorage.getItem("access_token");
+            const desc = document.getElementById(`desc-${roleId}`).value;
+
+            // 收集选中的权限
+            const permCheckboxes = document.querySelectorAll(`#perms-${roleId} input[type="checkbox"]:checked`);
+            const selectedPerms = Array.from(permCheckboxes).map(cb => cb.value);
+            const permsStr = selectedPerms.join(",");
+
+            const res = await fetch(`/admin/roles/${roleId}`, {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ permissions: permsStr, description: desc })
+            });
+
+            if (res.ok) {
+                alert("保存成功");
+                loadRoles();
+            } else {
+                alert("保存失败");
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", loadRoles);
+    </script>
+</body>
+</html>

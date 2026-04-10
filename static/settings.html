@@ -14,6 +14,10 @@
         .form-group { margin-bottom: 20px; max-width: 400px; }
         label { display: block; margin-bottom: 8px; font-weight: 500; }
         input[type="text"], input[type="password"], textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .password-wrapper { position: relative; max-width: 400px; }
+        .password-wrapper input { padding-right: 40px; }
+        .toggle-password { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #999; font-size: 18px; }
+        .toggle-password:hover { color: #00a1d6; }
         .avatar-preview { width: 100px; height: 100px; border-radius: 50%; border: 2px solid #eee; cursor: pointer; object-fit: cover; }
         .btn { background: #00a1d6; color: #fff; border: none; padding: 10px 24px; border-radius: 4px; cursor: pointer; }
         .user-list-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #f0f0f0; }
@@ -28,7 +32,9 @@
     <div class="sidebar">
         <div class="menu-item active" onclick="switchTab('profile', this)">个人资料</div>
         <div class="menu-item" onclick="switchTab('security', this)">账号安全</div>
+        <div class="menu-item" onclick="switchTab('private', this)">私密空间</div>
         <div class="menu-item" onclick="switchTab('following', this)">我的关注</div>
+        <div class="menu-item" onclick="switchTab('followers', this)">我的粉丝</div>
         <div class="menu-item" onclick="switchTab('blacklist', this)">黑名单</div>
     </div>
     
@@ -54,13 +60,93 @@
         <h2>账号安全</h2>
         <div class="form-group">
             <label>旧密码</label>
-            <input type="password" id="oldPassword">
+            <div class="password-wrapper">
+                <input type="password" id="oldPassword">
+                <span class="toggle-password" onclick="togglePassword('oldPassword', this)">👁</span>
+            </div>
         </div>
         <div class="form-group">
             <label>新密码</label>
-            <input type="password" id="newPassword">
+            <div class="password-wrapper">
+                <input type="password" id="newPassword">
+                <span class="toggle-password" onclick="togglePassword('newPassword', this)">👁</span>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>确认新密码</label>
+            <div class="password-wrapper">
+                <input type="password" id="newPasswordConfirm">
+                <span class="toggle-password" onclick="togglePassword('newPasswordConfirm', this)">👁</span>
+            </div>
         </div>
         <button class="btn" onclick="changePassword()">修改密码</button>
+    </div>
+
+    <div class="content" id="tab-private" style="display:none;">
+        <h2>私密空间密码</h2>
+        <p style="color:#666; margin-bottom:20px;">私密视频密码用于保护您的私密视频内容</p>
+
+        <div id="private-password-status" style="margin-bottom:20px; padding:15px; background:#f9f9f9; border-radius:4px;">
+            <span style="color:#999;">加载中...</span>
+        </div>
+
+        <div style="max-width:400px;">
+            <h4 style="margin-bottom:15px;">修改私密空间密码</h4>
+            <div class="form-group" id="current-private-group">
+                <label>当前私密空间密码</label>
+                <div class="password-wrapper">
+                    <input type="password" id="currentPrivatePassword">
+                    <span class="toggle-password" onclick="togglePassword('currentPrivatePassword', this)">👁</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>新密码</label>
+                <div class="password-wrapper">
+                    <input type="password" id="newPrivatePassword">
+                    <span class="toggle-password" onclick="togglePassword('newPrivatePassword', this)">👁</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>确认新密码</label>
+                <div class="password-wrapper">
+                    <input type="password" id="confirmNewPrivatePassword">
+                    <span class="toggle-password" onclick="togglePassword('confirmNewPrivatePassword', this)">👁</span>
+                </div>
+            </div>
+            <button class="btn" onclick="changePrivatePassword()">修改密码</button>
+            <div id="change-private-message" style="margin-top:10px;"></div>
+
+            <hr style="margin:30px 0; border:none; border-top:1px solid #eee;">
+
+            <h4 style="margin-bottom:15px; color:#f04c49;">重置私密空间密码</h4>
+            <p style="color:#666; margin-bottom:15px; font-size:13px;">重置密码需要验证您的登录密码</p>
+            <div class="form-group">
+                <label>登录密码（验证身份）</label>
+                <div class="password-wrapper">
+                    <input type="password" id="loginPasswordForReset">
+                    <span class="toggle-password" onclick="togglePassword('loginPasswordForReset', this)">👁</span>
+                </div>
+            </div>
+            <button class="btn" style="background:#f04c49;" onclick="resetPrivatePassword()">重置私密空间密码</button>
+            <div id="reset-private-message" style="margin-top:10px;"></div>
+
+            <hr style="margin:30px 0; border:none; border-top:1px solid #eee;">
+
+            <h4 style="margin-bottom:15px;">私密空间解锁有效期</h4>
+            <p style="color:#666; margin-bottom:15px; font-size:13px;">设置解锁后无需再次输入密码的有效时间</p>
+            <div class="form-group">
+                <label>有效时间（分钟）</label>
+                <select id="private-unlock-timeout" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+                    <option value="5">5分钟</option>
+                    <option value="10">10分钟</option>
+                    <option value="30">30分钟</option>
+                    <option value="60">1小时</option>
+                    <option value="1440">24小时</option>
+                </select>
+            </div>
+            <button class="btn" onclick="savePrivateUnlockTimeout()">保存设置</button>
+            <div id="timeout-message" style="margin-top:10px;"></div>
+        </div>
     </div>
 
     <div class="content" id="tab-following" style="display:none;">
@@ -68,9 +154,14 @@
         <div id="following-list">加载中...</div>
     </div>
 
+    <div class="content" id="tab-followers" style="display:none;">
+        <h2>我的粉丝</h2>
+        <div id="followers-list">加载中...</div>
+    </div>
+
     <div class="content" id="tab-blacklist" style="display:none;">
         <h2>黑名单管理</h2>
-        <div id="blacklist-list">暂无黑名单用户</div>
+        <div id="blacklist-list">加载中...</div>
     </div>
 </div>
 
@@ -78,13 +169,22 @@
     const token = localStorage.getItem("access_token");
     if (!token) location.href = "/static/login.html";
 
+    // 生成默认头像（使用首字母，CSS 渲染）
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="${color}" rx="50"/><text x="50" y="50" dy=".35em" text-anchor="middle" fill="white" font-size="40" font-family="Arial">${initial}</text></svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
     // 初始化
     fetch("/users/me", { headers: { "Authorization": "Bearer " + token } })
         .then(res => res.json())
         .then(user => {
             document.getElementById("username").value = user.username;
             document.getElementById("bio").value = user.bio || "";
-            document.getElementById("avatar").src = user.avatar_path || "https://ui-avatars.com/api/?name=" + user.username;
+            document.getElementById("avatar").src = getAvatarUrl(user.avatar_path) || getDefaultAvatar(user.username);
         });
 
     function switchTab(name, el) {
@@ -95,7 +195,12 @@
         el.classList.add('active');
         
         if (name === 'following') loadFollowing();
+        if (name === 'followers') loadFollowers();
         if (name === 'blacklist') loadBlacklist();
+        if (name === 'private') {
+            loadPrivatePasswordStatus();
+            loadPrivateUnlockTimeout();
+        }
     }
 
     async function uploadAvatar() {
@@ -125,11 +230,25 @@
         } catch(e) { alert("保存失败"); }
     }
 
+    function togglePassword(inputId, eyeIcon) {
+        const input = document.getElementById(inputId);
+        if (input.type === "password") {
+            input.type = "text";
+            eyeIcon.textContent = "🙈";
+        } else {
+            input.type = "password";
+            eyeIcon.textContent = "👁";
+        }
+    }
+
     async function changePassword() {
         const old_password = document.getElementById("oldPassword").value;
         const new_password = document.getElementById("newPassword").value;
+        const new_password_confirm = document.getElementById("newPasswordConfirm").value;
         if (!old_password || !new_password) return alert("请填写密码");
-        
+        if (new_password !== new_password_confirm) return alert("两次输入的新密码不一致");
+        if (new_password.length < 6) return alert("新密码长度不能少于6位");
+
         try {
             const res = await fetch("/users/me/password", {
                 method: "PUT",
@@ -146,14 +265,172 @@
         } catch(e) { alert("网络错误"); }
     }
 
+    async function loadPrivatePasswordStatus() {
+        try {
+            const res = await fetch("/users/me", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const user = await res.json();
+                const statusEl = document.getElementById("private-password-status");
+                if (user.has_private_videos_password) {
+                    statusEl.innerHTML = '<span style="color:#2f9e44;">● 已设置私密空间密码</span>';
+                    document.getElementById("current-private-group").style.display = "block";
+                } else {
+                    statusEl.innerHTML = '<span style="color:#f04c49;">● 未设置私密空间密码</span>';
+                    document.getElementById("current-private-group").style.display = "none";
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function changePrivatePassword() {
+        const currentPassword = document.getElementById("currentPrivatePassword").value;
+        const newPassword = document.getElementById("newPrivatePassword").value;
+        const confirmPassword = document.getElementById("confirmNewPrivatePassword").value;
+        const msgEl = document.getElementById("change-private-message");
+
+        if (!newPassword) {
+            msgEl.innerHTML = '<span style="color:#f04c49;">请输入新密码</span>';
+            return;
+        }
+        if (newPassword.length < 4) {
+            msgEl.innerHTML = '<span style="color:#f04c49;">新密码至少4位</span>';
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            msgEl.innerHTML = '<span style="color:#f04c49;">两次输入的新密码不一致</span>';
+            return;
+        }
+
+        msgEl.innerHTML = '<span style="color:#666;">验证中...</span>';
+
+        try {
+            // 先检查是否已设置密码
+            const userRes = await fetch("/users/me", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const userData = await userRes.json();
+
+            // 如果已设置密码，需要验证旧密码
+            if (userData.has_private_videos_password) {
+                const verifyRes = await fetch("/users/me/verify-private-password", {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: currentPassword })
+                });
+
+                if (!verifyRes.ok) {
+                    msgEl.innerHTML = '<span style="color:#f04c49;">当前密码错误</span>';
+                    return;
+                }
+            }
+
+            // 设置新密码
+            const setRes = await fetch("/users/me/private-videos-password", {
+                method: "PUT",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ password: newPassword })
+            });
+
+            if (setRes.ok) {
+                msgEl.innerHTML = '<span style="color:#2f9e44;">密码修改成功！</span>';
+                document.getElementById("currentPrivatePassword").value = "";
+                document.getElementById("newPrivatePassword").value = "";
+                document.getElementById("confirmNewPrivatePassword").value = "";
+                loadPrivatePasswordStatus();
+            } else {
+                const err = await setRes.json().catch(() => ({}));
+                msgEl.innerHTML = '<span style="color:#f04c49;">修改失败: ' + (err.detail || "未知错误") + '</span>';
+            }
+        } catch(e) {
+            msgEl.innerHTML = '<span style="color:#f04c49;">请求失败: ' + e.message + '</span>';
+        }
+    }
+
+    async function resetPrivatePassword() {
+        const loginPassword = document.getElementById("loginPasswordForReset").value;
+        const msgEl = document.getElementById("reset-private-message");
+
+        if (!loginPassword) {
+            msgEl.innerHTML = '<span style="color:#f04c49;">请输入登录密码</span>';
+            return;
+        }
+
+        msgEl.innerHTML = '<span style="color:#666;">验证登录密码...</span>';
+
+        try {
+            // 验证登录密码
+            const loginRes = await fetch("/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: "username=" + encodeURIComponent(getCurrentUsername()) + "&password=" + encodeURIComponent(loginPassword)
+            });
+
+            if (!loginRes.ok) {
+                msgEl.innerHTML = '<span style="color:#f04c49;">登录密码验证失败</span>';
+                return;
+            }
+
+            // 清空私密视频密码（重置）
+            const resetRes = await fetch("/users/me/private-videos-password", {
+                method: "PUT",
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify({ password: "" })
+            });
+
+            if (resetRes.ok) {
+                msgEl.innerHTML = '<span style="color:#2f9e44;">私密空间密码已重置！</span>';
+                document.getElementById("loginPasswordForReset").value = "";
+                loadPrivatePasswordStatus();
+            } else {
+                const err = await resetRes.json().catch(() => ({}));
+                msgEl.innerHTML = '<span style="color:#f04c49;">重置失败: ' + (err.detail || "未知错误") + '</span>';
+            }
+        } catch(e) {
+            msgEl.innerHTML = '<span style="color:#f04c49;">请求失败: ' + e.message + '</span>';
+        }
+    }
+
+    function savePrivateUnlockTimeout() {
+        const timeout = document.getElementById("private-unlock-timeout").value;
+        localStorage.setItem("private_unlock_timeout", (parseInt(timeout) * 60).toString()); // 转换为秒
+        document.getElementById("timeout-message").innerHTML = '<span style="color:#2f9e44;">设置已保存</span>';
+        setTimeout(() => {
+            document.getElementById("timeout-message").innerHTML = '';
+        }, 3000);
+    }
+
+    function loadPrivateUnlockTimeout() {
+        const timeout = localStorage.getItem("private_unlock_timeout") || "600"; // 默认10分钟
+        const minutes = Math.floor(parseInt(timeout) / 60);
+        document.getElementById("private-unlock-timeout").value = minutes.toString();
+    }
+
+    function getCurrentUsername() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return "";
+        try {
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            return payload.sub || "";
+        } catch(e) {
+            return "";
+        }
+    }
+
     async function loadFollowing() {
         const res = await fetch("/users/me/following", { headers: { "Authorization": "Bearer " + token } });
         if (res.ok) renderUserList(await res.json(), "following-list", "取关", unfollowUser);
     }
-    
+
+    async function loadFollowers() {
+        const res = await fetch("/users/me/followers", { headers: { "Authorization": "Bearer " + token } });
+        if (res.ok) renderUserList(await res.json(), "followers-list", "移除粉丝", removeFollower);
+    }
+
     async function loadBlacklist() {
         const res = await fetch("/users/me/blocks", { headers: { "Authorization": "Bearer " + token } });
-        if (res.ok) renderUserList(await res.json(), "blacklist-list", "解除", unblockUser);
+        if (res.ok) renderUserList(await res.json(), "blacklist-list", "解除拉黑", unblockUser);
     }
 
     function renderUserList(users, containerId, btnText, action) {
@@ -163,7 +440,7 @@
         users.forEach(u => {
             const div = document.createElement("div");
             div.className = "user-list-item";
-            const avatar = u.avatar_path || "https://ui-avatars.com/api/?name=" + u.username;
+            const avatar = getAvatarUrl(u.avatar_path) || getDefaultAvatar(u.username);
             div.innerHTML = `<div class="user-info">
                 <img src="${avatar}" class="mini-avatar">
                 <div><a href="/static/profile.html?id=${u.id}" target="_blank" style="color:#333; text-decoration:none; font-weight:bold;">${u.username}</a></div>
@@ -180,9 +457,19 @@
             loadFollowing();
         }
     }
+
+    async function removeFollower(id) {
+        if(confirm("确定移除该粉丝？")) {
+            await fetch(`/users/${id}/follower`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
+            loadFollowers();
+        }
+    }
+
     async function unblockUser(id) {
-        await fetch(`/users/${id}/block`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
-        loadBlacklist();
+        if(confirm("确定解除拉黑？")) {
+            await fetch(`/users/${id}/block`, { method: "DELETE", headers: { "Authorization": "Bearer " + token } });
+            loadBlacklist();
+        }
     }
 </script>
 </body>

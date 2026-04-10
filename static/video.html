@@ -2,30 +2,455 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>视频详情 - MyVideo</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="/static/js/hls.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f4f5f7; margin: 0; }
+        body { font-family: Roboto, Arial, sans-serif; background: #f9f9f9; margin: 0; color: #0f0f0f; }
         /* 导航栏由 nav.js 生成 */
-        .container { max-width: 1400px; margin: 20px auto; padding: 20px; display: grid; grid-template-columns: 1fr 320px; gap: 30px; }
+        .container { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 1fr 400px; gap: 24px; }
         .main-content { grid-column: 1 / 2; }
-        .player-wrapper { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); position: relative; }
+
+        /* 播放器 */
+        .player-wrapper { width: 100%; aspect-ratio: 16/9; background: #000; margin-bottom: 12px; position: relative; overflow: visible; }
+
+        /* 视频信息 */
+        .video-title { font-size: 20px; font-weight: 600; margin: 0 0 10px; line-height: 28px; }
+
+        /* 自定义控件栏 */
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 30px 12px 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            overflow: visible;
+            z-index: 100;
+        }
+        #settings-dropdown {
+            position: static;
+        }
+        .player-wrapper:hover .custom-controls {
+            opacity: 1;
+        }
+        .player-wrapper:hover .top-controls {
+            opacity: 1;
+        }
+        .top-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .controls-progress {
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            position: relative;
+        }
+        .controls-progress:hover {
+            height: 6px;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #fb7299;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.1s;
+        }
+        .controls-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #fullscreen-btn {
+            margin-left: auto;
+        }
+        .ctrl-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .ctrl-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .ctrl-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .ctrl-btn.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .time-display {
+            color: white;
+            font-size: 12px;
+            margin-left: 4px;
+        }
+        #theater-btn.active svg {
+            color: #00a1d6;
+        }
         video { width: 100%; height: 100%; }
-        
-        .video-header { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e7e7e7; }
-        .video-title { font-size: 20px; font-weight: 500; color: #212121; margin: 0 0 10px; line-height: 1.4; }
-        .video-meta { font-size: 13px; color: #999; display: flex; align-items: center; gap: 20px; }
-        
-        .author-card { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-        .follow-btn { background: #00a1d6; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-        .follow-btn:hover { background: #00b5e5; }
-        .follow-btn.following { background: #e7e7e7; color: #999; }
-        
-        .quality-selector { position: absolute; bottom: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.7); color: #fff; padding: 5px; border-radius: 4px; font-size: 12px; }
-        
+
+        /* 下拉菜单 */
+        .ctrl-dropdown {
+            position: relative;
+        }
+        #settings-dropdown {
+            position: static;
+        }
+        .dropdown-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            background: rgba(0,0,0,0.9);
+            border-radius: 4px;
+            padding: 4px 0;
+            min-width: 80px;
+            z-index: 200;
+            display: none;
+        }
+        .dropdown-menu.show {
+            display: block;
+        }
+        .dropdown-item {
+            padding: 6px 12px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .dropdown-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .dropdown-item.active {
+            color: #00a1d6;
+        }
+
+        /* 音量控制 */
+        .ctrl-volume {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .volume-slider {
+            width: 60px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .volume-slider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        /* 设置菜单 */
+        #settings-menu {
+            position: absolute;
+            bottom: 100%;
+            top: auto;
+            right: 0;
+            left: auto;
+            min-width: 180px;
+            padding: 8px 0;
+        }
+        .settings-section {
+            padding: 4px 0;
+        }
+        .settings-section:not(:last-child) {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 4px;
+        }
+        .settings-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 11px;
+            padding: 4px 12px;
+            text-transform: uppercase;
+        }
+        .speed-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            padding: 4px 8px;
+        }
+        .speed-options .dropdown-item {
+            text-align: center;
+            padding: 8px 4px;
+            font-size: 12px;
+        }
+
+        /* 控件内的select */
+        .ctrl-select {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            outline: none;
+        }
+        .ctrl-select option {
+            background: #000;
+        }
+
+        /* 宽屏模式 - YouTube/B站风格 */
+        .container.theater-mode {
+            max-width: 100%;
+            padding: 0;
+            display: block;
+        }
+        .container.theater-mode .main-content {
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            width: 100%;
+            max-width: min(85vw, 1200px);
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        /* 播放器居中容器 - 限制高度不超出屏幕 */
+        .container.theater-mode .player-center-wrap {
+            width: 100%;
+            max-height: calc(100vh - 120px);
+            margin-bottom: 24px;
+        }
+        .container.theater-mode .player-wrapper {
+            width: 100%;
+            height: 100%;
+            max-height: calc(100vh - 120px);
+            aspect-ratio: 16/9;
+        }
+        .container.theater-mode .player-wrapper video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .container.theater-mode .content-row {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+            width: 100%;
+        }
+        .container.theater-mode .video-info {
+            min-width: 0;
+        }
+        .container.theater-mode .sidebar {
+            max-height: none;
+            overflow-y: visible;
+        }
+
+        /* 视频信息 */
+        .video-title { font-size: 20px; font-weight: 600; margin: 0 0 10px; line-height: 28px; }
+        .video-meta { font-size: 14px; color: #606060; display: flex; align-items: center; gap: 10px; margin-bottom: 12px;}
+
+        .description-box { background: #f2f2f2; padding: 12px; border-radius: 12px; font-size: 14px; line-height: 20px; margin-bottom: 24px; color: #0f0f0f;}
+        .description-box:hover { background: #e5e5e5; }
+        .description-content { white-space: pre-wrap; max-height: none; overflow: hidden; transition: max-height 0.3s ease; }
+        .description-content.collapsed { max-height: 80px; }
+        .description-toggle { color: #065fd4; font-size: 14px; cursor: pointer; margin-top: 8px; display: inline-block; }
+        .description-toggle:hover { text-decoration: underline; }
+
+        /* 作者栏 */
+        .author-card { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e5e5; }
+        .author-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; }
+        .author-info { flex: 1; }
+        .author-name { font-weight: 500; font-size: 16px; cursor: pointer; color: #0f0f0f; text-decoration: none;}
+        .author-subs { font-size: 12px; color: #606060; }
+
+        .follow-btn { background: #0f0f0f; color: #fff; border: none; padding: 0 16px; height: 36px; border-radius: 18px; cursor: pointer; font-weight: 500; font-size: 14px; transition: 0.2s; }
+        .follow-btn:hover { background: #272727; }
+        .follow-btn.following { background: #f2f2f2; color: #0f0f0f; }
+        .follow-btn.following:hover { background: #e5e5e5; }
+
+        /* 侧边栏 */
         .sidebar { grid-column: 2 / 3; }
-        .rec-item { display: flex; gap: 10px; margin-bottom: 16px; cursor: pointer; }
-        .rec-thumb { width: 140px; height: 80px; object-fit: cover; border-radius: 4px; }
+        .rec-item { display: flex; gap: 8px; margin-bottom: 8px; cursor: pointer; }
+        .rec-thumb { width: 168px; height: 94px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+        .rec-info { display: flex; flex-direction: column; gap: 4px; }
+        .rec-title { font-size: 14px; font-weight: 500; line-height: 20px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #0f0f0f;}
+        .rec-meta { font-size: 12px; color: #606060; }
+
+        /* 评论区样式 (仿 YouTube) */
+        .comments-section { margin-top: 24px; }
+        .comments-header { font-size: 20px; font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+
+        .add-comment-row { display: flex; gap: 16px; margin-bottom: 32px; }
+        .my-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+        .input-wrap { flex: 1; }
+        .comment-input { width: 100%; border: none; border-bottom: 1px solid #e5e5e5; padding: 8px 0; background: transparent; outline: none; transition: 0.2s; font-size: 14px; }
+        .comment-input:focus { border-bottom: 2px solid #0f0f0f; }
+        .comment-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+        .btn-cancel { background: transparent; border: none; padding: 8px 16px; border-radius: 18px; cursor: pointer; font-weight: 500; color: #0f0f0f; }
+        .btn-cancel:hover { background: #f2f2f2; }
+        .btn-submit { background: #f2f2f2; color: #909090; border: none; padding: 8px 16px; border-radius: 18px; cursor: not-allowed; font-weight: 500; }
+        .btn-submit.active { background: #065fd4; color: #fff; cursor: pointer; }
+        .btn-submit.active:hover { background: #0356c3; }
+
+        .comment-item { display: flex; gap: 16px; margin-bottom: 16px; }
+        .c-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; }
+        .c-body { flex: 1; }
+        .c-header { margin-bottom: 2px; font-size: 13px; }
+        .c-author { font-weight: 500; color: #0f0f0f; text-decoration: none; margin-right: 4px; cursor: pointer;}
+        .c-time { color: #606060; }
+        .c-content { font-size: 14px; line-height: 20px; color: #0f0f0f; margin-bottom: 4px; white-space: pre-wrap; }
+        .c-actions { display: flex; align-items: center; gap: 16px; font-size: 12px; color: #0f0f0f; font-weight: 500; height: 32px;}
+        .c-btn { cursor: pointer; padding: 8px 12px; border-radius: 16px; border:none; background:transparent; font-size:12px; font-weight:500; }
+        .c-btn:hover { background: #e5e5e5; }
+        .c-btn-sm { font-size: 12px; color: #606060; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
+        .c-btn-sm:hover { background: #e5e5e5; }
+
+        /* 回复部分 */
+        .replies-container { margin-left: 0; }
+        /* YouTube的回复虽然视觉上有缩进，但在DOM结构上是独立的块。我们用margin-left模拟 */
+        .reply-item { display: flex; gap: 16px; margin-top: 8px; margin-bottom: 8px; }
+        .reply-item .c-avatar { width: 24px; height: 24px; } /* 回复头像小一点 */
+        .reply-item .c-author { font-size: 13px; }
+
+        .reply-toggle-btn { color: #065fd4; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 8px 0; border: none; background: transparent; margin-bottom: 8px; }
+        .reply-toggle-btn:hover { background: #def1ff; border-radius: 18px; padding: 8px 12px; margin-left: -12px;}
+        .reply-toggle-btn i { font-style: normal; font-size: 16px; transform: rotate(90deg); display: inline-block; }
+
+        .reply-input-box { margin-top: 8px; display: none; margin-bottom: 16px;}
+
+        .deleted-text { font-style: italic; color: #606060; background: #f9f9f9; padding: 4px 8px; border-radius: 4px; display: inline-block;}
+
+        .action-btn { background: #f2f2f2; border: none; padding: 6px 12px; border-radius: 18px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+        .action-btn:hover { background: #e5e5e5; }
+        .action-btn.active { background: #0f0f0f; color: #fff; }
+        .action-btn svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; fill: none; transition: 0.2s; }
+        .action-btn.active svg { fill: currentColor; }
+
+        /* 响应式布局 - 平板 (≤1024px) */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 16px;
+            }
+            .main-content {
+                grid-template-columns: 1fr !important;
+            }
+            .sidebar {
+                width: 100%;
+                max-width: none;
+            }
+        }
+
+        /* 响应式布局 - 手机 (≤768px) */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+            .player-wrapper {
+                border-radius: 0;
+                margin: -12px -12px 12px -12px;
+            }
+
+            /* 移动端宽屏模式 */
+            .container.theater-mode {
+                padding: 0;
+            }
+            .container.theater-mode .main-content {
+                display: block;
+                padding: 12px;
+            }
+            .container.theater-mode .player-center-wrap {
+                width: 100%;
+                max-width: none;
+                margin: 0 0 12px 0;
+            }
+            .container.theater-mode .player-wrapper {
+                margin: 0;
+                border-radius: 0;
+                max-height: 50vh;
+            }
+            .container.theater-mode .content-row {
+                display: block;
+                width: 100%;
+            }
+            .container.theater-mode .sidebar {
+                width: 100%;
+                max-height: none;
+                padding: 12px;
+            }
+            .rec-item {
+                flex-direction: column;
+            }
+            .rec-thumb {
+                width: 100%;
+                height: auto;
+            }
+            .sidebar-title {
+                font-size: 14px;
+            }
+            .comment-item {
+                flex-direction: column;
+            }
+            .action-btn {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+        }
+
+        /* 响应式布局 - 小屏手机 (≤480px) */
+        @media (max-width: 480px) {
+            .video-title {
+                font-size: 16px;
+            }
+            .author-card {
+                flex-wrap: wrap;
+            }
+            .follow-btn {
+                width: 100%;
+                margin-top: 8px;
+            }
+            .action-buttons {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .video-meta {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -33,36 +458,163 @@
 
 <div class="container">
     <div class="main-content">
-        <div class="player-wrapper">
-            <video id="player" controls autoplay poster=""></video>
-            <select id="quality" class="quality-selector" style="display:none;">
-                <option value="-1">Auto</option>
-            </select>
+        <div class="player-wrapper" id="player-wrapper">
+            <video id="player" autoplay poster=""></video>
+
+            <!-- 右上角：投屏和画中画 -->
+            <div id="top-controls" class="top-controls">
+                <!-- 画中画 -->
+                <button id="pip-btn" class="ctrl-btn" title="画中画">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+                </button>
+            </div>
+
+            <!-- 自定义控件栏 -->
+            <div id="custom-controls" class="custom-controls">
+                <div class="controls-progress" id="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="controls-row">
+                    <button id="play-btn" class="ctrl-btn" title="播放/暂停">
+                        <svg id="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <div class="ctrl-volume">
+                        <button id="volume-btn" class="ctrl-btn" title="音量">
+                            <svg id="volume-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                            <svg id="volume-mute-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                        </button>
+                        <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100">
+                    </div>
+                    <span id="time-display" class="time-display">0:00 / 0:00</span>
+
+                    <div class="ctrl-right">
+                        <!-- 分辨率选择 -->
+                        <select id="quality-select" class="ctrl-select" style="display:none;">
+                            <option value="-1">自动</option>
+                        </select>
+                        <!-- 字幕选择 -->
+                        <div class="ctrl-dropdown" id="subtitle-dropdown">
+                            <button id="subtitle-btn" class="ctrl-btn disabled" title="字幕">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-5v-2h5v2zM7.5 10h2v2h-2zm0-4h2v2h-2zm3 4h2v2h-2zm0-4h2v2h-2zm3 4h2v2h-2zm0-4h2v2h-2z"/></svg>
+                            </button>
+                            <div class="dropdown-menu" id="subtitle-menu"></div>
+                        </div>
+                        <!-- 设置 -->
+                        <div class="ctrl-dropdown" id="settings-dropdown">
+                            <button id="settings-btn" class="ctrl-btn" title="设置">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                            </button>
+                            <div class="dropdown-menu" id="settings-menu">
+                                <div class="settings-section">
+                                    <div class="settings-label">播放倍速</div>
+                                    <div class="speed-options">
+                                        <div class="dropdown-item" data-speed="0.5">0.5x</div>
+                                        <div class="dropdown-item" data-speed="0.75">0.75x</div>
+                                        <div class="dropdown-item active" data-speed="1">1x</div>
+                                        <div class="dropdown-item" data-speed="1.25">1.25x</div>
+                                        <div class="dropdown-item" data-speed="1.5">1.5x</div>
+                                        <div class="dropdown-item" data-speed="2">2x</div>
+                                    </div>
+                                </div>
+                                <div class="settings-section">
+                                    <div class="settings-label">投屏</div>
+                                    <div class="dropdown-item" onclick="showCastDevices()">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                                        投屏设备
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="theater-btn" class="ctrl-btn" onclick="toggleTheaterMode()" title="宽屏模式">
+                            <svg id="theater-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H5V8h14v8z"/></svg>
+                        </button>
+                        <button id="fullscreen-btn" class="ctrl-btn" title="全屏">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        
-        <div class="video-header">
+
+        <div class="video-info">
             <h1 class="video-title" id="title">加载中...</h1>
-            <div class="video-meta">
-                <span id="views">0播放</span>
-                <span id="date"></span>
+
+            <div class="author-card">
+                <img id="author-avatar" class="author-avatar" onerror="this.onerror=null; this.src='/static/img/default-avatar.svg'">
+                <div class="author-info">
+                    <div id="author-name" class="author-name"></div>
+                    <div id="author-subs" class="author-subs">0 粉丝</div>
+                </div>
+                <button id="follow-btn" class="follow-btn" onclick="toggleFollow()">关注</button>
+            </div>
+
+            <div class="description-box">
+                <div class="video-meta" style="justify-content: space-between;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <span id="views" style="color:#0f0f0f; font-weight:500;">0次观看</span>
+                        <span id="date"></span>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button id="like-btn" class="action-btn" onclick="toggleLike()">
+                            <span id="like-icon"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></span> <span id="like-count">0</span>
+                        </button>
+                        <button id="fav-btn" class="action-btn" onclick="toggleFavorite()">
+                            <span id="fav-icon"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span> <span id="fav-text">收藏</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="description" class="description-content"></div>
+                <span id="desc-toggle" class="description-toggle" onclick="toggleDescription()" style="display:none;">展开</span>
+                <div id="video-tags" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+            </div>
+
+            <!-- 评论区 -->
+            <div class="comments-section">
+                <div class="comments-header" style="justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="comment-count">0</span> 条评论
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:14px; color:#606060;">排序：</span>
+                        <select id="comment-sort" class="ctrl-select" onchange="loadComments(currentVideoId)" style="background:#f2f2f2; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">
+                            <option value="time">按时间</option>
+                            <option value="popular">按热度</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 添加主评论 -->
+                <div class="add-comment-row">
+                    <img id="my-avatar" src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'100'%20height%3D'100'%20viewBox%3D'0%200%20100%20100'%3E%3Crect%20width%3D'100'%20height%3D'100'%20fill%3D'%234ECDC4'%20rx%3D'50'%2F%3E%3Ctext%20x%3D'50'%20y%3D'50'%20dy%3D'.35em'%20text-anchor%3D'middle'%20fill%3D'white'%20font-size%3D'40'%20font-family%3D'Arial'%3EU%3C%2Ftext%3E%3C%2Fsvg%3E" class="my-avatar">
+                    <div class="input-wrap">
+                        <input type="text" id="main-comment-input" class="comment-input" placeholder="添加评论..." onfocus="showMainActions(true)" oninput="checkInput(this, 'main-submit-btn')">
+                        <div class="comment-actions" id="main-actions" style="display:none;">
+                            <button class="btn-cancel" onclick="showMainActions(false)">取消</button>
+                            <button id="main-submit-btn" class="btn-submit" onclick="postComment(null)">评论</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="comment-list"></div>
             </div>
         </div>
-        
-        <!-- 作者卡片 -->
-        <div class="author-card">
-            <img id="author-avatar" src="" style="width:48px; height:48px; border-radius:50%; object-fit:cover; cursor:pointer;">
-            <div style="flex:1;">
-                <div id="author-name" style="font-weight:bold; font-size:16px; color:#fb7299; cursor:pointer;"></div>
-                <div id="author-bio" style="font-size:12px; color:#999;"></div>
-            </div>
-            <button id="follow-btn" class="follow-btn" onclick="toggleFollow()">+ 关注</button>
-        </div>
-        
-        <div style="line-height:1.6; color:#333; white-space:pre-wrap;" id="description"></div>
     </div>
-    
+
     <div class="sidebar">
-        <h3>相关推荐</h3>
+        <!-- Playlist Container -->
+        <div id="playlist-container" style="display:none; margin-bottom:20px; border:1px solid #ddd; border-radius:8px; overflow:hidden; background:#fff;">
+            <div style="background:#f4f5f7; padding:12px; border-bottom:1px solid #e5e5e5;">
+                <div style="font-weight:600; font-size:15px; margin-bottom:4px;" id="pl-title">合集标题</div>
+                <div style="font-size:12px; color:#606060;">
+                    正在播放: <span id="pl-index">1</span> / <span id="pl-total">10</span>
+                </div>
+            </div>
+            <div id="pl-list" style="max-height:400px; overflow-y:auto;">
+                <!-- Items -->
+            </div>
+        </div>
+
         <div id="rec-list"></div>
     </div>
 </div>
@@ -70,175 +622,1707 @@
 <script>
     let currentAuthorId = null;
     let isFollowing = false;
-    let currentLoggedInUserId = null; // 添加当前登录用户ID变量
+    let currentUser = null;
+    let isLiked = false;
+    let isFavorited = false;
+    let currentVideoId = null;
+    let recSlot = null;
+    let recRank = null;
+
+    // 生成默认头像
+    function getDefaultAvatar(username) {
+        const initial = username ? username.charAt(0).toUpperCase() : '?';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        const color = colors[(username ? username.charCodeAt(0) : 0) % colors.length];
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='${color}' rx='50'/><text x='50' y='50' dy='.35em' text-anchor='middle' fill='white' font-size='40' font-family='Arial'>${initial}</text></svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
 
     document.addEventListener("DOMContentLoaded", async () => {
         const urlParams = new URLSearchParams(window.location.search);
-        const videoId = urlParams.get('id');
+        let videoId = urlParams.get('id');
+        const shareToken = urlParams.get('share_token');
+        const collectionId = urlParams.get('collection_id');
+        recSlot = urlParams.get('rec_slot');
+        recRank = urlParams.get('rec_rank') ? parseInt(urlParams.get('rec_rank')) : null;
+        let sharedVideoData = null;
+
+        // 如果有分享token，先获取视频信息
+        if (shareToken) {
+            try {
+                const res = await fetch(`/videos/shared/${encodeURIComponent(shareToken)}`);
+                if (res.ok) {
+                    sharedVideoData = await res.json();
+                    videoId = sharedVideoData.id;
+                } else {
+                    alert("分享链接无效或已过期");
+                    return location.href = "/static/index.html";
+                }
+            } catch (e) {
+                alert("获取视频失败");
+                return location.href = "/static/index.html";
+            }
+        }
+
         if (!videoId) return location.href = "/static/index.html";
 
-        await loadVideoDetails(videoId);
-        await loadRecommendations();
+        currentVideoId = videoId;
+
+        // 如果是分享链接，不需要加载当前用户信息
+        if (!shareToken) {
+            await loadCurrentUser();
+        }
+
+        // 如果是分享链接，使用已获取的视频数据；否则调用API获取
+        if (sharedVideoData) {
+            initCustomControls();
+            renderVideoDetails(sharedVideoData);
+            initPlayer(sharedVideoData);
+        } else {
+            await loadVideoDetails(videoId);
+        }
+
+        if (collectionId) {
+            loadPlaylist(collectionId, videoId);
+        } else {
+            loadRecommendations();
+        }
+
+        await loadComments(videoId);
+        setTimeout(handleHashScroll, 500); // Wait a bit for rendering
     });
 
-    async function loadVideoDetails(id) {
-        try {
-            const res = await fetch(`/videos/${id}`);
-            if (res.ok) {
-                const video = await res.json();
-                
-                document.title = video.title + " - MyVideo";
-                document.getElementById("title").innerText = video.title;
-                document.getElementById("views").innerText = video.views + "播放";
-                document.getElementById("date").innerText = new Date(video.created_at).toLocaleDateString();
-                document.getElementById("description").innerText = video.description || "暂无简介";
-                
-                // 填充作者信息
-                if (video.owner) {
-                    currentAuthorId = video.owner.id;
-                    document.getElementById("author-name").innerText = video.owner.username;
-                    document.getElementById("author-avatar").src = video.owner.avatar_path || "https://ui-avatars.com/api/?name=" + video.owner.username;
-                    document.getElementById("author-bio").innerText = video.owner.bio || "这个人很懒...";
-                    
-                    // 点击跳转
-                    const goProfile = () => location.href = `/static/profile.html?id=${currentAuthorId}`;
-                    document.getElementById("author-name").onclick = goProfile;
-                    document.getElementById("author-avatar").onclick = goProfile;
-                    
-                    // checkFollowStatus(); // 暂时移除，在获取token后统一调用
-                }
+    // 渲染视频详情（用于分享链接直接展示）
+    function renderVideoDetails(video) {
+        const setText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = text;
+        };
 
-                // 播放器逻辑 (保持不变)
-                const player = document.getElementById("player");
-                player.poster = video.thumbnail_path;
-                if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
-                    const hls = new Hls();
-                    hls.loadSource(video.processed_file_path);
-                    hls.attachMedia(player);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                        player.play();
-                        // 初始化清晰度选择
-                        const select = document.getElementById("quality");
-                        if (hls.levels.length > 1) {
-                            select.style.display = "block";
-                            hls.levels.forEach((lvl, idx) => {
-                                const opt = document.createElement("option");
-                                opt.value = idx;
-                                opt.text = lvl.height + "p";
-                                select.appendChild(opt);
-                            });
-                            select.onchange = () => hls.currentLevel = parseInt(select.value);
-                        }
-                    });
-                } else {
-                    player.src = video.processed_file_path;
-                }
-                
-                // 统计
-                let counted = false;
-                player.onplay = () => { if(!counted) { fetch(`/videos/${id}/view`, {method:"POST"}); counted=true; } };
-                player.onended = () => fetch(`/videos/${id}/complete`, {method:"POST"});
-                
-                // 获取当前登录用户ID，以便判断是否是自己的视频
-                const currentToken = localStorage.getItem("access_token"); // 在函数内部重新获取 token
-                if (currentToken) {
-                    const userRes = await fetch(`/users/me`, { headers: { "Authorization": "Bearer " + currentToken } });
-                    if (userRes.ok) {
-                        const userData = await userRes.json();
-                        currentLoggedInUserId = userData.id;
-                    }
-                }
-                checkFollowStatus(); // 统一在获取到登录用户ID后调用
+        document.title = video.title;
+        setText("title", video.title);
+        setText("views", (video.views || 0) + "次观看");
+        setText("date", new Date(video.created_at).toLocaleDateString());
+        setText("description", video.description || "");
+
+        // 简介展开/收起
+        const descEl = document.getElementById("description");
+        const toggleEl = document.getElementById("desc-toggle");
+        if (descEl && descEl.innerText.length > 100) {
+            descEl.classList.add("collapsed");
+            if (toggleEl) {
+                toggleEl.style.display = "inline-block";
+                toggleEl.innerText = "展开";
             }
-        } catch (e) { console.error(e); }
+        } else if (toggleEl) {
+            toggleEl.style.display = "none";
+        }
+
+        // 标签
+        const tagsEl = document.getElementById("video-tags");
+        if (tagsEl) {
+            if (video.tags && video.tags.length > 0) {
+                tagsEl.innerHTML = video.tags.map(tag =>
+                    `<span style="background:#f0f0f0; color:#606060; padding:4px 10px; border-radius:12px; font-size:12px;">${tag}</span>`
+                ).join('');
+            } else {
+                tagsEl.style.display = "none";
+            }
+        }
+
+        // 点赞/收藏状态
+        const likeCountEl = document.getElementById("like-count");
+        if (likeCountEl) likeCountEl.innerText = video.like_count || 0;
+        isLiked = video.is_liked || false;
+        isFavorited = video.is_favorited || false;
+        updateActionButtons();
+
+        // 作者信息
+        if (video.owner) {
+            currentAuthorId = video.owner.id;
+            const authorNameEl = document.getElementById("author-name");
+            const authorAvatarEl = document.getElementById("author-avatar");
+            if (authorNameEl) authorNameEl.innerText = video.owner.username;
+            if (authorAvatarEl) {
+                const avatar = getAvatarUrl(video.owner.avatar_path) || getDefaultAvatar(video.owner.username);
+                authorAvatarEl.src = avatar;
+                authorAvatarEl.onclick = () => location.href = `/static/profile.html?id=${video.owner.username}`;
+            }
+            if (authorNameEl) {
+                authorNameEl.onclick = () => location.href = `/static/profile.html?id=${video.owner.username}`;
+            }
+        }
+
+        // 分类
+        const categoryNameEl = document.getElementById("category-name");
+        if (categoryNameEl && video.category) {
+            categoryNameEl.innerText = video.category.name;
+            categoryNameEl.onclick = () => location.href = `/static/index.html?category=${video.category.slug}`;
+        }
     }
 
-    async function checkFollowStatus() {
-        // 如果是自己的视频，则不显示关注按钮
-        if (currentLoggedInUserId && currentAuthorId === currentLoggedInUserId) {
-            isFollowing = false; // 逻辑上不是关注，而是管理
-            updateFollowBtn(true); // 传入一个参数，指示是自己的视频
+    // 初始化播放器（用于分享链接）
+    function initPlayer(video) {
+        const player = document.getElementById("player");
+        const playerWrapper = document.getElementById("player-wrapper");
+
+        // 设置封面
+        player.poster = video.thumbnail_path || "";
+
+        // 检查视频是否可播放
+        if (!video.playable) {
+            player.style.display = "none";
+            const existingError = document.getElementById("video-error-overlay");
+            if (existingError) existingError.remove();
+            const errorDiv = document.createElement("div");
+            errorDiv.id = "video-error-overlay";
+            errorDiv.style.cssText = "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; color:#666; z-index:10;";
+            errorDiv.innerHTML = `<div style="font-size:48px;margin-bottom:20px;">🚫</div><div style="font-size:18px;font-weight:500;margin-bottom:10px;">视频状态异常</div><div style="font-size:14px;color:#999;">${video.playable_message || '该视频暂时无法播放'}</div>`;
+            if (playerWrapper) playerWrapper.appendChild(errorDiv);
             return;
         }
 
-        const token = localStorage.getItem("access_token");
-        if (!token || !currentAuthorId) {
-             updateFollowBtn(); // 没有登录或没有作者ID，也更新按钮状态
-             return;
-        }
-        
-        // 这里偷个懒，直接请求 profile 接口来获取关注状态
-        const res = await fetch(`/users/${currentAuthorId}/profile`, {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            isFollowing = data.is_following;
-            updateFollowBtn();
-        } else {
-            // 如果获取失败，也更新一下按钮状态，可能是未登录或者其他错误
-            isFollowing = false;
-            updateFollowBtn();
-        }
-    }
+        // 使用 HLS 播放
+        // 注意：stream_url 是带签名参数的路径，processed_file_path 才是判断是否 HLS 的依据
+        const streamUrl = video.stream_url || video.processed_file_path;
+        const isHls = video.processed_file_path && video.processed_file_path.endsWith('.m3u8');
+        if (Hls.isSupported() && isHls && streamUrl) {
+            const hls = new Hls();
+            hls.loadSource(streamUrl);
+            hls.attachMedia(player);
 
-    function updateFollowBtn(isOwnVideo = false) {
-        const btn = document.getElementById("follow-btn");
-        if (isOwnVideo) {
-            btn.innerText = "编辑资料"; // 自己的视频显示编辑资料
-            btn.className = "follow-btn"; // 移除关注样式
-            btn.onclick = () => location.href = `/static/settings.html`; // 点击跳转到设置页
-        } else if (isFollowing) {
-            btn.innerText = "已关注";
-            btn.className = "follow-btn following";
-            btn.onclick = () => toggleFollow(); // 绑定回 toggleFollow
-        } else {
-            btn.innerText = "+ 关注";
-            btn.className = "follow-btn";
-            btn.onclick = () => toggleFollow(); // 绑定回 toggleFollow
-        }
-    }
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                hlsReady = true;
+                player.play().catch(() => {});
+            });
 
-    async function toggleFollow() {
-        const token = localStorage.getItem("access_token");
-        if (!token) return location.href = "/static/login.html";
-        // 如果是自己的视频，不执行关注逻辑
-        if (currentLoggedInUserId && currentAuthorId === currentLoggedInUserId) {
-            location.href = `/static/settings.html`; // 或者其他编辑页面
-            return;
-        }
-        
-        const method = isFollowing ? "DELETE" : "POST";
-        const res = await fetch(`/users/${currentAuthorId}/follow`, {
-            method: method,
-            headers: { "Authorization": "Bearer " + token }
-        });
-        if (res.ok) {
-            isFollowing = !isFollowing;
-            updateFollowBtn();
-        }
-    }
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                console.error('HLS error:', data);
+            });
 
-    async function loadRecommendations() {
-        const res = await fetch(`/videos?size=5&sort_by=popular`);
-        if (res.ok) {
-            const videos = await res.json();
-            const list = document.getElementById("rec-list");
-            videos.forEach(v => {
-                const div = document.createElement("div");
-                div.className = "rec-item";
-                div.onclick = () => location.href = `/static/video.html?id=${v.id}`;
-                div.innerHTML = `
-                    <img src="${v.thumbnail_path}" class="rec-thumb">
-                    <div style="font-size:14px;">
-                        <div style="margin-bottom:4px; height:40px; overflow:hidden;">${v.title}</div>
-                        <div style="color:#999; font-size:12px;">${v.views}播放</div>
-                    </div>
-                `;
-                list.appendChild(div);
+            currentHls = hls;
+        } else if (streamUrl) {
+            // 直接播放
+            player.src = streamUrl;
+            player.addEventListener('loadedmetadata', () => {
+                player.play().catch(() => {});
             });
         }
     }
+
+    async function handleHashScroll() {
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith("#comment-")) return;
+
+        const commentId = hash.replace("#comment-", "");
+        if (!commentId) return;
+
+        try {
+            const res = await fetch(`/comments/${commentId}`);
+            if (res.ok) {
+                const comment = await res.json();
+
+                if (comment.parent_id) {
+                    // It's a reply
+                    // Find parent element
+                    const parentEl = document.getElementById(`comment-${comment.parent_id}`);
+                    if (parentEl) {
+                        parentEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                        // Expand replies
+                        await toggleReplies(comment.parent_id);
+                        // Wait for replies to render
+                        setTimeout(() => {
+                             const replyEl = document.getElementById(`comment-${commentId}`);
+                             if (replyEl) {
+                                 replyEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                                 replyEl.style.backgroundColor = "#fff9db"; // Highlight
+                                 setTimeout(() => replyEl.style.backgroundColor = "", 2000);
+                             }
+                        }, 500);
+                    }
+                } else {
+                    // It's a top-level comment
+                    const el = document.getElementById(`comment-${commentId}`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.style.backgroundColor = "#fff9db"; // Highlight
+                        setTimeout(() => el.style.backgroundColor = "", 2000);
+                    }
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadPlaylist(colId, currentVideoId) {
+        const token = localStorage.getItem("access_token");
+        try {
+            const headers = token ? { "Authorization": "Bearer " + token } : {};
+            const res = await fetch(`/collections/${colId}`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                const container = document.getElementById("playlist-container");
+                container.style.display = "block";
+
+                const isColFav = data.is_favorited || false;
+                const favIconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${isColFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                const favBtnText = isColFav ? "已收藏" : "收藏合集";
+                const favBtnStyle = isColFav ? "color:#f08c00; font-weight:bold;" : "color:#666;";
+
+                document.getElementById("pl-title").innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                        <span>${data.title}</span>
+                        <button onclick="toggleCollectionFavorite('${colId}', this)" style="border:none; background:none; cursor:pointer; font-size:12px; display:flex; align-items:center; ${favBtnStyle}">${favIconSvg}${favBtnText}</button>
+                    </div>
+                `;
+                document.getElementById("pl-total").innerText = data.videos ? data.videos.length : 0;
+
+                const list = document.getElementById("pl-list");
+                let currentIndex = -1;
+
+                let html = "";
+                data.videos.forEach((v, index) => {
+                    const isCurrent = v.id === currentVideoId;
+                    if (isCurrent) currentIndex = index;
+
+                    html += `
+                        <div class="pl-item" onclick="location.href='/static/video.html?id=${v.id}&collection_id=${colId}'"
+                             style="padding:10px; display:flex; gap:10px; cursor:pointer; ${isCurrent ? 'background:#e7f5ff;' : 'background:#fff'}; border-bottom:1px solid #f0f0f0;">
+                            <div style="color:#666; width:20px; font-size:13px; display:flex; align-items:center; justify-content:center;">${isCurrent ? '▶' : (index+1)}</div>
+                            <div style="flex:1;">
+                                <div style="font-size:13px; font-weight:500; color:${isCurrent?'#00a1d6':'#333'}; line-height:1.4; margin-bottom:2px;">${v.title}</div>
+                                <div style="font-size:12px; color:#999;">${v.owner ? v.owner.username : ''}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                list.innerHTML = html;
+                document.getElementById("pl-index").innerText = currentIndex + 1;
+
+                // Optional: Scroll to active item
+                const activeItem = list.children[currentIndex];
+                if (activeItem) {
+                    activeItem.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function toggleCollectionFavorite(colId, btn) {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        // Optimistic toggle
+        const isFav = btn.innerText.includes("已收藏");
+        const newIsFav = !isFav;
+
+        const iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${newIsFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+
+        btn.innerHTML = `${iconSvg}${newIsFav ? "已收藏" : "收藏合集"}`;
+        btn.style.color = newIsFav ? "#f08c00" : "#666";
+        btn.style.fontWeight = newIsFav ? "bold" : "normal";
+
+        try {
+            const res = await fetch(`/collections/${colId}/favorite`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (!res.ok) {
+                // Revert
+                const revertFav = !newIsFav;
+                const revertSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${revertFav?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 6.82 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                btn.innerHTML = `${revertSvg}${revertFav ? "已收藏" : "收藏合集"}`;
+                btn.style.color = revertFav ? "#f08c00" : "#666";
+                btn.style.fontWeight = revertFav ? "bold" : "normal";
+                alert("操作失败");
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadCurrentUser() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return;
+        try {
+            const res = await fetch("/users/me", { headers: { "Authorization": "Bearer " + token } });
+            if (res.ok) {
+                currentUser = await res.json();
+                const avatar = getAvatarUrl(currentUser.avatar_path) || getDefaultAvatar(currentUser.username);
+                document.getElementById("my-avatar").src = avatar;
+            }
+        } catch(e) {}
+    }
+
+    // --- 评论输入框交互 ---
+    function showMainActions(show) {
+        const actions = document.getElementById("main-actions");
+        const input = document.getElementById("main-comment-input");
+        if (show) {
+            actions.style.display = "flex";
+        } else {
+            // Cancel
+            input.value = "";
+            actions.style.display = "none";
+        }
+    }
+
+    function checkInput(input, btnId) {
+        const btn = document.getElementById(btnId);
+        if (input.value.trim().length > 0) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    }
+
+    function toggleReplyInput(id, rootId, replyToUser) {
+        // 关闭其他
+        document.querySelectorAll('.reply-input-box').forEach(el => el.style.display = 'none');
+
+        const box = document.getElementById(`reply-box-${id}`);
+        if (!box) return; // Should create if not exists? No, pre-rendered
+
+        box.style.display = "block";
+        const input = document.getElementById(`reply-input-${id}`);
+        input.focus();
+
+        // 如果是回复子评论，自动添加 @Username
+        if (replyToUser) {
+            input.value = `@${replyToUser} `;
+        } else {
+            input.value = "";
+        }
+
+        // 绑定检查事件
+        const btnId = `reply-btn-${id}`;
+        checkInput(input, btnId);
+        input.oninput = () => checkInput(input, btnId);
+
+        // 存储 rootId 以便提交
+        input.dataset.rootId = rootId;
+    }
+
+    function cancelReply(id) {
+        document.getElementById(`reply-box-${id}`).style.display = "none";
+    }
+
+    // --- 加载评论 ---
+    async function loadComments(videoId) {
+        try {
+            const sortBy = document.getElementById("comment-sort")?.value || "time";
+            const res = await fetch(`/videos/${videoId}/comments?sort=${sortBy}`);
+            if (res.ok) {
+                const comments = await res.json();
+                document.getElementById("comment-count").innerText = comments.length;
+                const list = document.getElementById("comment-list");
+                list.innerHTML = "";
+
+                // 分离置顶评论和普通评论
+                const pinnedComments = comments.filter(c => c.is_pinned);
+                const normalComments = comments.filter(c => !c.is_pinned);
+
+                // 先显示置顶评论
+                pinnedComments.forEach(c => {
+                    list.appendChild(createCommentElement(c, null, true));
+                });
+
+                // 再显示普通评论
+                normalComments.forEach(c => {
+                    list.appendChild(createCommentElement(c, null, false));
+                });
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function createCommentElement(c, rootId, isPinned = false) {
+        // rootId: 如果为空，说明 c 是主评论，rootId = c.id
+        // 如果不为空，说明 c 是回复，但我们这里只渲染主评论列表，所以 c 肯定是主评论
+        const isMain = rootId === null;
+        const currentRootId = isMain ? c.id : rootId;
+
+        const div = document.createElement("div");
+        div.className = isMain ? "comment-item" : "reply-item";
+        if (isPinned) div.style.borderLeft = "3px solid #065fd4";
+        div.id = `comment-${c.id}`;
+
+        const avatar = getAvatarUrl(c.user.avatar_url) || getDefaultAvatar(c.user.username);
+        const timeAgo = timeSince(new Date(c.created_at));
+        const isOwner = currentUser && c.user.username === currentUser.username;
+        const isLiked = c.is_liked || false;
+        const isDisliked = c.is_disliked || false;
+
+        // 内容处理
+        let contentHtml = c.content;
+        if (c.is_deleted) {
+            contentHtml = `<span class="deleted-text">${c.content}</span>`; // content has replacement text from backend
+        }
+
+        // 置顶标识
+        const pinnedBadge = isPinned ? `<span style="background:#065fd4; color:#fff; font-size:10px; padding:2px 6px; border-radius:3px; margin-right:6px;">置顶</span>` : '';
+
+        // 点赞图标 (大拇指朝上)
+        const likeIcon = isLiked
+            ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg>`
+            : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg>`;
+        const likeStyle = isLiked ? 'color:#065fd4;' : '';
+
+        // 点踩图标 (大拇指朝下)
+        const dislikeIcon = isDisliked
+            ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>`
+            : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>`;
+        const dislikeStyle = isDisliked ? 'color:#065fd4;' : '';
+
+        // 操作按钮
+        let actionsHtml = '';
+        if (!c.is_deleted) {
+            // 点赞按钮
+            actionsHtml += `<button class="c-btn" onclick="toggleCommentLike(${c.id}, 'like')" style="${likeStyle}">${likeIcon} <span id="comment-like-count-${c.id}">${c.like_count || 0}</span></button>`;
+            // 点踩按钮
+            actionsHtml += `<button class="c-btn" onclick="toggleCommentLike(${c.id}, 'dislike')" style="${dislikeStyle}">${dislikeIcon} <span id="comment-dislike-count-${c.id}">${c.dislike_count || 0}</span></button>`;
+            actionsHtml += `<button class="c-btn" onclick="toggleReplyInput(${c.id}, ${currentRootId}, '${c.user.username}')">回复</button>`;
+            if (isOwner) {
+                actionsHtml += `<span class="c-btn-sm" onclick="deleteComment(${c.id})">删除</span>`;
+            }
+            // 作者可以置顶/取消置顶自己的评论
+            if (currentUser && c.user.username === currentUser.username) {
+                actionsHtml += `<span class="c-btn-sm" onclick="togglePinComment(${c.id}, ${!isPinned})">${isPinned ? '取消置顶' : '置顶'}</span>`;
+            }
+        }
+
+        // 回复容器 & 加载更多按钮 (只针对主评论)
+        let repliesHtml = '';
+        if (isMain && c.reply_count > 0) {
+            repliesHtml = `
+                <div style="margin-left: 56px;">
+                    <button id="toggle-replies-${c.id}" class="reply-toggle-btn" onclick="toggleReplies('${currentRootId}')">
+                        <i>&#9662;</i> ${c.reply_count} 条回复
+                    </button>
+                    <div id="replies-container-${c.id}" class="replies-container" style="display:none;"></div>
+                </div>
+            `;
+        } else if (isMain) {
+             repliesHtml = `<div id="replies-container-${c.id}" class="replies-container" style="display:none; margin-left:56px;"></div>`;
+        }
+
+        // 嵌入的回复输入框 (默认隐藏)
+        const replyInputHtml = `
+            <div id="reply-box-${c.id}" class="reply-input-box" style="margin-left: ${isMain?56:0}px;">
+                <div class="add-comment-row" style="margin-bottom:0;">
+                    <img src="${currentUser ? (getAvatarUrl(currentUser.avatar_path)||getDefaultAvatar(currentUser.username)) : '/static/img/default-avatar.svg'}" class="my-avatar" style="width:24px; height:24px;">
+                    <div class="input-wrap">
+                        <input type="text" id="reply-input-${c.id}" class="comment-input" placeholder="添加回复..." style="font-size:13px;">
+                        <div class="comment-actions">
+                            <button class="btn-cancel" onclick="cancelReply(${c.id})">取消</button>
+                            <button id="reply-btn-${c.id}" class="btn-submit" onclick="submitReply(${c.id}, ${currentRootId})">回复</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        div.innerHTML = `
+            <img src="${avatar}" class="c-avatar" onclick="location.href='/static/profile.html?id=${c.user.username}'"> <!-- Assuming username nav for now -->
+            <div class="c-body">
+                <div class="c-header">
+                    ${pinnedBadge}
+                    <span class="c-author" onclick="location.href='/static/profile.html?id=${c.user.username}'">${c.user.username}</span>
+                    <span class="c-time">${timeAgo}</span>
+                </div>
+                <div class="c-content" id="content-${c.id}">${contentHtml}</div>
+                <div class="c-actions">
+                    ${actionsHtml}
+                </div>
+                ${!isMain ? replyInputHtml : ''}
+            </div>
+        `;
+
+        // 组合：主评论包含回复列表和输入框在底部
+        if (isMain) {
+            const wrapper = document.createElement("div");
+            wrapper.appendChild(div);
+            // 主评论的回复框放在 Actions 下面
+            const replyBoxContainer = document.createElement("div");
+            replyBoxContainer.innerHTML = replyInputHtml;
+            div.querySelector(".c-body").appendChild(replyBoxContainer);
+
+            // 回复列表放在最后
+            const repliesContainer = document.createElement("div");
+            repliesContainer.innerHTML = repliesHtml;
+            wrapper.appendChild(repliesContainer);
+            return wrapper;
+        }
+
+        return div;
+    }
+
+    async function toggleReplies(parentId) {
+        const container = document.getElementById(`replies-container-${parentId}`);
+        const btn = document.getElementById(`toggle-replies-${parentId}`);
+
+        if (container.style.display === "none") {
+            // Load
+            if (container.children.length === 0) {
+                 const urlParams = new URLSearchParams(window.location.search);
+                 const videoId = urlParams.get('id');
+                 const res = await fetch(`/videos/${videoId}/comments?parent_id=${parentId}`);
+                 if (res.ok) {
+                     const replies = await res.json();
+                     replies.forEach(r => {
+                         container.appendChild(createCommentElement(r, parentId));
+                     });
+                 }
+            }
+            container.style.display = "block";
+            if(btn) btn.innerHTML = `<i>&#9652;</i> 收起回复`;
+        } else {
+            container.style.display = "none";
+            if(btn) {
+                // Get count roughly
+                const count = container.children.length;
+                btn.innerHTML = `<i>&#9662;</i> ${count} 条回复`; // Simplified
+            }
+        }
+    }
+
+    // --- 提交评论/回复 ---
+    async function postComment(parentId) {
+        let content, input;
+        if (parentId === null) {
+            input = document.getElementById("main-comment-input");
+            content = input.value.trim();
+        }
+
+        if (!content) return;
+        await sendComment(content, null, input);
+    }
+
+    async function submitReply(boxId, rootId) {
+        const input = document.getElementById(`reply-input-${boxId}`);
+        const content = input.value.trim();
+        if (!content) return;
+
+        // 关键：rootId 是主评论ID。无论我们在哪一层回复，parent_id 都设为 rootId
+        // 这样后端存为二级结构
+        await sendComment(content, rootId, input, () => {
+             cancelReply(boxId);
+             // 刷新回复列表
+             const container = document.getElementById(`replies-container-${rootId}`);
+             // 简单的处理：清空并重新展开，或者追加
+             // 这里选择追加一个假的或重新加载
+             // 为了简单，我们追加到DOM
+             // 但我们需要完整的对象。重新加载比较稳妥，或者手动构造
+             // 重新加载:
+             container.innerHTML = "";
+             container.style.display = "none";
+             toggleReplies(rootId);
+        });
+    }
+
+    async function sendComment(content, parentId, inputElem, onSuccess) {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoId = urlParams.get('id');
+
+        const formData = new FormData();
+        formData.append("content", content);
+        if (parentId) formData.append("parent_id", parentId);
+
+        try {
+            const res = await fetch(`/videos/${videoId}/comments`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: formData
+            });
+
+            if (res.ok) {
+                inputElem.value = "";
+                if (parentId === null) {
+                    showMainActions(false);
+                    loadComments(videoId); // Reload all for main
+                } else {
+                    if (onSuccess) onSuccess();
+                }
+            } else {
+                alert("发送失败");
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function deleteComment(commentId) {
+        if(!confirm("确定删除?")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch(`/comments/${commentId}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if(res.ok) {
+                const el = document.getElementById(`content-${commentId}`);
+                if(el) {
+                    el.innerHTML = `<span class="deleted-text">该评论已由用户删除</span>`;
+                    // Remove actions
+                    const actions = el.parentElement.querySelector(".c-actions");
+                    if(actions) actions.remove();
+                }
+            }
+        } catch(e) {}
+    }
+
+    async function toggleCommentLike(commentId, likeType = 'like') {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+        try {
+            const formData = new FormData();
+            formData.append('like_type', likeType);
+            const res = await fetch(`/comments/${commentId}/like`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: formData
+            });
+            if (res.ok) {
+                const data = await res.json();
+                // 更新点赞数
+                const likeCountEl = document.getElementById(`comment-like-count-${commentId}`);
+                const dislikeCountEl = document.getElementById(`comment-dislike-count-${commentId}`);
+                if (likeCountEl) likeCountEl.innerText = data.like_count;
+                if (dislikeCountEl) dislikeCountEl.innerText = data.dislike_count;
+                // 重新加载评论以更新所有状态
+                loadComments(currentVideoId);
+            }
+        } catch(e) {}
+    }
+
+    async function togglePinComment(commentId, pin) {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+        try {
+            const res = await fetch(`/comments/${commentId}/pin`, {
+                method: pin ? "POST" : "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                // 刷新评论
+                loadComments(currentVideoId);
+            }
+        } catch(e) {}
+    }
+
+    // --- Helpers ---
+    function timeSince(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " 年前";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " 个月前";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " 天前";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " 小时前";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " 分钟前";
+        return "刚刚";
+    }
+
+    // ... loadVideoDetails (same as before but simplified IDs) ...
+    async function loadVideoDetails(id) {
+        try {
+            const token = localStorage.getItem("access_token");
+            const privateToken = localStorage.getItem("private_token");
+            const headers = token ? { "Authorization": "Bearer " + token } : {};
+            let url = `/videos/${id}`;
+            if (privateToken) {
+                url += `?private_token=${encodeURIComponent(privateToken)}`;
+            }
+            const res = await fetch(url, { headers });
+            if (res.ok) {
+                const video = await res.json();
+                document.title = video.title;
+                document.getElementById("title").innerText = video.title;
+                document.getElementById("views").innerText = video.views + "次观看";
+                document.getElementById("date").innerText = new Date(video.created_at).toLocaleDateString(); // Simple date
+                document.getElementById("description").innerText = video.description || "";
+                // 检查简介长度，决定是否显示展开/收起按钮
+                const descEl = document.getElementById("description");
+                const toggleEl = document.getElementById("desc-toggle");
+                if (descEl.innerText.length > 100) {
+                    descEl.classList.add("collapsed");
+                    toggleEl.style.display = "inline-block";
+                    toggleEl.innerText = "展开";
+                } else {
+                    toggleEl.style.display = "none";
+                }
+
+                // 显示视频标签
+                const tagsEl = document.getElementById("video-tags");
+                if (video.tags && video.tags.length > 0) {
+                    tagsEl.innerHTML = video.tags.map(tag =>
+                        `<span style="background:#f0f0f0; color:#606060; padding:4px 10px; border-radius:12px; font-size:12px;">${tag}</span>`
+                    ).join('');
+                } else {
+                    tagsEl.style.display = "none";
+                }
+
+                // Update Like/Fav UI
+                document.getElementById("like-count").innerText = video.like_count;
+                isLiked = video.is_liked;
+                isFavorited = video.is_favorited;
+                updateActionButtons();
+
+                if (video.owner) {
+                    currentAuthorId = video.owner.id;
+                    document.getElementById("author-name").innerText = video.owner.username;
+                    const avatar = getAvatarUrl(video.owner.avatar_path) || getDefaultAvatar(video.owner.username);
+                    document.getElementById("author-avatar").src = avatar;
+
+                    // 点击跳转
+                    const goProfile = () => location.href = `/static/profile.html?id=${video.owner.username}`;
+                    document.getElementById("author-name").onclick = goProfile;
+                    document.getElementById("author-avatar").onclick = goProfile;
+
+                    // Simple subs count placeholder
+                    // document.getElementById("author-subs").innerText = "..."
+
+                    checkFollowStatus();
+                }
+
+                // 加载字幕
+                loadSubtitles(video.id);
+
+                // Player logic (simplified copy)
+                const player = document.getElementById("player");
+                player.poster = video.thumbnail_path;
+
+                // 记录播放次数（一次页面访问只记录一次）
+                let viewRecorded = false;
+                let completedRecorded = false;
+                let viewToken = null;  // 匿名用户的view token
+                let tokenPromise = null;  // 防止重复获取token
+
+                // 匿名用户获取view token
+                const fetchViewToken = async () => {
+                    const token = localStorage.getItem("access_token");
+                    if (token) return;  // 已登录用户不需要token
+                    const aid = getAnonymousId();
+                    try {
+                        const res = await fetch(`/videos/${video.id}/view-token?anonymous_id=${aid}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            viewToken = data.token;
+                        }
+                    } catch(e) { console.error("View token error:", e); }
+                };
+                fetchViewToken();  // 页面加载时提前获取token
+
+                const recordView = async () => {
+                    if (viewRecorded) return;
+                    viewRecorded = true;
+                    try {
+                        const token = localStorage.getItem("access_token");
+                        if (token) {
+                            await fetch(`/videos/${video.id}/view`, {
+                                method: "POST",
+                                headers: { "Authorization": "Bearer " + token }
+                            });
+                            // 追踪推荐播放
+                            if (recSlot) {
+                                await fetch("/recommendations/watch", {
+                                    method: "POST",
+                                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ video_id: video.id, watch_percent: 0, slot_name: recSlot, impression_rank: recRank })
+                                });
+                            }
+                        } else {
+                            // 匿名用户：等待token获取完成后再发送
+                            if (!tokenPromise) {
+                                tokenPromise = fetchViewToken();
+                            }
+                            await tokenPromise;
+                            if (viewToken) {
+                                const aid = getAnonymousId();
+                                await fetch(`/videos/${video.id}/view`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ anonymous_id: aid, token: viewToken })
+                                });
+                            }
+                        }
+                        // 更新页面上的播放次数显示
+                        const viewsEl = document.getElementById("views");
+                        if (viewsEl) {
+                            const currentViews = parseInt(viewsEl.textContent) || 0;
+                            viewsEl.innerText = (currentViews + 1) + "次观看";
+                        }
+                    } catch(e) { console.error("View record error:", e); }
+                };
+
+                player.addEventListener("play", recordView);
+
+                // 记录完播次数 - 兼容HLS和普通视频
+                const recordComplete = async () => {
+                    if (completedRecorded) return;
+                    completedRecorded = true;
+                    try {
+                        const token = localStorage.getItem("access_token");
+                        if (!token) return;  // 未登录不记录
+                        await fetch(`/videos/${video.id}/progress?is_finished=true`, {
+                            method: "POST",
+                            headers: { "Authorization": "Bearer " + token }
+                        });
+                    } catch(e) { console.error("Complete record error:", e); }
+                };
+
+                // 对于HLS流，使用FRAG_LOADED事件监听最后一段
+                if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
+                    // 使用timeupdate监控进度，快进到最后5秒内时标记完成
+                    player.addEventListener("timeupdate", () => {
+                        if (completedRecorded || player.duration <= 0) return;
+                        const remaining = player.duration - player.currentTime;
+                        if (remaining < 5 || player.currentTime / player.duration > 0.95) {
+                            recordComplete();
+                        }
+                    });
+                } else {
+                    player.addEventListener("ended", recordComplete);
+                }
+
+                // 检查视频是否可播放
+                if (!video.playable) {
+                    document.getElementById("player").style.display = "none";
+                    const existingError = document.getElementById("video-error-overlay");
+                    if (existingError) existingError.remove();
+                    const errorDiv = document.createElement("div");
+                    errorDiv.id = "video-error-overlay";
+                    errorDiv.style.cssText = "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; color:#666; z-index:10;";
+                    errorDiv.innerHTML = `<div style="font-size:48px;margin-bottom:20px;">🚫</div><div style="font-size:18px;font-weight:500;margin-bottom:10px;">视频状态异常</div><div style="font-size:14px;color:#999;">${video.playable_message || '该视频暂时无法播放'}</div>`;
+                    document.getElementById("player-wrapper").appendChild(errorDiv);
+                } else if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
+                    const hls = new Hls();
+                    const streamUrl = video.stream_url || video.processed_file_path;
+                    hls.loadSource(streamUrl);
+                    hls.attachMedia(player);
+
+                    // HLS loadedmetadata 可能在 MANIFEST_PARSED 之前或之后触发，提前监听
+                    player.addEventListener('loadedmetadata', () => {
+                        restorePlaybackPosition();
+                    });
+
+                    hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                        hlsReady = true;
+                        setupHlsQuality(hls);
+                        // 如果 loadedmetadata 已触发，直接恢复位置
+                        if (player.duration > 0) {
+                            restorePlaybackPosition();
+                        }
+                        player.play().catch(() => {});
+                    });
+
+                    hls.on(Hls.Events.ERROR, (event, data) => {
+                        console.error('HLS error:', data);
+                        console.error('  type:', data.type);
+                        console.error('  details:', data.details);
+                        console.error('  fatal:', data.fatal);
+                        if (data.fatal) {
+                            switch (data.type) {
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    console.error('Fatal network error');
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    console.error('Fatal media error');
+                                    break;
+                                default:
+                                    console.error('Fatal error');
+                                    break;
+                            }
+                        }
+                    });
+                } else {
+                    player.src = video.stream_url || video.processed_file_path;
+                }
+
+                // Auto-load playlist if video belongs to a collection and no collection_id in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                if (!urlParams.get('collection_id') && video.collection_id) {
+                    // Option 1: Just load it
+                    loadPlaylist(video.collection_id, video.id);
+                    // Option 2: Update URL (cleaner but optional)
+                    // const newUrl = `${window.location.pathname}?id=${video.id}&collection_id=${video.collection_id}`;
+                    // window.history.replaceState(null, '', newUrl);
+                }
+
+                // 自定义控件初始化
+                initCustomControls();
+            } else if (res.status === 403) {
+                // 视频被下架或状态异常 - 隐藏播放器，显示错误提示
+                let errorMsg = "该视频暂时无法播放";
+                try {
+                    const errData = await res.json();
+                    if (errData.detail) errorMsg = errData.detail;
+                } catch(e) {}
+                document.getElementById("player").style.display = "none";
+                // 移除之前的错误提示（如果存在）
+                const existingError = document.getElementById("video-error-overlay");
+                if (existingError) existingError.remove();
+                // 创建错误提示覆盖层
+                const errorDiv = document.createElement("div");
+                errorDiv.id = "video-error-overlay";
+                errorDiv.style.cssText = "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; color:#666; z-index:10;";
+                errorDiv.innerHTML = `<div style="font-size:48px;margin-bottom:20px;">🚫</div><div style="font-size:18px;font-weight:500;margin-bottom:10px;">视频状态异常</div><div style="font-size:14px;color:#999;">${errorMsg}</div>`;
+                document.getElementById("player-wrapper").appendChild(errorDiv);
+            } else if (res.status === 404) {
+                document.getElementById("player").style.display = "none";
+                const existingError = document.getElementById("video-error-overlay");
+                if (existingError) existingError.remove();
+                const errorDiv = document.createElement("div");
+                errorDiv.id = "video-error-overlay";
+                errorDiv.style.cssText = "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; color:#666; z-index:10;";
+                errorDiv.innerHTML = `<div style="font-size:48px;margin-bottom:20px;">🔍</div><div style="font-size:18px;font-weight:500;margin-bottom:10px;">视频不存在</div><div style="font-size:14px;color:#999;">该视频可能已被删除</div>`;
+                document.getElementById("player-wrapper").appendChild(errorDiv);
+            }
+        } catch(e) {}
+    }
+
+    // ... checkFollowStatus, toggleFollow, loadRecommendations (reuse existing logic) ...
+    async function checkFollowStatus() {
+         if (!currentAuthorId) return;
+         const token = localStorage.getItem("access_token");
+         const headers = token ? {"Authorization":"Bearer "+token} : {};
+         const res = await fetch(`/users/${currentAuthorId}/profile`, {headers});
+         if(res.ok) {
+             const data = await res.json();
+             isFollowing = data.is_following;
+
+             // 更新粉丝数
+             document.getElementById("author-subs").innerText = data.followers_count + " 粉丝";
+
+             const btn = document.getElementById("follow-btn");
+             if(data.is_self) btn.style.display="none";
+             else {
+                 btn.innerText = isFollowing ? "已关注" : "关注";
+                 btn.className = isFollowing ? "follow-btn following" : "follow-btn";
+             }
+         }
+    }
+    async function toggleFollow() {
+        const token = localStorage.getItem("access_token");
+        if(!token) return location.href="/static/login.html";
+        const method = isFollowing ? "DELETE" : "POST";
+        const res = await fetch(`/users/${currentAuthorId}/follow`, {method:method, headers:{"Authorization":"Bearer "+token}});
+        if(res.ok) { isFollowing = !isFollowing; checkFollowStatus(); }
+    }
+    async function loadRecommendations() {
+        const token = localStorage.getItem("access_token");
+        const headers = token ? { "Authorization": "Bearer " + token } : {};
+
+        try {
+            // 排除当前视频，获取相关推荐
+            const res = await fetch(`/recommendations?slot_name=sidebar_related&limit=10&exclude_video_ids=${currentVideoId}`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                const l = document.getElementById("rec-list");
+                l.innerHTML = "";
+
+                if (!data.recommendations || data.recommendations.length === 0) {
+                    l.innerHTML = `<div style="text-align:center; padding:20px; color:#999; font-size:12px;">暂无推荐视频</div>`;
+                    return;
+                }
+
+                // 添加标题
+                const title = document.createElement("div");
+                title.style.cssText = "padding:12px; font-size:14px; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; margin-bottom:8px;";
+                title.innerHTML = `<span style="color:#00a1d6;">✨</span> 相关推荐`;
+                l.appendChild(title);
+
+                data.recommendations.forEach((rec, idx) => {
+                    const v = rec.video;
+                    const d = document.createElement("div");
+                    d.className = "rec-item";
+                    d.style.cssText = `
+                        padding: 8px; margin-bottom: 8px; border-radius: 6px; cursor: pointer;
+                        transition: 0.2s; background: #fff; border: 1px solid #f0f0f0;
+                        display: flex; gap: 10px; align-items: flex-start;
+                    `;
+
+                    d.onmouseenter = () => d.style.background = "#f5f5f5";
+                    d.onmouseleave = () => d.style.background = "#fff";
+
+                    const thumb = v.thumbnail_path || "https://via.placeholder.com/168x94";
+                    const authorName = v.owner?.username || "未知作者";
+                    const uploadDate = v.created_at ? new Date(v.created_at).toLocaleDateString() : "";
+                    const viewsText = v.views ? `${v.views}次播放` : "";
+                    // 简介只取前50字
+                    const desc = v.description ? (v.description.length > 50 ? v.description.substring(0, 50) + '...' : v.description) : "";
+
+                    d.innerHTML = `
+                        <img src="${thumb}" style="width:120px; height:68px; border-radius:4px; object-fit:cover; flex-shrink:0;" loading="lazy">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:13px; font-weight:500; color:#18191c; line-height:1.3; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
+                                ${v.title}
+                            </div>
+                            <div style="font-size:12px; color:#606060; margin-bottom:2px;">
+                                ${authorName}
+                            </div>
+                            ${desc ? `<div style="font-size:11px; color:#888; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${desc}</div>` : ''}
+                            <div style="font-size:12px; color:#606060;">
+                                ${viewsText}${viewsText && uploadDate ? ' · ' : ''}${uploadDate}
+                            </div>
+                        </div>
+                    `;
+
+                    d.onclick = async () => {
+                        const token = localStorage.getItem("access_token");
+                        if (token) {
+                            try {
+                                await fetch("/recommendations/click", {
+                                    method: "POST",
+                                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                                    body: JSON.stringify({ video_id: v.id, slot_name: "sidebar_related", impression_rank: idx + 1 })
+                                });
+                            } catch(e) {}
+                        }
+                        location.href = `/static/video.html?id=${v.id}&rec_slot=sidebar_related&rec_rank=${idx + 1}`;
+                    };
+                    l.appendChild(d);
+
+                    // 追踪展示
+                    trackRecommendationImpression(v.id, "sidebar_related", idx + 1, rec.source);
+                });
+            }
+        } catch(e) {
+            console.error("Recommendation load error:", e);
+        }
+    }
+
+    function getRecommendationBadge(source) {
+        const badges = {
+            "manual": "精选推荐",
+            "collaborative": "推荐给你",
+            "trending": "热门视频",
+            "category": "分类推荐",
+            "tag": "标签相似",
+            "similarity": "内容相似"
+        };
+        return badges[source] || "为你推荐";
+    }
+
+    function trackRecommendationImpression(videoId, slotName, rank, source) {
+        // 记录推荐展示（可选，用于分析）
+        try {
+            const token = localStorage.getItem("access_token");
+            if (token) {
+                // 这里可以调用追踪API，但不阻塞页面加载
+                // 暂时不强制调用
+            }
+        } catch(e) {}
+    }
+
+
+    function updateActionButtons() {
+        const likeBtn = document.getElementById("like-btn");
+        const favBtn = document.getElementById("fav-btn");
+
+        if (isLiked) {
+            likeBtn.classList.add("active");
+        } else {
+            likeBtn.classList.remove("active");
+        }
+
+        if (isFavorited) {
+            favBtn.classList.add("active");
+            document.getElementById("fav-text").innerText = "已收藏";
+        } else {
+            favBtn.classList.remove("active");
+            document.getElementById("fav-text").innerText = "收藏";
+        }
+    }
+
+    // 简介展开/收起
+    function toggleDescription() {
+        const descEl = document.getElementById("description");
+        const toggleEl = document.getElementById("desc-toggle");
+        const isCollapsed = descEl.classList.toggle("collapsed");
+        toggleEl.innerText = isCollapsed ? "展开" : "收起";
+    }
+
+    async function toggleLike() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        // Optimistic update
+        isLiked = !isLiked;
+        let count = parseInt(document.getElementById("like-count").innerText);
+        count = isLiked ? count + 1 : count - 1;
+        document.getElementById("like-count").innerText = count;
+        updateActionButtons();
+
+        const method = isLiked ? "POST" : "DELETE"; // Logic handled by backend if post same type toggles? No backend handles POST toggle but DELETE is explicit
+        // Backend: POST like -> if exists and same type -> delete. So just POST is enough for toggle if backend supports it.
+        // My backend logic: POST like -> if like exists -> delete.
+        // So I should always use POST like.
+
+        try {
+            const res = await fetch(`/videos/${currentVideoId}/like?like_type=like`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                // Sync actual count
+                document.getElementById("like-count").innerText = data.total_likes;
+                // isLiked is already updated by optimistic but verifying status
+                isLiked = data.liked;
+                updateActionButtons();
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function toggleFavorite() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return location.href = "/static/login.html";
+
+        isFavorited = !isFavorited;
+        updateActionButtons();
+
+        try {
+            const res = await fetch(`/videos/${currentVideoId}/favorite`, {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                isFavorited = data.favorited;
+                updateActionButtons();
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    // ==================== 宽屏模式 ====================
+    function toggleTheaterMode() {
+        const container = document.querySelector('.container');
+        const mainContent = document.querySelector('.main-content');
+        const sidebar = document.querySelector('.sidebar');
+        const playerWrapper = document.querySelector('.player-wrapper');
+        const btn = document.getElementById('theater-btn');
+        const icon = document.getElementById('theater-icon');
+        const isTheater = container.classList.toggle('theater-mode');
+        btn.classList.toggle('active', isTheater);
+
+        if (isTheater) {
+            // 宽屏模式：
+            // 1. 用player-center-wrap包裹player-wrapper实现居中
+            // 2. 创建content-row包裹video-info和sidebar
+            const centerWrap = document.createElement('div');
+            centerWrap.className = 'player-center-wrap';
+            playerWrapper.parentNode.insertBefore(centerWrap, playerWrapper);
+            centerWrap.appendChild(playerWrapper);
+
+            const videoInfo = mainContent.querySelector('.video-info');
+            const contentRow = document.createElement('div');
+            contentRow.className = 'content-row';
+            contentRow.appendChild(videoInfo);
+            contentRow.appendChild(sidebar);
+            mainContent.appendChild(contentRow);
+            icon.innerHTML = '<path d="M19 13H5v-2h14v2z"/>';
+        } else {
+            // 普通模式：
+            // 1. 把player-wrapper移出player-center-wrap，直接放回mainContent
+            // 2. 移除content-row，恢复video-info到mainContent，sidebar应该移回container（grid第2列）
+            const centerWrap = mainContent.querySelector('.player-center-wrap');
+            if (centerWrap) {
+                mainContent.replaceChild(playerWrapper, centerWrap);
+            }
+
+            // 移除content-row，恢复video-info和sidebar
+            const contentRow = mainContent.querySelector('.content-row');
+            if (contentRow) {
+                const videoInfo = contentRow.querySelector('.video-info');
+                const sidebarInRow = contentRow.querySelector('.sidebar');
+
+                // video-info应该紧跟在player-wrapper后面
+                if (videoInfo) {
+                    mainContent.insertBefore(videoInfo, contentRow);
+                }
+                // sidebar应该移回container（在mainContent后面）
+                if (sidebarInRow) {
+                    container.appendChild(sidebarInRow);
+                }
+                contentRow.remove();
+            }
+            icon.innerHTML = '<path d="M19 6H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0 1.1-.9-2-2-2zm0 10H5V8h14v8z"/>';
+        }
+    }
+
+    // ==================== 自定义播放器控件 ====================
+    let hlsInstance = null;  // 保存HLS实例供控件使用
+    let hlsReady = false;  // HLS是否已就绪
+
+    function initCustomControls() {
+        const player = document.getElementById('player');
+        const playBtn = document.getElementById('play-btn');
+        const playIcon = document.getElementById('play-icon');
+        const pauseIcon = document.getElementById('pause-icon');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const timeDisplay = document.getElementById('time-display');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const playerWrapper = document.getElementById('player-wrapper');
+        const pipBtn = document.getElementById('pip-btn');
+        const qualitySelect = document.getElementById('quality-select');
+        const volumeBtn = document.getElementById('volume-btn');
+        const volumeSlider = document.getElementById('volume-slider');
+        const volumeIcon = document.getElementById('volume-icon');
+        const volumeMuteIcon = document.getElementById('volume-mute-icon');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsMenu = document.getElementById('settings-menu');
+
+        let lastVolume = 1; // 保存静音前的音量
+
+        // 格式化时间
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // 更新播放/暂停图标
+        function updatePlayIcon() {
+            if (player.paused) {
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+            } else {
+                playIcon.style.display = 'none';
+                pauseIcon.style.display = 'block';
+            }
+        }
+
+        // 播放/暂停按钮
+        playBtn.addEventListener('click', () => {
+            if (player.paused) {
+                player.play().catch(err => {
+                    console.error('Play error:', err.message);
+                });
+            } else {
+                player.pause();
+            }
+        });
+
+        // 视频点击播放/暂停
+        player.addEventListener('click', () => {
+            if (player.paused) {
+                player.play().catch(err => {
+                    console.error('Play error:', err.message);
+                });
+            } else {
+                player.pause();
+            }
+        });
+
+        // 播放状态变化
+        player.addEventListener('play', updatePlayIcon);
+        player.addEventListener('pause', updatePlayIcon);
+
+        // 更新进度条和时间
+        let lastSaveTime = 0;
+        const SAVE_INTERVAL = 5000; // 每5秒保存一次
+        player.addEventListener('timeupdate', () => {
+            if (!player.duration) return;
+            const percent = (player.currentTime / player.duration) * 100;
+            progressBar.style.width = percent + '%';
+            timeDisplay.textContent = `${formatTime(player.currentTime)} / ${formatTime(player.duration)}`;
+            // 节流保存播放位置
+            const now = Date.now();
+            if (now - lastSaveTime > SAVE_INTERVAL) {
+                savePlaybackPosition();
+                lastSaveTime = now;
+            }
+        });
+
+        // 键盘快捷键 - 左右方向键快进/倒退
+        document.addEventListener('keydown', (e) => {
+            if (!player.duration) return;
+            const seekAmount = 5; // 秒
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                player.currentTime = Math.max(0, player.currentTime - seekAmount);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                player.currentTime = Math.min(player.duration, player.currentTime + seekAmount);
+            }
+        });
+
+        // 进度条点击跳转
+        progressContainer.addEventListener('click', (e) => {
+            const rect = progressContainer.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            player.currentTime = percent * player.duration;
+        });
+
+        // 全屏按钮
+        fullscreenBtn.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                playerWrapper.requestFullscreen();
+            }
+        });
+
+	        // 全屏状态变化处理 - 控件自动隐藏
+	        let controlsTimeout;
+	        const customControls = document.getElementById('custom-controls');
+	        const topControls = document.getElementById('top-controls');
+	        document.addEventListener('fullscreenchange', () => {
+	            const isFullscreen = !!document.fullscreenElement;
+	            if (isFullscreen) {
+	                const showControls = () => {
+	                    customControls.style.opacity = '1';
+	                    topControls.style.opacity = '1';
+	                    if (controlsTimeout) clearTimeout(controlsTimeout);
+	                    controlsTimeout = setTimeout(() => {
+	                        customControls.style.opacity = '0';
+	                    }, 3000);
+	                };
+	                playerWrapper.addEventListener('mousemove', showControls);
+	                showControls();
+	            } else {
+	                customControls.style.opacity = '1';
+	                if (controlsTimeout) clearTimeout(controlsTimeout);
+	            }
+	        });
+
+	        // 画中画按钮
+        pipBtn.addEventListener('click', async () => {
+            try {
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture();
+                } else if (document.pictureInPictureEnabled) {
+                    await player.requestPictureInPicture();
+                }
+            } catch(e) {
+                console.error('PiP error:', e);
+            }
+        });
+
+        // 设置菜单
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            settingsMenu.classList.toggle('show');
+        });
+
+        // 隐藏设置菜单
+        document.addEventListener('click', () => {
+            settingsMenu.classList.remove('show');
+        });
+
+        // 速度选择
+        settingsMenu.querySelectorAll('.speed-options .dropdown-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const speed = parseFloat(item.dataset.speed);
+                player.playbackRate = speed;
+
+                // 更新选中状态
+                settingsMenu.querySelectorAll('.speed-options .dropdown-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                settingsMenu.classList.remove('show');
+            });
+        });
+
+        // 音量控制
+        function updateVolumeIcon(volume) {
+            if (volume === 0) {
+                volumeIcon.style.display = 'none';
+                volumeMuteIcon.style.display = 'block';
+            } else {
+                volumeIcon.style.display = 'block';
+                volumeMuteIcon.style.display = 'none';
+            }
+        }
+
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = parseInt(e.target.value) / 100;
+            player.volume = volume;
+            lastVolume = volume;
+            updateVolumeIcon(volume);
+        });
+
+        volumeBtn.addEventListener('click', () => {
+            if (player.volume > 0) {
+                lastVolume = player.volume;
+                player.volume = 0;
+                volumeSlider.value = 0;
+                updateVolumeIcon(0);
+            } else {
+                player.volume = lastVolume;
+                volumeSlider.value = lastVolume * 100;
+                updateVolumeIcon(lastVolume);
+            }
+        });
+
+        // 初始化音量图标
+        updateVolumeIcon(player.volume);
+
+        // 分辨率选择（HLS）
+        if (qualitySelect) {
+            qualitySelect.addEventListener('change', (e) => {
+                if (hlsInstance) {
+                    hlsInstance.currentLevel = parseInt(e.target.value);
+                }
+            });
+        }
+
+        // 初始化
+        player.addEventListener('loadedmetadata', () => {
+            timeDisplay.textContent = `0:00 / ${formatTime(player.duration)}`;
+            restorePlaybackPosition();
+        });
+
+        // 暂停时保存位置
+        player.addEventListener('pause', () => {
+            savePlaybackPosition();
+        });
+
+        // 页面关闭/刷新前保存位置
+        window.addEventListener('beforeunload', () => {
+            savePlaybackPosition();
+        });
+    }
+
+    // HLS质量级别设置（供外部调用）
+    function setupHlsQuality(hls) {
+        hlsInstance = hls;
+        const qualitySelect = document.getElementById('quality-select');
+        if (!qualitySelect) return;
+
+        const levels = hls.levels;
+        if (levels.length > 1) {
+            qualitySelect.style.display = 'block';
+            qualitySelect.innerHTML = '<option value="-1">自动</option>';
+            levels.forEach((level, index) => {
+                const opt = document.createElement('option');
+                opt.value = index;
+                opt.text = level.height + 'p';
+                qualitySelect.appendChild(opt);
+            });
+        }
+    }
+
+    // ==================== 字幕功能 ====================
+    let availableSubtitles = [];
+    let currentSubtitleTrack = null;
+    let currentSubtitleLang = null; // 当前选中的字幕语言
+
+    async function loadSubtitles(videoId) {
+        try {
+            const res = await fetch(`/videos/${videoId}/subtitles`);
+            if (res.ok) {
+                const subtitles = await res.json();
+                availableSubtitles = subtitles;
+                setupSubtitleUI(subtitles);
+            }
+        } catch (e) {
+            console.log("No subtitles available");
+        }
+    }
+
+    function setupSubtitleUI(subtitles) {
+        const dropdown = document.getElementById('subtitle-dropdown');
+        const menu = document.getElementById('subtitle-menu');
+        const btn = document.getElementById('subtitle-btn');
+
+        if (!subtitles || subtitles.length === 0) {
+            btn.classList.add('disabled');
+            menu.innerHTML = '';
+            menu.classList.remove('show');
+            return;
+        }
+
+        btn.classList.remove('disabled');
+        menu.innerHTML = '';
+
+        // Off option
+        const offOpt = document.createElement('div');
+        offOpt.className = 'dropdown-item' + (currentSubtitleLang === null ? ' active' : '');
+        offOpt.textContent = '关闭';
+        offOpt.onclick = () => disableSubtitles();
+        menu.appendChild(offOpt);
+
+        subtitles.forEach(sub => {
+            const opt = document.createElement('div');
+            opt.className = 'dropdown-item' + (currentSubtitleLang === sub.language ? ' active' : '');
+            opt.textContent = getLanguageName(sub.language) + (sub.is_auto_generated ? ' (自动)' : '');
+            opt.onclick = () => enableSubtitle(sub);
+            menu.appendChild(opt);
+        });
+    }
+
+    function getLanguageName(code) {
+        const names = {
+            "en": "English", "zh": "中文", "zh-Hans": "简体中文",
+            "zh-Hant": "繁体中文", "es": "Español", "fr": "Français",
+            "de": "Deutsch", "ja": "日本語", "ko": "한국어"
+        };
+        return names[code] || code.toUpperCase();
+    }
+
+    function enableSubtitle(sub) {
+        const player = document.getElementById('player');
+
+        // Hide all existing tracks
+        for (let i = player.textTracks.length - 1; i >= 0; i--) {
+            player.textTracks[i].mode = 'disabled';
+        }
+
+        // Add the subtitle track
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = getLanguageName(sub.language);
+        track.src = sub.url;
+        track.srclang = sub.language;
+        track.mode = 'showing';
+        player.appendChild(track);
+        currentSubtitleTrack = track;
+        currentSubtitleLang = sub.language;
+
+        // Refresh menu to show active state
+        setupSubtitleUI(availableSubtitles);
+    }
+
+    function disableSubtitles() {
+        if (currentSubtitleTrack) {
+            currentSubtitleTrack.mode = 'hidden';
+            currentSubtitleTrack = null;
+        }
+        currentSubtitleLang = null;
+        // Also clear all text tracks
+        const player = document.getElementById('player');
+        for (let i = player.textTracks.length - 1; i >= 0; i--) {
+            player.textTracks[i].mode = 'hidden';
+        }
+        // Refresh menu to show active state
+        setupSubtitleUI(availableSubtitles);
+    }
+
+    // ==================== 播放位置记忆 ====================
+    function savePlaybackPosition() {
+        const player = document.getElementById('player');
+        if (!player || !currentVideoId) return;
+        // 不保存太短的位置（开头1秒内）或接近结尾的位置
+        // duration 可能为0（HLS），这种情况下跳过保存
+        if (!player.duration || player.currentTime < 1 || player.currentTime / player.duration > 0.95) return;
+        localStorage.setItem(`video_position_${currentVideoId}`, player.currentTime.toString());
+    }
+
+    function restorePlaybackPosition() {
+        const player = document.getElementById('player');
+        if (!player || !currentVideoId) return;
+        const savedTime = localStorage.getItem(`video_position_${currentVideoId}`);
+        if (savedTime) {
+            const time = parseFloat(savedTime);
+            // 验证时间有效（HLS duration 可能还未准备好，浏览器会自动处理无效值）
+            if (!isNaN(time) && time > 0) {
+                player.currentTime = time;
+            }
+        }
+    }
+
+    // Toggle subtitle menu
+    document.getElementById('subtitle-btn')?.addEventListener('click', (e) => {
+        const btn = document.getElementById('subtitle-btn');
+        if (btn.classList.contains('disabled')) return;
+        e.stopPropagation();
+        document.getElementById('subtitle-menu').classList.toggle('show');
+    });
+
+    document.addEventListener('click', () => {
+        document.getElementById('subtitle-menu')?.classList.remove('show');
+    });
+
+    // ==================== 投屏功能 ====================
+    let castDevices = [];
+
+    async function showCastDevices() {
+        // 检查登录状态
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            // 弹出登录界面
+            location.href = '/static/login.html?return_url=' + encodeURIComponent(location.href);
+            return;
+        }
+
+        const list = document.getElementById('device-list');
+        list.innerHTML = '<div style="padding:40px; text-align:center;"><div style="display:inline-block; width:32px; height:32px; border:3px solid #eee; border-top:#00a1d6; border-radius:50%; animation:spin 1s linear infinite;"></div><p style="margin-top:12px; color:#666;">搜索投屏设备中...</p></div>';
+        document.getElementById('cast-modal').style.display = 'block';
+
+        try {
+            const res = await fetch('/api/cast/devices', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.status === 401) {
+                closeCastModal();
+                location.href = '/static/login.html?return_url=' + encodeURIComponent(location.href);
+                return;
+            }
+            const data = await res.json();
+            castDevices = data.devices || [];
+
+            if (castDevices.length === 0) {
+                list.innerHTML = '<p style="padding:20px; text-align:center; color:#999;">未发现可投屏设备</p>';
+            } else {
+                list.innerHTML = castDevices.map(d =>
+                    `<div onclick="castTo('${d.id}')" style="padding: 12px; border-bottom: 1px solid #eee; cursor: pointer;">${d.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+                ).join('');
+            }
+        } catch(e) {
+            console.error('Cast error:', e);
+            list.innerHTML = '<p style="padding:20px; text-align:center; color:#f04c49;">获取投屏设备失败</p>';
+        }
+    }
+
+    async function castTo(deviceId) {
+        const token = localStorage.getItem('access_token');
+        try {
+            const res = await fetch(`/api/cast/play?device_id=${encodeURIComponent(deviceId)}&video_id=${currentVideoId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.status === 401) {
+                closeCastModal();
+                location.href = '/static/login.html?return_url=' + encodeURIComponent(location.href);
+                return;
+            }
+            if (res.ok) {
+                alert('投屏成功！');
+            } else {
+                const err = await res.json();
+                alert('投屏失败: ' + (err.detail || '未知错误'));
+            }
+        } catch(e) {
+            console.error('Cast error:', e);
+            alert('投屏失败');
+        }
+        closeCastModal();
+    }
+
+    function closeCastModal() {
+        document.getElementById('cast-modal').style.display = 'none';
+    }
+
+    // 点击模态框外部关闭
+    document.addEventListener('click', (e) => {
+        const modal = document.getElementById('cast-modal');
+        if (modal && e.target === modal) {
+            closeCastModal();
+        }
+    });
 </script>
+
+<!-- 投屏设备选择模态框 -->
+<div id="cast-modal" style="display:none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background: white; margin: 100px auto; padding: 20px; border-radius: 8px; max-width: 400px;">
+        <h3 style="margin: 0 0 16px; font-size: 16px;">选择投屏设备</h3>
+        <div id="device-list" style="max-height: 300px; overflow-y: auto;"></div>
+        <button onclick="closeCastModal()" style="margin-top: 16px; width: 100%; padding: 10px; border: none; background: #f0f0f0; border-radius: 4px; cursor: pointer;">关闭</button>
+    </div>
+</div>
 </body>
 </html>
