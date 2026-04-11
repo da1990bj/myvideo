@@ -37,8 +37,29 @@ class MyVideoSettings(BaseSettings):
         extra="ignore"
     )
 
+    def _get_version(self) -> str:
+        """从 git tag 获取版本号"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["git", "describe", "--tags", "--abbrev=0"],
+                cwd=self.BASE_DIR,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return "unknown"
+
     # ==================== 基础配置 ====================
     MYVIDEO_ROOT: str
+
+    @property
+    def VERSION(self) -> str:
+        """当前版本号（从 git tag 获取）"""
+        return self._get_version()
 
     # ==================== 数据库 ====================
     DATABASE_HOST: str

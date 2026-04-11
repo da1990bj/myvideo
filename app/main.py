@@ -1,5 +1,5 @@
 """
-MyVideo v3.0 - FastAPI 主应用
+MyVideo - FastAPI 主应用
 
 架构变更：
 - 所有 API 路由已拆分到 app/routers/ 目录下的模块化路由
@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Redis Pub/Sub 监听器启动失败: {e}")
 
-    logger.info("✅ MyVideo v3.0 startup complete - Modular architecture + Redis Adapter + Pub/Sub")
+    logger.info(f"✅ MyVideo {settings.VERSION} startup complete - Modular architecture + Redis Adapter + Pub/Sub")
 
     yield
 
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MyVideo Backend",
-    version="3.0.0",
+    version=settings.VERSION,
     lifespan=lifespan
 )
 
@@ -138,7 +138,7 @@ socketio_app = socketio.ASGIApp(sio, app)
 @app.get("/")
 async def root():
     """API 根路径"""
-    return {"message": "MyVideo API v3.0 is running!", "version": "3.0.0"}
+    return {"message": f"MyVideo API {settings.VERSION} is running!", "version": settings.VERSION}
 
 
 @app.get("/system/config")
