@@ -448,23 +448,41 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                 "ffmpeg", "-i", input_path, "-ss", "00:00:05", "-vframes", "1", thumb_path, "-y"
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-            # 3. 自适应转码策略
+            # 3. 自适应转码策略 - 根据原分辨率动态生成
             resolutions = [
                 (1440, "6000k", "192k", "2k"),
                 (1080, "4500k", "192k", "1080p"),
                 (720, "2500k", "128k", "720p"),
-                (480, "1000k", "96k", "480p")
+                (480, "1000k", "96k", "480p"),
+                (360, "600k", "64k", "360p"),
             ]
 
+            # 找出原视频高度对应的分辨率
             target_resolutions = []
-            found_higher = False
-            for r_h, r_b, r_a, r_n in resolutions:
-                if height >= r_h * 0.9:
-                    target_resolutions.append((r_h, r_b, r_a, r_n))
-                    found_higher = True
+            original_res_idx = None
 
-            if not target_resolutions:
-                target_resolutions.append((480, "1000k", "96k", "480p"))
+            for i, (r_h, r_b, r_a, r_n) in enumerate(resolutions):
+                if height >= r_h:
+                    # 原视频高度 >= 当前分辨率，使用原高度作为分辨率
+                    # 按比例计算码率
+                    scale = height / r_h
+                    video_bitrate = f"{int(int(r_b[:-1]) * scale)}k"
+                    target_resolutions.append((height, video_bitrate, r_a, f"{height}p"))
+                    original_res_idx = i
+                    break
+
+            if original_res_idx is None:
+                # 原视频高度不在列表中，找最接近的较低分辨率
+                for i, (r_h, r_b, r_a, r_n) in enumerate(resolutions):
+                    if height < r_h:
+                        target_resolutions.append((r_h, r_b, r_a, r_n))
+                        original_res_idx = i
+                        break
+
+            # 添加低一级、低两级、低三级（最多4个，最低360p）
+            for i in range(original_res_idx + 1, min(original_res_idx + 4, len(resolutions))):
+                r_h, r_b, r_a, r_n = resolutions[i]
+                target_resolutions.append((r_h, r_b, r_a, r_n))
 
             # 计算进度步长
             step = 95 / len(target_resolutions)
@@ -494,9 +512,11 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                         # 从恢复点继续，使用 -ss 定位
                         cmd = [
                             "ffmpeg", "-ss", resume_timestamp, "-i", input_path,
+                            "-map", "0:v:0", "-map", "0:a:0",
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.1",
                             "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                            "-vf", f"scale=-2:{r_h},format=yuv420p", "-c:a", "aac", "-b:a", r_a,
+                            "-vf", f"scale=-2:{r_h},format=yuv420p",
+                            "-c:a", "aac", "-b:a", r_a, "-af", "aformat=channel_layouts=stereo",
                             "-hls_time", "6", "-hls_playlist_type", "vod",
                             "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
                             "-progress", "pipe:1",
@@ -505,9 +525,11 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                     else:
                         cmd = [
                             "ffmpeg", "-i", input_path,
+                            "-map", "0:v:0", "-map", "0:a:0",
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.1",
                             "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                            "-vf", f"scale=-2:{r_h},format=yuv420p", "-c:a", "aac", "-b:a", r_a,
+                            "-vf", f"scale=-2:{r_h},format=yuv420p",
+                            "-c:a", "aac", "-b:a", r_a, "-af", "aformat=channel_layouts=stereo",
                             "-hls_time", "6", "-hls_playlist_type", "vod",
                             "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
                             "-progress", "pipe:1",
@@ -516,9 +538,11 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                 else:
                     cmd = [
                         "ffmpeg", "-i", input_path,
+                        "-map", "0:v:0", "-map", "0:a:0",
                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.1",
                         "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                        "-vf", f"scale=-2:{r_h},format=yuv420p", "-c:a", "aac", "-b:a", r_a,
+                        "-vf", f"scale=-2:{r_h},format=yuv420p",
+                        "-c:a", "aac", "-b:a", r_a, "-af", "aformat=channel_layouts=stereo",
                         "-hls_time", "6", "-hls_playlist_type", "vod",
                         "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
                         "-progress", "pipe:1",
@@ -541,6 +565,15 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
             master_path = os.path.join(hls_dir, "master.m3u8")
             with open(master_path, "w") as f:
                 f.write('\n'.join(master_playlist))
+
+            # 6. 提取字幕流
+            try:
+                extracted_languages = extract_subtitle_streams(video_id, input_path, hls_dir)
+                if extracted_languages:
+                    update_master_playlist_with_subtitles(video_id, extracted_languages)
+                    logger.info(f"Extracted subtitles for video {video_id}: {extracted_languages}")
+            except Exception as e:
+                logger.warning(f"Failed to extract subtitles for video {video_id}: {e}")
 
             # 完成
             video.processed_file_path = f"/static/videos/processed/{video.id}/master.m3u8"
@@ -1379,6 +1412,80 @@ def publish_subtitle_progress(video_id: str, user_id: str, progress: int, status
         redis_client.publish("subtitle:progress", payload)
     except Exception as e:
         logger.warning(f"Failed to publish subtitle progress: {e}")
+
+
+def extract_subtitle_streams(video_id: str, input_path: str, hls_dir: str) -> List[str]:
+    """
+    从原始视频中提取字幕流并转换为 WebVTT 格式
+    返回提取成功的语言列表
+    """
+    try:
+        # 使用 ffprobe 获取字幕流信息
+        probe_result = subprocess.run(
+            ["ffprobe", "-v", "error",
+             "-show_entries", "stream=index,codec_name,codec_type,language,Disposition",
+             "-select_streams", "s",
+             "-of", "json",
+             input_path],
+            capture_output=True, text=True
+        )
+
+        if not probe_result.stdout:
+            return []
+
+        probe_data = json.loads(probe_result.stdout)
+        streams = probe_data.get("streams", [])
+
+        if not streams:
+            return []
+
+        # 创建字幕目录
+        subtitle_dir = Path(hls_dir) / "subtitles"
+        subtitle_dir.mkdir(parents=True, exist_ok=True)
+
+        extracted_languages = []
+        language_count = {}  # 用于处理相同语言的多个字幕
+
+        for stream in streams:
+            stream_index = stream.get("index")
+            codec_name = stream.get("codec_name")
+            language = stream.get("language", "unknown")
+
+            # 跳过非字幕流
+            if stream.get("codec_type") != "subtitle":
+                continue
+
+            # 处理相同语言的多个字幕（添加后缀区分）
+            if language in language_count:
+                language_count[language] += 1
+                lang_key = f"{language}_{language_count[language]}"
+            else:
+                language_count[language] = 0
+                lang_key = language
+
+            # 转换为 VTT 格式
+            vtt_path = subtitle_dir / f"{lang_key}.vtt"
+
+            # subrip (srt) 可以直接转换或复制
+            if codec_name == "subrip":
+                # 提取字幕流
+                extract_result = subprocess.run(
+                    ["ffmpeg", "-i", input_path,
+                     "-map", f"0:s:{stream_index}",
+                     "-c:s", "webvtt",
+                     str(vtt_path), "-y"],
+                    capture_output=True, text=True
+                )
+
+                if extract_result.returncode == 0 and vtt_path.exists():
+                    extracted_languages.append(lang_key)
+                    logger.info(f"Extracted subtitle: {lang_key} from stream {stream_index}")
+
+        return extracted_languages
+
+    except Exception as e:
+        logger.warning(f"Error extracting subtitles: {e}")
+        return []
 
 
 def update_master_playlist_with_subtitles(video_id: str, languages: List[str]):

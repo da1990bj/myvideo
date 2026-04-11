@@ -803,6 +803,10 @@
                 player.play().catch(() => {});
             });
 
+            // HLS 错误恢复次数限制
+            let hlsRecoverCount = 0;
+            const MAX_HLS_RECOVER = 3;
+
             hls.on(Hls.Events.ERROR, (event, data) => {
                 console.error('HLS error:', data);
                 if (data.fatal) {
@@ -813,11 +817,19 @@
                             break;
                         case Hls.ErrorTypes.MEDIA_ERROR:
                             console.error('Fatal media error, trying to recover...');
-                            hls.recoverMediaError();
+                            if (hlsRecoverCount < MAX_HLS_RECOVER) {
+                                hlsRecoverCount++;
+                                hls.recoverMediaError();
+                            } else {
+                                console.error('Max recovery attempts reached, destroying HLS instance...');
+                                hls.destroy();
+                                showPlaybackError('视频加载失败，请刷新重试');
+                            }
                             break;
                         default:
                             console.error('Fatal error, destroying HLS instance...');
                             hls.destroy();
+                            showPlaybackError('视频加载失败，请刷新重试');
                             break;
                     }
                 }
@@ -1546,6 +1558,10 @@
                         player.play().catch(() => {});
                     });
 
+                    // HLS 错误恢复次数限制
+                    let hlsRecoverCount = 0;
+                    const MAX_HLS_RECOVER = 3;
+
                     hls.on(Hls.Events.ERROR, (event, data) => {
                         console.error('HLS error:', data);
                         console.error('  type:', data.type);
@@ -1559,11 +1575,19 @@
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
                                     console.error('Fatal media error, trying to recover...');
-                                    hls.recoverMediaError();
+                                    if (hlsRecoverCount < MAX_HLS_RECOVER) {
+                                        hlsRecoverCount++;
+                                        hls.recoverMediaError();
+                                    } else {
+                                        console.error('Max recovery attempts reached, destroying HLS instance...');
+                                        hls.destroy();
+                                        showPlaybackError('视频加载失败，请刷新重试');
+                                    }
                                     break;
                                 default:
                                     console.error('Fatal error, destroying HLS instance...');
                                     hls.destroy();
+                                    showPlaybackError('视频加载失败，请刷新重试');
                                     break;
                             }
                         }
@@ -1993,11 +2017,56 @@
             }
         });
 
-        // 进度条点击跳转
-        progressContainer.addEventListener('click', (e) => {
+        // 进度条拖拽跳转（支持鼠标和触摸）
+        let isDragging = false;
+
+        function seekToPosition(clientX) {
             const rect = progressContainer.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
+            const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
             player.currentTime = percent * player.duration;
+            progressBar.style.width = (percent * 100) + '%';
+        }
+
+        // 鼠标事件
+        progressContainer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            seekToPosition(e.clientX);
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                seekToPosition(e.clientX);
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // 触摸事件
+        progressContainer.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            seekToPosition(e.touches[0].clientX);
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                seekToPosition(e.touches[0].clientX);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', () => {
+            isDragging = false;
+        });
+
+        // 点击跳转（保留）
+        progressContainer.addEventListener('click', (e) => {
+            if (!isDragging) {
+                seekToPosition(e.clientX);
+            }
         });
 
         // 全屏按钮
@@ -2140,9 +2209,11 @@
         if (levels.length > 1) {
             qualitySelect.style.display = 'block';
             qualitySelect.innerHTML = '<option value="-1">自动</option>';
-            levels.forEach((level, index) => {
+            // 按分辨率从高到低排序
+            const sortedLevels = levels.slice().sort((a, b) => b.height - a.height);
+            sortedLevels.forEach((level) => {
                 const opt = document.createElement('option');
-                opt.value = index;
+                opt.value = levels.indexOf(level);
                 opt.text = level.height + 'p';
                 qualitySelect.appendChild(opt);
             });
@@ -2266,6 +2337,23 @@
                 player.currentTime = time;
             }
         }
+    }
+
+    // 显示播放错误
+    function showPlaybackError(message) {
+        const player = document.getElementById('player');
+        const playerWrapper = document.getElementById('player-wrapper');
+        if (!player || !playerWrapper) return;
+
+        player.style.display = 'none';
+        const existingError = document.getElementById('video-error-overlay');
+        if (existingError) existingError.remove();
+
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'video-error-overlay';
+        errorDiv.style.cssText = 'position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; color:#666; z-index:10;';
+        errorDiv.innerHTML = `<div style="font-size:48px;margin-bottom:20px;">🚫</div><div style="font-size:18px;font-weight:500;margin-bottom:10px;">视频加载失败</div><div style="font-size:14px;color:#999;">${message || '请刷新页面重试'}</div>`;
+        playerWrapper.appendChild(errorDiv);
     }
 
     // Toggle subtitle menu
