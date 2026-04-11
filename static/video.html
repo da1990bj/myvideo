@@ -115,8 +115,11 @@
         .ctrl-dropdown {
             position: relative;
         }
-        #settings-dropdown, #subtitle-dropdown {
+        #settings-dropdown {
             position: static;
+        }
+        #subtitle-dropdown {
+            position: relative;
         }
         .dropdown-menu {
             position: absolute;
@@ -803,6 +806,9 @@
                 maxBufferLength: 30,
                 maxMaxBufferLength: 600,
                 fragBufferTimeBankSize: 500,
+                // 禁用内置字幕功能，使用外部字幕渲染
+                enableWebVTT: false,
+                enableMGK: false,
             };
             const hls = new Hls(hlsConfig);
             hls.loadSource(streamUrl);
@@ -812,11 +818,11 @@
                 hlsReady = true;
 
                 // 禁用 HLS 内嵌字幕，使用外部字幕渲染
+                // 清理 subtitleTracks 数组以防止 HLS.js 加载任何字幕
                 if (hls.subtitleTracks && hls.subtitleTracks.length > 0) {
-                    console.log('[MANIFEST] HLS subtitle tracks found:', hls.subtitleTracks.length, '(using external subtitles)');
-                    hls.subtitleTracks.forEach((track, idx) => {
-                        console.log(`[MANIFEST] Track ${idx}: lang=${track.lang}, url=${track.url || 'none'}`);
-                    });
+                    console.log('[MANIFEST] HLS subtitle tracks found:', hls.subtitleTracks.length, '(clearing to use external subtitles)');
+                    // 清理所有字幕轨道
+                    hls.subtitleTracks.length = 0;
                 }
                 hls.subtitleTrack = -1;  // 禁用 HLS 字幕，使用手动渲染
 
@@ -1557,6 +1563,9 @@
                         maxBufferLength: 30,
                         maxMaxBufferLength: 600,
                         fragBufferTimeBankSize: 500,
+                        // 禁用内置字幕功能，使用外部字幕渲染
+                        enableWebVTT: false,
+                        enableMGK: false,
                     };
                     const hls = new Hls(hlsConfig);
                     const streamUrl = video.stream_url || video.processed_file_path;
@@ -1573,11 +1582,11 @@
                         setupHlsQuality(hls);
 
                         // 禁用 HLS 内嵌字幕，使用外部字幕渲染
+                        // 清理 subtitleTracks 数组以防止 HLS.js 加载任何字幕
                         if (hls.subtitleTracks && hls.subtitleTracks.length > 0) {
-                            console.log('[MANIFEST] HLS subtitle tracks found:', hls.subtitleTracks.length, '(using external subtitles)');
-                            hls.subtitleTracks.forEach((track, idx) => {
-                                console.log(`[MANIFEST] Track ${idx}: lang=${track.lang}, url=${track.url || 'none'}`);
-                            });
+                            console.log('[MANIFEST] HLS subtitle tracks found:', hls.subtitleTracks.length, '(clearing to use external subtitles)');
+                            // 清理所有字幕轨道
+                            hls.subtitleTracks.length = 0;
                         }
                         hls.subtitleTrack = -1;  // 禁用 HLS 字幕，使用手动渲染
 
@@ -2300,15 +2309,38 @@
     }
 
     function getLanguageName(code) {
-        // 扩展语言代码映射表
+        // 语言代码映射表
         const names = {
-            // 标准 ISO 639-1 代码
+            // 标准 ISO 639-2 (三字母) 代码 - FFmpeg 常用
+            "eng": "English", "zho": "中文", "chi": "中文", "spa": "Español",
+            "fra": "Français", "fre": "Français", "deu": "Deutsch", "ger": "Deutsch",
+            "jpn": "日本語", "kor": "한국어", "ita": "Italiano",
+            "por": "Português", "rus": "Русский", "ara": "العربية",
+            "hin": "हिन्दी", "tha": "ไทย", "vie": "Tiếng Việt",
+            "ind": "Bahasa Indonesia", "msa": "Bahasa Melayu", "fil": "Filipino",
+            "nld": "Nederlands", "dut": "Nederlands", "pol": "Polski",
+            "tur": "Türkçe", "ukr": "Українська",
+            // 其他常用语言
+            "cat": "Català", "cze": "Čeština", "ces": "Čeština",
+            "dan": "Dansk", "gre": "Ελληνικά", "ell": "Ελληνικά",
+            "baq": "Euskara", "eus": "Euskara",
+            "fin": "Suomi", "glg": "Galego", "heb": "עברית",
+            "hun": "Magyar", "kan": "ಕನ್ನಡ", "mal": "മലയാളം",
+            "may": "Bahasa Melayu", "zsm": "Bahasa Melayu",
+            "nob": "Norsk Bokmål", "ron": "Română", "rum": "Română",
+            "swe": "Svenska", "tam": "தமிழ்", "tel": "తెలుగు",
+            // 标准 ISO 639-1 (两字母) 代码
             "en": "English", "zh": "中文", "es": "Español", "fr": "Français",
             "de": "Deutsch", "ja": "日本語", "ko": "한국어", "it": "Italiano",
             "pt": "Português", "ru": "Русский", "ar": "العربية", "hi": "हिन्दी",
             "th": "ไทย", "vi": "Tiếng Việt", "id": "Bahasa Indonesia",
-            "ms": "Bahasa Melayu", "fil": "Filipino", "nl": "Nederlands",
-            "pl": "Polski", "tr": "Türkçe", "uk": "Українська",
+            "ms": "Bahasa Melayu", "nl": "Nederlands", "pl": "Polski",
+            "tr": "Türkçe", "uk": "Українська", "ca": "Català",
+            "cs": "Čeština", "da": "Dansk", "el": "Ελληνικά",
+            "eu": "Euskara", "fi": "Suomi", "gl": "Galego", "he": "עברית",
+            "hu": "Magyar", "kn": "ಕನ್ನಡ", "ml": "മലയാളം",
+            "nb": "Norsk Bokmål", "ro": "Română", "sv": "Svenska",
+            "ta": "தமிழ்", "te": "తెలుగు",
             // 中文变体
             "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "zh-CN": "简体中文",
             "zh-TW": "繁體中文", "zh-HK": "繁體中文",
@@ -2320,6 +2352,38 @@
             "英文": "English", "中文": "中文", "日文": "日本語", "韩文": "한국어",
             "法文": "Français", "德文": "Deutsch", "西班牙语": "Español",
         };
+
+        // 处理 track 开头的未知语言格式 (例如 track0_unknown)
+        // 这是后备方案，只有在没有正确语言信息时才会用到
+        if (code && code.startsWith('track')) {
+            const match = code.match(/^track(\d+)(?:_|$)/);
+            if (match) {
+                return `字幕 ${parseInt(match[1]) + 1}`;
+            }
+            return '未知字幕';
+        }
+
+        // 处理带下划线的复合语言代码格式 (如 chi_trad, eng_english, spa_español)
+        if (code && code.includes('_')) {
+            const parts = code.split('_');
+            const baseLang = parts[0].toLowerCase();
+            const suffix = parts.slice(1).join('_').toLowerCase();
+
+            // 中文变体
+            if (baseLang === 'chi') {
+                if (suffix.includes('trad') || suffix.includes('繁')) return '繁體中文';
+                if (suffix.includes('simp') || suffix.includes('简')) return '简体中文';
+                return '中文';
+            }
+            // 英文变体
+            if (baseLang === 'eng' && (suffix.includes('sdh') || suffix.includes('forced'))) {
+                return 'English (' + suffix.toUpperCase() + ')';
+            }
+            // 其他语言的地区变体，直接返回语言名称
+            const baseName = names[baseLang] || names[baseLang.replace('-', '')] || baseLang;
+            return baseName;
+        }
+
         // 转为小写匹配
         const lowerCode = code.toLowerCase();
         return names[lowerCode] || names[code] || code;
@@ -2335,25 +2399,22 @@
 
         console.log('[Subtitle] Enabling subtitle:', sub);
 
-        // 禁用 HLS 内嵌字幕
-        if (window.hls) {
-            window.hls.subtitleTrack = -1;
-        }
-
-        // 隐藏所有 textTracks
-        for (let i = player.textTracks.length - 1; i >= 0; i--) {
-            player.textTracks[i].mode = 'hidden';
-        }
-
-        // 清除之前的字幕
+        // 首先清除之前的字幕（这会禁用 HLS 字幕）
         disableSubtitles();
 
         currentSubtitle = sub;
         currentSubtitleLang = sub.language;
 
-        // 显示字幕覆盖层
+        // 隐藏所有 player.textTracks（这可能会触发 HLS.js 的 change 事件，
+        // 但由于我们已经在 disableSubtitles 中设置了 hls.subtitleTrack = -1，
+        // HLS.js 不会尝试加载任何字幕）
+        for (let i = player.textTracks.length - 1; i >= 0; i--) {
+            player.textTracks[i].mode = 'hidden';
+        }
+
+        // 先隐藏字幕覆盖层，等 startSubtitleSync 根据字幕内容来控制显示
         const overlay = document.getElementById('subtitle-overlay');
-        if (overlay) overlay.style.display = 'block';
+        if (overlay) overlay.style.display = 'none';
 
         // 加载并解析字幕文件
         loadSubtitleFile(sub.url);
@@ -2424,6 +2485,7 @@
     function startSubtitleSync() {
         const player = document.getElementById('player');
         const subtitleText = document.getElementById('subtitle-text');
+        const overlay = document.getElementById('subtitle-overlay');
 
         if (subtitleUpdateTimer) {
             clearInterval(subtitleUpdateTimer);
@@ -2437,8 +2499,11 @@
 
             if (cue) {
                 subtitleText.textContent = cue.text;
+                if (overlay) overlay.style.display = 'block';
             } else {
                 subtitleText.textContent = '';
+                // 当没有字幕时隐藏 overlay，避免显示空的黑框
+                if (overlay) overlay.style.display = 'none';
             }
         }, 100);  // 每100ms检查一次
     }
