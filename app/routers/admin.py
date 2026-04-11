@@ -1855,6 +1855,36 @@ async def trigger_transcode(
     return {"message": "Transcode triggered", "task_id": video_id}
 
 
+@router.post("/videos/{video_id}/reextract-subtitles")
+async def reextract_subtitles(
+    video_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """重新提取视频字幕（使用正确的语言代码命名）"""
+    from tasks import reextract_subtitles_for_video
+
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if not video.original_file_path:
+        raise HTTPException(status_code=400, detail="Original file not found")
+
+    if not video.has_embedded_subtitles:
+        raise HTTPException(status_code=400, detail="Video has no embedded subtitles to re-extract")
+
+    result = reextract_subtitles_for_video(video_id)
+
+    log_admin_action(
+        session, admin.id, "reextract_subtitles",
+        video_id,
+        f"Re-extracted {result.get('extracted', 0)} subtitles: {result.get('languages', [])}"
+    )
+
+    return result
+
+
 # ==================== 冷存储 ====================
 
 @router.get("/cold-storage/stats")

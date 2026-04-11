@@ -433,7 +433,13 @@
                             `;
                         }
                     } else if (v.status === "completed" || v.status === "failed" || v.status === "cancelled") {
-                        transcodeOps = `<button class="btn btn-warning btn-small" onclick="retryTranscode('${v.id}')">重新转码</button>`;
+                        // 有原始文件且有内置字幕才显示重新提取字幕按钮
+                        const hasOriginal = v.original_file_path;
+                        const hasEmbedded = v.has_embedded_subtitles;
+                        transcodeOps = `
+                            <button class="btn btn-warning btn-small" onclick="retryTranscode('${v.id}')">重新转码</button>
+                            <button class="btn ${hasEmbedded ? 'btn-info' : 'btn-disabled'} btn-small" onclick="${hasEmbedded ? `reextractSubtitles('${v.id}')` : ''}" ${!hasEmbedded ? 'disabled title="无内置字幕"' : ''}>重新字幕</button>
+                        `;
                     }
 
                     // 审核操作按钮
@@ -596,6 +602,27 @@
                 const res = await fetch(`/admin/videos/${videoId}/transcode`, { method: "POST", headers });
                 if (res.ok) {
                     alert("已触发重新转码");
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("操作失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("操作失败: " + err.message);
+            }
+        }
+
+        async function reextractSubtitles(videoId) {
+            if (!confirm("确定要重新提取字幕吗？\n\n这将删除旧的字幕文件并使用新的语言代码重新提取。")) return;
+            try {
+                const res = await fetch(`/admin/videos/${videoId}/reextract-subtitles`, { method: "POST", headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === "success") {
+                        alert(`字幕重新提取完成！\n\n提取了 ${data.extracted} 个字幕：\n${data.languages.join(", ")}`);
+                    } else {
+                        alert("字幕重新提取失败：" + data.message);
+                    }
                     loadData();
                 } else {
                     const err = await res.json();

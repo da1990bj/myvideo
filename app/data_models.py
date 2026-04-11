@@ -122,6 +122,7 @@ class Video(SQLModel, table=True):
     deleted_at: Optional[datetime] = None  # When video was soft deleted
 
     # Subtitle fields
+    has_embedded_subtitles: bool = Field(default=False)  # 原视频是否有内嵌字幕流
     subtitle_languages: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))  # e.g. ["en", "zh-Hans", "zh-Hant"]
     auto_subtitle: bool = Field(default=False)  # Whether auto-subtitle was generated
     auto_subtitle_language: Optional[str] = None  # Language used for auto-subtitle
