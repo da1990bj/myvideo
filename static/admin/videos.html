@@ -2,22 +2,137 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>后台管理 - 视频</title>
+    <title>后台管理 - 视频管理</title>
     <style>
-        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #fafafa; }
-        .btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .container { padding: 20px; max-width: 1600px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #333; }
+
+        /* 统计卡片 */
+        .stats-row { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+        .stat-card {
+            background: #fff; padding: 20px 30px; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; flex: 1; min-width: var(--card-min-width, 120px); max-width: var(--card-max-width, 300px);
+        }
+        .stat-card .label { color: #888; font-size: 13px; margin-bottom: 8px; }
+        .stat-card .num { font-size: 28px; font-weight: bold; }
+        .stat-card.total .num { color: #666; }
+        .stat-card.processing .num { color: #00a1d6; }
+        .stat-card.pending .num { color: #f08c00; }
+        .stat-card.completed .num { color: #2f9e44; }
+
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 500; color: #555; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f9f9f9; }
+
+        /* 缩略图 */
+        .thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 4px; background: #eee; }
+
+        /* 状态标签 */
+        .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .status-pending { background: #fff3e0; color: #f08c00; }
+        .status-processing { background: #e3f2fd; color: #00a1d6; }
+        .status-completed { background: #e8f5e9; color: #2f9e44; }
+        .status-failed { background: #ffebee; color: #f04c49; }
+        .status-cancelled { background: #f5f5f5; color: #999; }
+        .status-paused { background: #fff8e1; color: #f08c00; }
+
+        /* 进度显示 */
+        .progress-cell { font-weight: 500; color: #00a1d6; }
+        .progress-cell.completed { color: #2f9e44; }
+        .progress-cell.failed { color: #f04c49; }
+        .audit-pending { background: #fff3e0; color: #f08c00; }
+        .audit-approved { background: #e8f5e9; color: #2f9e44; }
+        .audit-banned { background: #ffebee; color: #f04c49; }
+        .audit-appealing { background: #fff8e1; color: #e65100; }
+
+        /* 按钮 */
+        .btn { padding: 5px 12px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; font-size: 12px; transition: all 0.2s; }
+        .btn:hover { background: #f5f5f5; }
         .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-danger:hover { background: #ffebee; }
         .btn-success { color: #00a1d6; border-color: #00a1d6; }
+        .btn-success:hover { background: #e3f2fd; }
         .btn-warning { color: #f08c00; border-color: #f08c00; }
+        .btn-warning:hover { background: #fff3e0; }
+        .btn-purple { color: #9c27b0; border-color: #9c27b0; }
+        .btn-purple:hover { background: #f3e5f5; }
+        .btn-small { padding: 3px 8px; font-size: 11px; }
+
+        /* 操作区域 */
+        .op-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .op-label { font-size: 11px; color: #999; margin-right: 4px; }
+
+        /* 刷新提示 */
+        .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
+        .refresh-info button { padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .refresh-info button:hover { background: #008dbd; }
+
+        /* 分隔线 */
+        .divider { border-left: 1px solid #ddd; height: 24px; margin: 0 4px; }
     </style>
 </head>
 <body>
     <script src="/static/admin/admin.js"></script>
+    <script src="/static/js/socket.io.js"></script>
 
-    <div style="padding: 20px;">
+    <div class="container">
         <h1>视频管理</h1>
+        <div class="refresh-info">
+            <span id="ws-status" style="margin-right: 15px; font-size: 12px;"></span>
+            上次更新：<span id="last-update-time">加载中...</span>
+            <button onclick="loadData()">刷新</button>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats-row">
+            <div class="stat-card total">
+                <div class="label">总视频数</div>
+                <div class="num" id="stat-total">-</div>
+            </div>
+            <div class="stat-card processing">
+                <div class="label">转码中</div>
+                <div class="num" id="stat-processing">-</div>
+            </div>
+            <div class="stat-card pending">
+                <div class="label">待处理</div>
+                <div class="num" id="stat-pending">-</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="label">今日完成</div>
+                <div class="num" id="stat-completed">-</div>
+            </div>
+        </div>
+
+        <!-- 筛选区域 -->
+        <div class="filter-row" style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <input type="text" id="filter-title" placeholder="标题搜索" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:150px;" oninput="applyFilters()">
+            <input type="text" id="filter-author" placeholder="作者搜索" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:120px;" oninput="applyFilters()">
+            <select id="filter-category" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:120px;" onchange="applyFilters()">
+                <option value="">全部分类</option>
+            </select>
+            <select id="filter-audit" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:120px;" onchange="applyFilters()">
+                <option value="">全部审核状态</option>
+                <option value="pending">待审核</option>
+                <option value="approved">已审核</option>
+                <option value="banned">已下架</option>
+                <option value="appealing">申诉中</option>
+            </select>
+            <select id="filter-transcode" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:120px;" onchange="applyFilters()">
+                <option value="">全部转码状态</option>
+                <option value="pending">等待转码</option>
+                <option value="processing">转码中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">转码失败</option>
+                <option value="paused">已暂停</option>
+            </select>
+            <button onclick="clearFilters()" style="padding:6px 12px; background:#eee; border:1px solid #ddd; border-radius:4px; cursor:pointer;">清除筛选</button>
+        </div>
+
+        <!-- 视频列表 -->
         <table>
             <thead>
                 <tr>
@@ -26,149 +141,464 @@
                     <th>分类</th>
                     <th>作者</th>
                     <th>转码状态</th>
+                    <th>进度</th>
                     <th>审核状态</th>
-                    <th>操作</th>
+                    <th sort="created_at" style="cursor:pointer;">上传时间 ↕</th>
+                    <th>审核操作</th>
+                    <th>转码操作</th>
                 </tr>
             </thead>
-            <tbody id="list"></tbody>
+            <tbody id="video-list"></tbody>
         </table>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", loadVideos);
+        const token = localStorage.getItem("access_token");
+        const headers = { "Authorization": "Bearer " + token };
+
+        // ==================== WebSocket 实时进度 ====================
+        let progressSocket = null;
+        let progressUpdateCallbacks = [];
+
+        function connectProgressSocket() {
+            if (!token) return;
+
+            // 初始状态
+            const wsStatus = document.getElementById('ws-status');
+            if (wsStatus) {
+                wsStatus.textContent = '● WebSocket 连接中...';
+                wsStatus.style.color = '#f08c00';
+            }
+
+            progressSocket = io('/', {
+                auth: { token: token },
+                transports: ['websocket', 'polling']
+            });
+
+            progressSocket.on('connect', () => {
+                console.log('✅ Progress WebSocket connected');
+                const wsStatus = document.getElementById('ws-status');
+                if (wsStatus) {
+                    wsStatus.textContent = '● WebSocket 已连接';
+                    wsStatus.style.color = '#2f9e44';
+                }
+            });
+
+            progressSocket.on('disconnect', () => {
+                console.log('⚠️ Progress WebSocket disconnected');
+                const wsStatus = document.getElementById('ws-status');
+                if (wsStatus) {
+                    wsStatus.textContent = '● WebSocket 已断开';
+                    wsStatus.style.color = '#f04c49';
+                }
+            });
+
+            // 监听转码进度更新
+            progressSocket.on('transcode_progress', (data) => {
+                if (data && data.video_id) {
+                    updateVideoProgress(data.video_id, data.progress, data.status);
+                }
+            });
+
+            // 监听批量进度更新
+            progressSocket.on('transcode_progress_batch', (data) => {
+                if (data && data.videos && Array.isArray(data.videos)) {
+                    data.videos.forEach(item => {
+                        if (item.video_id) {
+                            updateVideoProgress(item.video_id, item.progress, item.status);
+                        }
+                    });
+                }
+            });
+        }
+
+        function updateVideoProgress(videoId, progress, status) {
+            const progressEl = document.getElementById('progress-' + videoId);
+            if (!progressEl) return;
+
+            progressEl.textContent = progress + '%';
+
+            // 更新样式
+            progressEl.classList.remove('completed', 'failed');
+            if (status === 'completed') {
+                progressEl.classList.add('completed');
+                progressEl.textContent = '已完成';
+            } else if (status === 'failed') {
+                progressEl.classList.add('failed');
+                progressEl.textContent = '失败';
+            }
+        }
+
+        // 连接 WebSocket
+        connectProgressSocket();
+
+        // ==================== 数据加载 ====================
+
+        async function loadData() {
+            await Promise.all([loadStats(), loadVideos()]);
+            const now = new Date();
+            document.getElementById("last-update-time").textContent =
+                now.getHours().toString().padStart(2, '0') + ':' +
+                now.getMinutes().toString().padStart(2, '0') + ':' +
+                now.getSeconds().toString().padStart(2, '0');
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch("/admin/videos/stats", { headers });
+                if (!res.ok) return;
+                const stats = await res.json();
+                document.getElementById("stat-total").textContent = stats.total;
+                document.getElementById("stat-processing").textContent = stats.processing;
+                document.getElementById("stat-pending").textContent = stats.pending;
+                document.getElementById("stat-completed").textContent = stats.completed_today;
+            } catch (err) {
+                console.error("Failed to load stats:", err);
+            }
+        }
+
+        // ==================== 工具函数 ====================
+
+        // 日期格式化
+        function formatDate(isoString) {
+            if (!isoString) return '-';
+            const d = new Date(isoString);
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const day = d.getDate().toString().padStart(2, '0');
+            const hour = d.getHours().toString().padStart(2, '0');
+            const min = d.getMinutes().toString().padStart(2, '0');
+            return `${month}-${day} ${hour}:${min}`;
+        }
+
+        // 排序状态
+        let sortField = 'created_at';
+        let sortAsc = false;
+
+        // 排序函数
+        function sortVideos(videos, field) {
+            if (sortField === field) {
+                sortAsc = !sortAsc;
+            } else {
+                sortField = field;
+                sortAsc = false;
+            }
+            return videos.sort((a, b) => {
+                const aVal = a[field] || '';
+                const bVal = b[field] || '';
+                const cmp = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                return sortAsc ? cmp : -cmp;
+            });
+        }
+
+        // 点击表头排序
+        document.addEventListener('click', (e) => {
+            const th = e.target.closest('th[sort]');
+            if (!th) return;
+            const field = th.getAttribute('sort');
+            const thead = th.closest('thead');
+            const videos = window._cachedVideos;
+            if (!videos) return;
+            sortVideos(videos, field);
+            renderVideos(videos);
+            // 更新表头箭头
+            thead.querySelectorAll('th').forEach(h => {
+                if (h.hasAttribute('sort')) h.textContent = h.textContent.replace(' ↑', '').replace(' ↓', '');
+            });
+            th.textContent = th.textContent.replace(' ↕', '') + (sortAsc ? ' ↑' : ' ↓');
+        });
+
+        // 缓存视频数据用于排序
+        window._cachedVideos = [];
 
         async function loadVideos() {
-            const token = localStorage.getItem("access_token");
-            const res = await fetch("/admin/videos?size=50", {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            if (res.ok) {
+            try {
+                const res = await fetch("/admin/videos?size=100", { headers });
+                if (!res.ok) {
+                    if (res.status === 401) location.href = "/static/login.html";
+                    return;
+                }
                 const videos = await res.json();
-                const tbody = document.getElementById("list");
-                tbody.innerHTML = "";
-                videos.forEach(v => {
+                // 缓存并排序
+                window._cachedVideos = videos;
+                if (sortField) {
+                    sortVideos(videos, sortField);
+                }
+                // 加载分类列表
+                loadCategories(videos);
+                applyFilters();
+            } catch (err) {
+                console.error("Failed to load videos:", err);
+            }
+        }
+
+        // 加载分类筛选选项
+        function loadCategories(videos) {
+            const catSelect = document.getElementById('filter-category');
+            const cats = new Set();
+            videos.forEach(v => {
+                if (v.category && v.category.name) {
+                    cats.add(v.category.name);
+                }
+            });
+            catSelect.innerHTML = '<option value="">全部分类</option>';
+            cats.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
+            });
+        }
+
+        // 筛选函数
+        function applyFilters() {
+            if (!window._cachedVideos) return;
+            const title = document.getElementById('filter-title').value.toLowerCase();
+            const author = document.getElementById('filter-author').value.toLowerCase();
+            const category = document.getElementById('filter-category').value;
+            const audit = document.getElementById('filter-audit').value;
+            const transcode = document.getElementById('filter-transcode').value;
+
+            const filtered = window._cachedVideos.filter(v => {
+                if (title && !(v.title || '').toLowerCase().includes(title)) return false;
+                if (author && !(v.owner && v.owner.username || '').toLowerCase().includes(author)) return false;
+                if (category && v.category && v.category.name !== category) return false;
+                if (audit && v.is_approved !== audit) return false;
+                if (transcode && v.status !== transcode) return false;
+                return true;
+            });
+
+            if (sortField) {
+                sortVideos(filtered, sortField);
+            }
+            renderVideos(filtered);
+        }
+
+        // 清除筛选
+        function clearFilters() {
+            document.getElementById('filter-title').value = '';
+            document.getElementById('filter-author').value = '';
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-audit').value = '';
+            document.getElementById('filter-transcode').value = '';
+            applyFilters();
+        }
+
+        function renderVideos(videos) {
+            const tbody = document.getElementById("video-list");
+            tbody.innerHTML = "";
+            videos.forEach(v => {
                     const tr = document.createElement("tr");
 
                     // 转码状态
-                    let transcodeLabel = "";
-                    let transcodeColor = "#666";
-                    if (v.status === 'pending') {
-                        transcodeLabel = "等待转码";
-                        transcodeColor = "#888";
-                    } else if (v.status === 'processing') {
-                        transcodeLabel = "转码中";
-                        transcodeColor = "#00a1d6";
-                    } else if (v.status === 'completed') {
-                        transcodeLabel = "转码完成";
-                        transcodeColor = "#2f9e44";
-                    } else if (v.status === 'failed') {
-                        transcodeLabel = "转码失败";
-                        transcodeColor = "#f04c49";
-                    } else {
-                        transcodeLabel = v.status;
-                    }
+                    const statusMap = {
+                        "pending": ["等待转码", "status-pending"],
+                        "processing": ["转码中", "status-processing"],
+                        "completed": ["已完成", "status-completed"],
+                        "failed": ["转码失败", "status-failed"],
+                        "paused": ["已暂停", "status-paused"],
+                        "cancelled": ["已取消", "status-cancelled"]
+                    };
+                    const [tLabel, tClass] = statusMap[v.status] || [v.status, "status-pending"];
 
                     // 审核状态
-                    let auditLabel = "";
-                    let auditColor = "#666";
-                    if (v.is_approved === 'pending') {
-                        auditLabel = "待审核";
-                        auditColor = "#f08c00";
-                    } else if (v.is_approved === 'banned') {
-                        auditLabel = "已下架";
-                        auditColor = "#f04c49";
-                    } else if (v.is_approved === 'appealing') {
-                        auditLabel = "申诉中";
-                        auditColor = "#e67700";
-                    } else if (v.is_approved === 'approved') {
-                        auditLabel = "已审核";
-                        auditColor = "#2f9e44";
-                    } else {
-                        auditLabel = v.is_approved;
+                    const auditMap = {
+                        "pending": ["待审核", "audit-pending"],
+                        "approved": ["已审核", "audit-approved"],
+                        "banned": ["已下架", "audit-banned"],
+                        "appealing": ["申诉中", "audit-appealing"]
+                    };
+                    const [aLabel, aClass] = auditMap[v.is_approved] || [v.is_approved, "audit-pending"];
+
+                    // 转码操作按钮
+                    const task = v.task;
+                    let transcodeOps = "";
+                    if (v.status === "pending" || v.status === "processing" || v.status === "paused") {
+                        // 有活跃任务
+                        if (task && task.status === "paused") {
+                            transcodeOps = `
+                                <button class="btn btn-success btn-small" onclick="resumeTask('${v.id}')">继续</button>
+                                <button class="btn btn-danger btn-small" onclick="cancelTask('${v.id}')">取消</button>
+                            `;
+                        } else if (v.status === "processing") {
+                            transcodeOps = `
+                                <button class="btn btn-warning btn-small" onclick="pauseTask('${v.id}')">暂停</button>
+                                <button class="btn btn-danger btn-small" onclick="cancelTask('${v.id}')">取消</button>
+                            `;
+                        } else if (v.status === "pending") {
+                            transcodeOps = `
+                                <button class="btn btn-purple btn-small" onclick="bumpTask('${v.id}')">插队</button>
+                                <button class="btn btn-danger btn-small" onclick="cancelTask('${v.id}')">取消</button>
+                            `;
+                        }
+                    } else if (v.status === "completed" || v.status === "failed" || v.status === "cancelled") {
+                        transcodeOps = `<button class="btn btn-warning btn-small" onclick="retryTranscode('${v.id}')">重新转码</button>`;
+                    }
+
+                    // 审核操作按钮
+                    let auditOps = "";
+                    if (v.is_approved === "pending") {
+                        auditOps = `<button class="btn btn-success btn-small" onclick="approveVideo('${v.id}')">通过</button>`;
+                    } else if (v.is_approved === "approved") {
+                        auditOps = `<button class="btn btn-danger btn-small" onclick="banVideo('${v.id}')">下架</button>`;
+                    } else if (v.is_approved === "banned" || v.is_approved === "appealing") {
+                        auditOps = `<button class="btn btn-success btn-small" onclick="approveVideo('${v.id}')">恢复上架</button>`;
                     }
 
                     tr.innerHTML = `
-                        <td><img src="${v.thumbnail_path}" style="height:40px; border-radius:4px;"></td>
-                        <td><a href="/static/video.html?id=${v.id}" target="_blank">${v.title}</a></td>
-                        <td>${v.category ? v.category.name : '-'}</td>
-                        <td>${v.owner ? v.owner.username : '-'}</td>
-                        <td style="color:${transcodeColor}; font-weight:bold;">${transcodeLabel}</td>
-                        <td style="color:${auditColor}; font-weight:bold;">${auditLabel}</td>
-                        <td>
-                            ${v.status === 'completed' && v.is_approved === 'pending' ?
-                                `<button class="btn btn-success" onclick="approveVideo('${v.id}')">通过</button>` : ''
-                            }
-
-                            ${v.is_approved === 'approved' ?
-                                `<button class="btn btn-danger" onclick="banVideo('${v.id}')">下架</button>` : ''
-                            }
-
-                            ${v.is_approved === 'banned' || v.is_approved === 'appealing' ?
-                                `<button class="btn btn-success" onclick="approveVideo('${v.id}')">恢复上架</button>` : ''
-                            }
-                            <button class="btn" onclick="showLogs('${v.id}')">记录</button>
-                            <button class="btn btn-warning" onclick="triggerTranscode('${v.id}')">重新转码</button>
-                        </td>
+                        <td><img src="${v.thumbnail_path || '/static/default_thumb.jpg'}" class="thumb" onerror="this.src='/static/default_thumb.jpg'"></td>
+                        <td><a href="/static/video.html?id=${v.id}" target="_blank" style="color:#333; text-decoration:none;">${escapeHtml(v.title || '未知')}</a></td>
+                        <td>${v.category ? escapeHtml(v.category.name) : '-'}</td>
+                        <td>${v.owner ? escapeHtml(v.owner.username) : '-'}</td>
+                        <td><span class="status-badge ${tClass}">${tLabel}</span></td>
+                        <td><span id="progress-${v.id}" class="progress-cell">${v.progress || 0}%</span></td>
+                        <td><span class="status-badge ${aClass}">${aLabel}</span></td>
+                        <td data-sort="${v.created_at || ''}">${formatDate(v.created_at)}</td>
+                        <td><div class="op-group">${auditOps}</div></td>
+                        <td><div class="op-group">${transcodeOps}</div></td>
                     `;
+                    tr.dataset.videoId = v.id;
                     tbody.appendChild(tr);
                 });
-            }
+        }
+
+        // ==================== 审核操作 ====================
+
+        async function approveVideo(id) {
+            if (!confirm("确定通过审核并上架？")) return;
+            const res = await fetch(`/admin/videos/${id}/approve`, { method: "POST", headers });
+            if (res.ok) loadData();
         }
 
         async function banVideo(id) {
             const reason = prompt("请输入下架原因：");
             if (!reason) return;
-            const token = localStorage.getItem("access_token");
             const res = await fetch(`/admin/videos/${id}/ban`, {
                 method: "POST",
-                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                headers: { ...headers, "Content-Type": "application/json" },
                 body: JSON.stringify({ reason })
             });
-            if (res.ok) loadVideos();
+            if (res.ok) loadData();
         }
 
-        async function approveVideo(id) {
-            if(!confirm("确定通过审核并上架？")) return;
-            const token = localStorage.getItem("access_token");
-            const res = await fetch(`/admin/videos/${id}/approve`, {
-                method: "POST",
-                headers: { "Authorization": "Bearer " + token }
-            });
-            if (res.ok) loadVideos();
-        }
+        // ==================== 转码操作 ====================
 
-        async function showLogs(id) {
-            const token = localStorage.getItem("access_token");
-            const res = await fetch(`/videos/${id}/audit-logs`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            if (res.ok) {
-                const logs = await res.json();
-                if (logs.length === 0) return alert("暂无记录");
-                let msg = "";
-                logs.forEach(l => {
-                    const actionMap = {"ban": "下架", "approve": "上架", "appeal": "申诉"};
-                    msg += `${new Date(l.created_at).toLocaleString()} - ${l.operator_name} [${actionMap[l.action] || l.action}]\n${l.reason || ''}\n----------------\n`;
-                });
-                alert(msg);
+        async function pauseTask(videoId) {
+            if (!confirm("确定要暂停该视频的转码任务吗？")) return;
+            try {
+                // 获取该视频的任务ID
+                const res = await fetch("/admin/videos?size=100", { headers });
+                if (!res.ok) return;
+                const videos = await res.json();
+                const video = videos.find(v => v.id === videoId);
+                if (!video || !video.task) return alert("找不到转码任务");
+
+                const tres = await fetch(`/admin/transcode/${video.task.id}/pause`, { method: "POST", headers });
+                if (tres.ok) {
+                    alert("已暂停转码");
+                    loadData();
+                } else {
+                    const err = await tres.json();
+                    alert("暂停失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("暂停失败: " + err.message);
             }
         }
 
-        async function triggerTranscode(id) {
+        async function resumeTask(videoId) {
+            if (!confirm("确定要继续该视频的转码任务吗？")) return;
+            try {
+                const res = await fetch("/admin/videos?size=100", { headers });
+                if (!res.ok) return;
+                const videos = await res.json();
+                const video = videos.find(v => v.id === videoId);
+                if (!video || !video.task) return alert("找不到转码任务");
+
+                const tres = await fetch(`/admin/transcode/${video.task.id}/resume`, { method: "POST", headers });
+                if (tres.ok) {
+                    const data = await tres.json();
+                    alert("已继续转码，从 " + data.resume_from_percent + "% 恢复");
+                    loadData();
+                } else {
+                    const err = await tres.json();
+                    alert("继续失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("继续失败: " + err.message);
+            }
+        }
+
+        async function cancelTask(videoId) {
+            if (!confirm("确定要取消该视频的转码任务吗？")) return;
+            try {
+                const res = await fetch("/admin/videos?size=100", { headers });
+                if (!res.ok) return;
+                const videos = await res.json();
+                const video = videos.find(v => v.id === videoId);
+                if (!video || !video.task) return alert("找不到转码任务");
+
+                const tres = await fetch(`/admin/transcode/${video.task.id}/cancel`, { method: "POST", headers });
+                if (tres.ok) {
+                    alert("已取消任务");
+                    loadData();
+                } else {
+                    const err = await tres.json();
+                    alert("取消失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("取消失败: " + err.message);
+            }
+        }
+
+        async function bumpTask(videoId) {
+            if (!confirm("确定要将该视频的转码任务插队到最前面吗？")) return;
+            try {
+                const res = await fetch("/admin/videos?size=100", { headers });
+                if (!res.ok) return;
+                const videos = await res.json();
+                const video = videos.find(v => v.id === videoId);
+                if (!video || !video.task) return alert("找不到转码任务");
+
+                const tres = await fetch(`/admin/transcode/${video.task.id}/bump`, { method: "POST", headers });
+                if (tres.ok) {
+                    alert("已将任务插队到优先级队列");
+                    loadData();
+                } else {
+                    const err = await tres.json();
+                    alert("插队失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("插队失败: " + err.message);
+            }
+        }
+
+        async function retryTranscode(videoId) {
             if (!confirm("确定要重新转码该视频吗？\n\n这将删除旧的转码文件并重新生成。")) return;
-            const token = localStorage.getItem("access_token");
-            const res = await fetch(`/admin/videos/${id}/transcode`, {
-                method: "POST",
-                headers: { "Authorization": "Bearer " + token }
-            });
-            if (res.ok) {
-                alert("已触发重新转码");
-                loadVideos();
-            } else {
-                const err = await res.json().catch(() => ({}));
-                alert("操作失败: " + (err.detail || "未知错误"));
+            try {
+                const res = await fetch(`/admin/videos/${videoId}/transcode`, { method: "POST", headers });
+                if (res.ok) {
+                    alert("已触发重新转码");
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("操作失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("操作失败: " + err.message);
             }
         }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 初始化
+        document.addEventListener("DOMContentLoaded", loadData);
+        // 每30秒自动刷新
+        setInterval(loadData, 30000);
     </script>
 </body>
 </html>

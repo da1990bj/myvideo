@@ -3,77 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <title>后台管理 - 仪表盘</title>
-    <style>
-        .container { padding: 20px; background: #fff; }
-        .card { background: #fff; padding: 20px; border-radius: 8px; flex: 1; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); min-width: 200px; }
-        .num { font-size: 36px; font-weight: bold; color: #00a1d6; margin: 15px 0; }
-        .label { color: #666; font-size: 14px; font-weight: 500; }
-        .refresh-info { color: #999; font-size: 12px; margin-bottom: 20px; padding: 10px; background: #f9f9f9; border-left: 3px solid #00a1d6; border-radius: 4px; }
-        .refresh-info button { padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
-        .refresh-info button:hover { background: #008dbd; }
-    </style>
 </head>
 <body>
     <script src="/static/admin/admin.js"></script>
     <script src="/static/js/socket.io.js"></script>
 
-    <div style="padding: 20px;">
+    <div class="container">
         <h1>仪表盘</h1>
         <div class="refresh-info">
             <span id="ws-status" style="color: #888; margin-right: 10px;"></span>
             上次更新：<span id="last-update-time">加载中...</span>
             <button onclick="loadStats()">刷新</button>
         </div>
-        <div style="display: flex; gap: 20px; margin-top: 30px;">
-            <div class="card">
+        <div class="stats-row">
+            <div class="card stat-card">
                 <div class="label">注册用户</div>
                 <div class="num" id="user-count">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">视频投稿</div>
                 <div class="num" id="video-count">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">历史总数</div>
                 <div class="num" id="all-videos-count">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">私密视频</div>
                 <div class="num" id="private-videos-count">-</div>
             </div>
         </div>
 
-        <h3 style="margin-top: 30px;">视频审核状态</h3>
-        <div style="display: flex; gap: 20px; margin-top: 15px;">
-            <div class="card">
+        <h3>视频审核状态</h3>
+        <div class="stats-row">
+            <div class="card stat-card">
                 <div class="label">待审核</div>
                 <div class="num" id="pending-videos-count" style="color: #f08c00;">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">已通过</div>
                 <div class="num" id="approved-videos-count" style="color: #2f9e44;">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">已下架</div>
                 <div class="num" id="banned-videos-count" style="color: #f04c49;">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">评论总数</div>
                 <div class="num" id="comment-count">-</div>
             </div>
         </div>
 
-        <h2 style="margin-top: 40px;">服务器状态</h2>
-        <div style="display: flex; gap: 20px; margin-top: 20px;">
-            <div class="card">
+        <h2>服务器状态</h2>
+        <div class="stats-row">
+            <div class="card stat-card">
                 <div class="label">CPU 使用率</div>
                 <div class="num" id="cpu-stat">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">内存使用率</div>
                 <div class="num" id="mem-stat">-</div>
             </div>
-            <div class="card">
+            <div class="card stat-card">
                 <div class="label">磁盘使用率</div>
                 <div class="num" id="disk-stat">-</div>
             </div>

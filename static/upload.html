@@ -38,6 +38,7 @@
         .modal.error .modal-icon { color: #dc3545; }
         .modal.success .modal-icon { color: #28a745; }
         .modal.warning .modal-icon { color: #ffc107; }
+        .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
@@ -59,6 +60,11 @@
 <div class="upload-page-container">
     <div class="upload-card">
         <h1>投稿视频</h1>
+        <div class="refresh-info" style="margin-bottom: 15px;">
+            <span id="ws-status" style="margin-right: 15px; font-size: 12px;"></span>
+            上次更新：<span id="last-update-time">加载中...</span>
+            <button type="button" onclick="location.reload()" style="padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">刷新</button>
+        </div>
 
         <form id="uploadForm" onsubmit="handleUpload(event)"></parameter>
 
@@ -135,11 +141,88 @@
     // 默认大小限制 2GB
     let MAX_UPLOAD_SIZE_MB = 2048;
 
+    // 用户信息（用于判断是否跳过上传限制）
+    let currentUser = null;
+    // 运营人员角色列表（这些角色不限制上传大小）
+    const OPERATOR_ROLES = ['Operations', 'Content Auditor', 'User Support'];
+
     // Socket.IO 连接
     let uploadSocket = null;
     // 当前上传会话
     let currentUploads = {};  // { sessionId: { file, sessionId, uploadedChunks, totalChunks, status } }
     let modalCallback = null;  // 弹窗确认回调
+
+    // 检查用户是否可跳过上传大小限制（管理员或运营人员）
+    function canBypassUploadLimit() {
+        if (!currentUser) return false;
+        if (currentUser.is_admin) return true;
+        if (currentUser.role_names && currentUser.role_names.some(r => OPERATOR_ROLES.includes(r))) return true;
+        return false;
+    }
+
+    // 刷新 access_token
+    async function refreshAccessToken() {
+        const refresh_token = localStorage.getItem("refresh_token");
+        if (!refresh_token) {
+            throw new Error("No refresh token");
+        }
+
+        try {
+            const res = await fetch("/auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token })
+            });
+
+            if (!res.ok) {
+                // Refresh失败，清除 token 并跳转登录
+                localStorage.removeItem("access_token");
+                localStorage.removeItem("refresh_token");
+                showModal('error', '登录已过期', '请重新登录');
+                setTimeout(() => location.href = "/static/login.html", 2000);
+                throw new Error("Token refresh failed");
+            }
+
+            const data = await res.json();
+            localStorage.setItem("access_token", data.access_token);
+            localStorage.setItem("refresh_token", data.refresh_token);
+            console.log('Token refreshed successfully');
+            return data.access_token;
+        } catch (e) {
+            console.error("Token refresh error:", e);
+            throw e;
+        }
+    }
+
+    // 带认证的 fetch，自动处理 401 和 token 刷新
+    async function fetchWithAuth(url, options = {}) {
+        let token = localStorage.getItem("access_token");
+        if (!token) {
+            showModal('error', '请先登录', '需要登录后才能上传视频');
+            setTimeout(() => location.href = "/static/login.html", 2000);
+            throw new Error("No access token");
+        }
+
+        const headers = {
+            ...options.headers,
+            "Authorization": `Bearer ${token}`
+        };
+
+        let res = await fetch(url, { ...options, headers });
+
+        // 401 = access_token expired，尝试刷新 token 并重试
+        if (res.status === 401) {
+            try {
+                const newToken = await refreshAccessToken();
+                headers["Authorization"] = `Bearer ${newToken}`;
+                res = await fetch(url, { ...options, headers });
+            } catch (e) {
+                throw new Error("Authentication failed after refresh");
+            }
+        }
+
+        return res;
+    }
 
     // 模态框函数
     function showModal(type, title, message, onConfirm) {
@@ -216,7 +299,8 @@
         }
 
         const maxBytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
-        if (maxBytes > 0 && file.size > maxBytes) {
+        // 管理员或运营人员不限制上传大小
+        if (!canBypassUploadLimit() && maxBytes > 0 && file.size > maxBytes) {
             return { valid: false, error: `文件大小 ${formatSize(file.size)} 超过限制 ${MAX_UPLOAD_SIZE_MB}MB` };
         }
 
@@ -238,11 +322,23 @@
             transports: ['websocket', 'polling']
         };
 
+        // 初始状态
+        const wsStatus = document.getElementById('ws-status');
+        if (wsStatus) {
+            wsStatus.textContent = '● WebSocket 连接中...';
+            wsStatus.style.color = '#f08c00';
+        }
+
         try {
             uploadSocket = io('/', socketOptions);
 
             uploadSocket.on('connect', () => {
                 console.log('✅ Upload socket connected:', uploadSocket.id);
+                const wsStatus = document.getElementById('ws-status');
+                if (wsStatus) {
+                    wsStatus.textContent = '● WebSocket 已连接';
+                    wsStatus.style.color = '#2f9e44';
+                }
             });
 
             uploadSocket.on('upload_progress', (data) => {
@@ -253,8 +349,22 @@
                 handleUploadComplete(data);
             });
 
-            uploadSocket.on('disconnect', (reason) => {
+            uploadSocket.on('disconnect', async (reason) => {
                 console.log('Upload socket disconnected:', reason);
+                const wsStatus = document.getElementById('ws-status');
+                if (wsStatus) {
+                    wsStatus.textContent = '● WebSocket 已断开';
+                    wsStatus.style.color = '#f04c49';
+                }
+                // 如果是服务器断开，尝试用新 token 重新连接
+                if (reason === 'io server disconnect') {
+                    try {
+                        const newToken = await refreshAccessToken();
+                        initUploadSocket(newToken);
+                    } catch (e) {
+                        console.error('Failed to reconnect:', e);
+                    }
+                }
             });
 
         } catch (e) {
@@ -298,6 +408,19 @@
             showModal('error', '请先登录', '需要登录后才能上传视频');
             setTimeout(() => location.href = "/static/login.html", 2000);
             return;
+        }
+
+        // 获取当前用户信息（用于判断是否可跳过上传限制）
+        try {
+            const userRes = await fetch("/users/me", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (userRes.ok) {
+                currentUser = await userRes.json();
+                console.log('当前用户:', currentUser.username, 'is_admin:', currentUser.is_admin, 'roles:', currentUser.role_names);
+            }
+        } catch (e) {
+            console.log('获取用户信息失败:', e);
         }
 
         // 初始化 Socket.IO
@@ -674,11 +797,8 @@
             const formData = new FormData();
             formData.append("chunk", chunk);
 
-            const chunkRes = await fetch(`/upload-sessions/${sessionId}/chunks/${i}`, {
+            const chunkRes = await fetchWithAuth(`/upload-sessions/${sessionId}/chunks/${i}`, {
                 method: "POST",
-                headers: {
-                    "Authorization": "Bearer " + token
-                },
                 body: formData
             });
 
@@ -696,11 +816,8 @@
         // 3. 完成上传
         statusSpan.innerText = "正在合并文件...";
 
-        const completeRes = await fetch(`/upload-sessions/${sessionId}/complete`, {
-            method: "POST",
-            headers: {
-                "Authorization": "Bearer " + token
-            }
+        const completeRes = await fetchWithAuth(`/upload-sessions/${sessionId}/complete`, {
+            method: "POST"
         });
 
         if (!completeRes.ok) {

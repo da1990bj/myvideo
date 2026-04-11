@@ -128,6 +128,28 @@ def check_permission(user: User, permission: str, session: Session) -> bool:
     return False
 
 
+# 运营人员角色列表（这些角色不限制上传大小）
+OPERATOR_ROLE_NAMES = ["Operations", "Content Auditor", "User Support"]
+
+
+def can_bypass_upload_limit(user: User, session: Session) -> bool:
+    """
+    检查用户是否可以绕过上传大小限制（管理员或运营人员）
+    """
+    if user.is_admin:
+        return True
+
+    # 检查用户角色
+    user_roles = session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+    role_ids = [ur.role_id for ur in user_roles]
+    if role_ids:
+        roles = session.exec(select(Role).where(Role.id.in_(role_ids))).all()
+        for role in roles:
+            if role.name in OPERATOR_ROLE_NAMES:
+                return True
+    return False
+
+
 def process_tags(session: Session, video, tag_list: List[str]):
     """
     处理视频标签关联

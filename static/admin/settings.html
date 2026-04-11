@@ -40,7 +40,7 @@
         .section-title { font-size: 16px; font-weight: 600; color: #00a1d6; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid #00a1d6; }
 
         /* 统计卡片 */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--card-min-width, 160px), 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: #f9f9f9; padding: 15px; border-radius: 8px; }
         .stat-card .label { color: #888; font-size: 13px; }
         .stat-card .value { font-size: 24px; font-weight: bold; color: #00a1d6; margin-top: 5px; }

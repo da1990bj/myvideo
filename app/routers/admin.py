@@ -1326,8 +1326,8 @@ async def fix_abnormal_transcode_tasks(
                 session.add(task)
                 session.commit()
 
-                # 触发转码任务
-                transcode_video_task.delay(str(video.id))
+                # 触发转码任务（使用视频ID作为task_id防止重复）
+                transcode_video_task.apply_async(args=[str(video.id)], task_id=str(video.id))
                 fixed_count += 1
                 logger.info(f"Fixed abnormal pending task for video {video.id}")
             except Exception as e:
@@ -1366,8 +1366,8 @@ async def fix_abnormal_transcode_tasks(
                 session.add(task)
                 session.commit()
 
-                # 触发转码任务
-                transcode_video_task.delay(str(video.id))
+                # 触发转码任务（使用视频ID作为task_id防止重复）
+                transcode_video_task.apply_async(args=[str(video.id)], task_id=str(video.id))
                 fixed_count += 1
                 logger.info(f"Fixed abnormal processing task for video {video.id}")
             except Exception as e:
@@ -1562,8 +1562,8 @@ async def resume_transcode_task(
 
     session.commit()
 
-    # 重新提交Celery任务，传递恢复参数
-    transcode_video_task.delay(str(task.video_id), resume="resume")
+    # 重新提交Celery任务，传递恢复参数（使用视频ID作为task_id防止重复）
+    transcode_video_task.apply_async(args=[str(task.video_id)], kwargs={"resume": "resume"}, task_id=str(task.video_id))
 
     return {"message": "Task resumed", "resume_from_percent": task.pause_percent}
 
@@ -1643,7 +1643,7 @@ async def retry_transcode(
     session.add(video)
     session.commit()
 
-    transcode_video_task.delay(video_id)
+    transcode_video_task.apply_async(args=[video_id], task_id=video_id)
 
     return {"message": "Transcode retry scheduled", "retry_count": task.retry_count if task else 0}
 
@@ -1655,6 +1655,10 @@ async def trigger_transcode(
     session: Session = Depends(get_session)
 ):
     """手动触发视频转码（删除旧文件后重新转码）"""
+    # 验证 video_id 不是 "null" 或空字符串
+    if not video_id or video_id == "null" or video_id == "undefined":
+        raise HTTPException(status_code=400, detail="Invalid video ID")
+
     video = session.get(Video, video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -1701,10 +1705,10 @@ async def trigger_transcode(
 
     session.commit()
 
-    # 4. 触发 Celery 任务
-    transcode_video_task.delay(video_id)
+    # 4. 触发 Celery 任务（使用视频ID作为task_id防止重复）
+    transcode_video_task.apply_async(args=[video_id], task_id=video_id)
 
-    return {"message": "Transcode triggered", "task_id": str(task.id) if task else None}
+    return {"message": "Transcode triggered", "task_id": video_id}
 
 
 # ==================== 冷存储 ====================
@@ -2022,6 +2026,52 @@ async def update_user_role(
 
 # ==================== 视频管理 ====================
 
+@router.get("/videos/stats")
+async def get_video_stats(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """获取视频统计信息"""
+    from datetime import datetime, timedelta
+
+    # 总视频数
+    total = session.exec(
+        select(func.count()).select_from(Video).where(Video.is_deleted == False)
+    ).one()
+
+    # 转码中
+    processing = session.exec(
+        select(func.count()).select_from(Video).where(
+            Video.is_deleted == False,
+            Video.status == "processing"
+        )
+    ).one()
+
+    # 待处理
+    pending = session.exec(
+        select(func.count()).select_from(Video).where(
+            Video.is_deleted == False,
+            Video.status == "pending"
+        )
+    ).one()
+
+    # 今日完成（使用 TranscodeTask 的 completed_at）
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    completed_today = session.exec(
+        select(func.count()).select_from(TranscodeTask).where(
+            TranscodeTask.status == "completed",
+            TranscodeTask.completed_at >= today_start
+        )
+    ).one()
+
+    return {
+        "total": total,
+        "processing": processing,
+        "pending": pending,
+        "completed_today": completed_today
+    }
+
+
 @router.get("/videos")
 async def get_all_videos(
     admin: User = Depends(PermissionChecker("video:audit")),
@@ -2050,6 +2100,20 @@ async def get_all_videos(
                 "id": v.category.id,
                 "name": v.category.name,
             }
+        # 查询该视频最新的转码任务
+        task = session.exec(
+            select(TranscodeTask).where(
+                TranscodeTask.video_id == v.id
+            ).order_by(desc(TranscodeTask.created_at)).limit(1)
+        ).first()
+        if task:
+            video_dict["task"] = {
+                "id": str(task.id),
+                "status": task.status,
+                "pause_percent": task.pause_percent,
+            }
+        else:
+            video_dict["task"] = None
         result.append(video_dict)
 
     return result

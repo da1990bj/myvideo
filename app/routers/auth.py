@@ -8,14 +8,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 
 from database import get_session
-from data_models import User, UserCreate, UserRead, UserUpdate, UserLogin, Token, Video, UserRole, Role
-from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from data_models import User, UserCreate, UserRead, UserUpdate, UserLogin, Token, TokenResponse, RefreshRequest, Video, UserRole, Role
+from security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, create_refresh_token, verify_refresh_token, revoke_refresh_token
 from dependencies import get_current_user, get_current_user_optional
 
 router = APIRouter(prefix="", tags=["认证"])
 
 
-@router.post("/token", response_model=Token)
+@router.post("/token", response_model=TokenResponse)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: Session = Depends(get_session)
@@ -23,7 +23,7 @@ async def login(
     """
     登录获取 JWT token
 
-    OAuth2 兼容的登录接口
+    OAuth2 兼容的登录接口，同时返回 access_token 和 refresh_token
     """
     user = session.exec(select(User).where(User.username == form_data.username)).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -36,7 +36,46 @@ async def login(
         raise HTTPException(status_code=400, detail="Inactive user")
 
     access_token = create_access_token(data={"sub": user.username})
-    return Token(access_token=access_token, token_type="bearer")
+    refresh_token = create_refresh_token(user.id, device_info=None, session=session)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+
+
+@router.post("/auth/refresh", response_model=TokenResponse)
+async def refresh_access_token(
+    refresh_data: RefreshRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    使用 refresh_token 获取新的 access_token
+    """
+    user_id = verify_refresh_token(refresh_data.refresh_token, session)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+
+    user = session.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    access_token = create_access_token(data={"sub": user.username})
+    new_refresh_token = create_refresh_token(user.id, device_info=None, session=session)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
+
+
+@router.post("/auth/logout")
+async def logout(
+    refresh_data: RefreshRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    撤销 refresh_token (登出)
+    """
+    revoked = revoke_refresh_token(refresh_data.refresh_token, session)
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Refresh token not found")
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/users/register", response_model=UserRead, status_code=201)

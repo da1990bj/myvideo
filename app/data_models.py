@@ -260,6 +260,7 @@ class Collection(SQLModel, table=True):
     title: str = Field(index=True)
     description: Optional[str] = None
     cover_image: Optional[str] = None
+    is_public: bool = Field(default=True)
     favorite_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -446,6 +447,26 @@ class Token(SQLModel):
     access_token: str
     token_type: str
 
+class TokenResponse(SQLModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+class RefreshRequest(SQLModel):
+    refresh_token: str
+
+class RefreshToken(SQLModel, table=True):
+    """Refresh Token 持久化表"""
+    __tablename__ = "refresh_tokens"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    token_hash: str  # 存储哈希而非原始 token
+    device_info: Optional[str] = None
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    revoked: bool = Field(default=False)
+
 class VideoUpdate(SQLModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -497,16 +518,19 @@ class SubtitleGenerateRequest(SQLModel):
 class CollectionCreate(SQLModel):
     title: str
     description: Optional[str] = None
+    is_public: bool = True
 
 class CollectionUpdate(SQLModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    is_public: Optional[bool] = None
 
 class CollectionRead(SQLModel):
     id: UUID
     title: str
     description: Optional[str]
     cover_image: Optional[str]
+    is_public: bool = True
     created_at: datetime
     video_count: int = 0
     favorite_count: int = 0

@@ -110,7 +110,24 @@ def create_transcode_task(video_id: str, user_id: str, priority_type: str = "nor
             p_type = "paid_speedup"
             queue_name = "priority"
 
-        # 检查是否已有任务记录
+        # 检查视频状态，如果已完成则不再创建新任务
+        video = session.get(Video, UUID(video_id))
+        if video and video.status == "completed":
+            # 视频已转码完成，检查是否已有任务记录
+            existing = session.exec(
+                select(TranscodeTask).where(
+                    TranscodeTask.video_id == UUID(video_id),
+                    TranscodeTask.status == "completed"
+                )
+            ).first()
+            if existing:
+                logger.info(f"Video {video_id} already completed, reusing task {existing.id}")
+                return existing
+            # 视频已完成但无任务记录，不创建新任务
+            logger.info(f"Video {video_id} already completed, skipping task creation")
+            return None
+
+        # 检查是否已有 pending/processing 任务
         existing = session.exec(
             select(TranscodeTask).where(
                 TranscodeTask.video_id == UUID(video_id),
@@ -279,13 +296,20 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
 
     # 先创建任务记录（这样队列立即可见）
     task_record = None
+    video_status = None
     try:
         with Session(engine) as session:
             video = session.exec(select(Video).where(Video.id == video_id)).first()
             if video:
+                video_status = video.status
                 task_record = create_transcode_task(video_id, str(video.user_id), priority_type)
     except Exception as e:
         logger.warning(f"Failed to create transcode task record: {e}")
+
+    # 如果任务记录为 None（视频已完成），则跳过
+    if task_record is None and video_status == "completed":
+        logger.info(f"Video {video_id} already completed, skipping transcode")
+        return {"status": "skipped", "reason": "video_already_completed"}
 
     # 检查是否已有正在运行的 ffmpeg 进程（防止僵尸进程重复启动）
     import subprocess
@@ -472,7 +496,7 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                             "ffmpeg", "-ss", resume_timestamp, "-i", input_path,
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.1",
                             "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                            "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
+                            "-vf", f"scale=-2:{r_h},format=yuv420p", "-c:a", "aac", "-b:a", r_a,
                             "-hls_time", "6", "-hls_playlist_type", "vod",
                             "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
                             "-progress", "pipe:1",
@@ -483,7 +507,7 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                             "ffmpeg", "-i", input_path,
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.1",
                             "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                            "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
+                            "-vf", f"scale=-2:{r_h},format=yuv420p", "-c:a", "aac", "-b:a", r_a,
                             "-hls_time", "6", "-hls_playlist_type", "vod",
                             "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
                             "-progress", "pipe:1",
@@ -494,7 +518,7 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                         "ffmpeg", "-i", input_path,
                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.1",
                         "-b:v", r_b, "-maxrate", r_b, "-bufsize", str(int(r_b[:-1])*2)+"k",
-                        "-vf", f"scale=-2:{r_h}", "-c:a", "aac", "-b:a", r_a,
+                        "-vf", f"scale=-2:{r_h},format=yuv420p", "-c:a", "aac", "-b:a", r_a,
                         "-hls_time", "6", "-hls_playlist_type", "vod",
                         "-hls_segment_filename", os.path.join(hls_dir, f"{r_n}_%03d.ts"),
                         "-progress", "pipe:1",

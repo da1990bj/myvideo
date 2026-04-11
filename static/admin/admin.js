@@ -3,7 +3,6 @@
 // 默认菜单配置
 const DEFAULT_MENU = [
     { id: 'index', href: '/static/admin/index.html', text: '仪表盘' },
-    { id: 'transcode', href: '/static/admin/transcode.html', text: '转码队列' },
     { id: 'videos', href: '/static/admin/videos.html', text: '视频管理' },
     { id: 'categories', href: '/static/admin/categories.html', text: '分类管理' },
     { id: 'recommendations', href: '/static/admin/recommendations.html', text: '推荐管理' },
@@ -120,40 +119,144 @@ function renderMenuItem(item) {
     `;
 }
 
+// 注入统一全局样式
+function injectCommonStyles() {
+    if (document.getElementById('admin-common-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'admin-common-styles';
+    style.textContent = `
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .container { padding: 20px; max-width: 1600px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; color: #333; }
+        h2 { margin-bottom: 15px; color: #333; }
+        h3 { margin-top: 30px; margin-bottom: 15px; color: #333; }
+
+        /* 统计卡片 */
+        .stats-row, .stats-grid, .stats { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+        .stat-card, .card {
+            background: #fff; padding: 20px 30px; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; flex: 1;
+            min-width: var(--card-min-width, 120px); max-width: var(--card-max-width, 300px);
+        }
+        .stat-card .label, .card .label { color: #888; font-size: 13px; margin-bottom: 8px; }
+        .stat-card .num, .card .num { font-size: 28px; font-weight: bold; color: #00a1d6; }
+        .stat-card .stat-value { font-size: 24px; font-weight: 600; color: #00a1d6; margin-bottom: 4px; }
+        .stat-card .stat-label, .card .stat-label { font-size: 12px; color: #999; }
+
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 500; color: #555; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f9f9f9; }
+
+        /* 状态标签 */
+        .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .status-pending { background: #fff3e0; color: #f08c00; }
+        .status-processing { background: #e3f2fd; color: #00a1d6; }
+        .status-completed { background: #e8f5e9; color: #2f9e44; }
+        .status-failed { background: #ffebee; color: #f04c49; }
+        .status-cancelled { background: #f5f5f5; color: #999; }
+        .status-paused { background: #fff8e1; color: #f08c00; }
+        .audit-pending { background: #fff3e0; color: #f08c00; }
+        .audit-approved { background: #e8f5e9; color: #2f9e44; }
+        .audit-banned { background: #ffebee; color: #f04c49; }
+        .audit-appealing { background: #fff8e1; color: #e65100; }
+
+        /* 按钮 */
+        .btn { padding: 5px 12px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; font-size: 12px; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn:hover { background: #f5f5f5; }
+        .btn-danger { color: #f04c49; border-color: #f04c49; }
+        .btn-danger:hover { background: #ffebee; }
+        .btn-success { color: #00a1d6; border-color: #00a1d6; }
+        .btn-success:hover { background: #e3f2fd; }
+        .btn-warning { color: #f08c00; border-color: #f08c00; }
+        .btn-warning:hover { background: #fff3e0; }
+        .btn-purple { color: #9c27b0; border-color: #9c27b0; }
+        .btn-purple:hover { background: #f3e5f5; }
+        .btn-small { padding: 3px 8px; font-size: 11px; }
+        .btn-secondary { color: #666; border-color: #ddd; }
+
+        /* 刷新提示 */
+        .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
+        .refresh-info button { padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .refresh-info button:hover { background: #008dbd; }
+
+        /* 分隔线 */
+        .divider { border-left: 1px solid #ddd; height: 24px; margin: 0 4px; }
+
+        /* 角色标签 */
+        .role-tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin: 2px; background: #e7f5ff; color: #00a1d6; }
+
+        /* 缩略图 */
+        .thumb { width: 80px; height: 45px; object-fit: cover; border-radius: 4px; background: #eee; }
+
+        /* 操作区域 */
+        .op-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .op-label { font-size: 11px; color: #999; margin-right: 4px; }
+
+        /* 进度显示 */
+        .progress-cell { font-weight: 500; color: #00a1d6; }
+        .progress-cell.completed { color: #2f9e44; }
+        .progress-cell.failed { color: #f04c49; }
+    `;
+    document.head.appendChild(style);
+}
+
 // 渲染侧边栏
 function renderSidebar(menu) {
     const menuHtml = menu.map(renderMenuItem).join('');
+    const savedWidth = localStorage.getItem('sidebarWidth') || 240;
 
     const html = `
     <div id="admin-sidebar">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2 style="margin:0; color:#00a1d6;">MyVideo Admin</h2>
-            <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:none; border:none; cursor:pointer; font-size:20px; color:#999; padding:4px;" title="收起菜单">&#9776;</button>
-        </div>
-        <div id="menu-container">
-            ${menuHtml}
+        <div id="sidebar-inner" style="padding: 20px; height: 100%; box-sizing: border-box; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="margin:0; color:#00a1d6;">MyVideo Admin</h2>
+                <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:none; border:none; cursor:pointer; font-size:20px; color:#999; padding:4px;" title="收起菜单">&#9776;</button>
+            </div>
+            <div id="menu-container">
+                ${menuHtml}
+            </div>
         </div>
     </div>
+    <div id="sidebar-resize-handle" style="position: fixed; left: ${parseInt(savedWidth)}px; top: 0; width: 8px; height: 100vh; cursor: ew-resize; z-index: 101; background: transparent;"></div>
     <div id="sidebar-float-btn" onclick="toggleSidebar()" style="display:none; position:fixed; left:10px; top:20px; z-index:99; background:#00a1d6; color:#fff; width:40px; height:40px; border-radius:50%; cursor:pointer; font-size:18px; text-align:center; line-height:40px; box-shadow:0 2px 10px rgba(0,0,0,0.2);" title="展开菜单">&#9776;</div>
+    <div id="admin-toolbar" style="position: fixed; top: 10px; right: 20px; z-index: 90; display: flex; gap: 15px; align-items: center;">
+        <div id="card-width-control" style="display:none; align-items: center; gap: 8px;">
+            <span style="color: #666; font-size: 12px;">卡片宽度：</span>
+            <input type="range" id="card-width-slider" min="100" max="300" value="160" style="width: 100px; vertical-align: middle;">
+            <span id="card-width-label" style="color: #666; font-size: 12px;">160px</span>
+        </div>
+    </div>
     <style>
-        #admin-sidebar { width: 240px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; padding: 20px; overflow-y: auto; z-index: 100; transition: left 0.3s, box-shadow 0.3s; }
+        #admin-sidebar { width: ${savedWidth}px; background: #fff; height: 100vh; position: fixed; left: 0; top: 0; border-right: 1px solid #eee; overflow: hidden; z-index: 100; transition: width 0s; }
+        #sidebar-inner { padding: 20px; }
+        #sidebar-resize-handle:hover { background: rgba(0, 160, 214, 0.2); }
+        #sidebar-resize-handle.resizing { background: rgba(0, 160, 214, 0.3); }
         .admin-link { display: block; padding: 12px; color: #333; text-decoration: none; border-radius: 4px; margin-bottom: 4px; transition: all 0.2s; cursor: pointer; user-select: none; }
         .admin-link:hover { background: #f4f5f7; color: #00a1d6; }
         .admin-link.dragging { opacity: 0.5; background: #e3f2fd; }
         .admin-link.drag-over { border-top: 2px solid #00a1d6; }
         .admin-link.drag-over-next { border-bottom: 2px solid #00a1d6; }
         .drag-handle:hover { opacity: 1 !important; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0 !important; padding-left: 280px !important; background-color: #f4f5f7 !important; transition: padding-left 0.3s; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0 !important; padding-left: var(--sidebar-width, ${parseInt(savedWidth) + 40}px) !important; background-color: #f4f5f7 !important; transition: padding-left 0.3s; }
         body.sidebar-collapsed { padding-left: 20px !important; }
         .container, .content { padding: 20px; max-width: 100%; }
         #menu-container { min-height: 50px; }
         #sidebar-toggle-btn:hover { color: #00a1d6; }
+        .stats-row { --card-min-width: 160px; --card-max-width: 320px; }
+        .stats-grid { --card-min-width: 160px; --card-max-width: 320px; }
+        .stats { --card-min-width: 160px; --card-max-width: 320px; }
     </style>
     `;
 
     const div = document.createElement("div");
     div.innerHTML = html;
     document.body.appendChild(div);
+
+    // 注入统一样式到 document head
+    injectCommonStyles();
 
     // 应用保存的状态
     if (sidebarCollapsed) {
@@ -162,6 +265,93 @@ function renderSidebar(menu) {
     updateSidebarState();
 
     initDragAndDrop();
+    initSidebarResize();
+}
+
+// 初始化侧边栏宽度拖拽
+function initSidebarResize() {
+    const defaultWidth = 240;
+    const savedWidth = parseInt(localStorage.getItem('sidebarWidth')) || defaultWidth;
+    const sidebar = document.getElementById('admin-sidebar');
+    const handle = document.getElementById('sidebar-resize-handle');
+    if (!sidebar || !handle) return;
+
+    // 重置为默认宽度
+    sidebar.style.width = defaultWidth + 'px';
+    handle.style.left = defaultWidth + 'px';
+    document.body.style.setProperty('--sidebar-width', (defaultWidth + 40) + 'px');
+    localStorage.setItem('sidebarWidth', defaultWidth);
+
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = parseInt(sidebar.style.width) || defaultWidth;
+        handle.classList.add('resizing');
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const diff = e.clientX - startX;
+        const newWidth = Math.max(150, Math.min(500, startWidth + diff));
+        sidebar.style.width = newWidth + 'px';
+        handle.style.left = newWidth + 'px';
+        document.body.style.setProperty('--sidebar-width', (newWidth + 40) + 'px');
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+        isResizing = false;
+        handle.classList.remove('resizing');
+        const finalWidth = parseInt(sidebar.style.width) || defaultWidth;
+        localStorage.setItem('sidebarWidth', finalWidth);
+    });
+}
+
+// ==================== 卡片宽度调整 ====================
+function updateCardWidth(value) {
+    // videos.html - .stats-row with CSS variables
+    document.querySelectorAll('.stats-row').forEach(row => {
+        row.style.setProperty('--card-min-width', value + 'px');
+        row.style.setProperty('--card-max-width', (value * 2) + 'px');
+    });
+    // settings.html, recommendations.html - .stats-grid / .stats with CSS variables
+    document.querySelectorAll('.stats-grid, .stats').forEach(grid => {
+        grid.style.setProperty('--card-min-width', value + 'px');
+        grid.style.setProperty('--card-max-width', (value * 2) + 'px');
+    });
+    // index.html - set card width directly (cards use flex: 0 0 <width>)
+    document.querySelectorAll('.card').forEach(card => {
+        card.style.flex = `0 0 ${value}px`;
+        card.style.minWidth = value + 'px';
+        card.style.maxWidth = (value * 2) + 'px';
+    });
+    const label = document.getElementById('card-width-label');
+    if (label) label.textContent = value + 'px';
+    localStorage.setItem('statCardWidth', value);
+}
+
+function initCardWidthControl() {
+    const control = document.getElementById('card-width-control');
+    const slider = document.getElementById('card-width-slider');
+    if (!control || !slider) return;
+
+    // 检查页面上是否有任何卡片容器
+    const hasCards = document.querySelector('.stats-row, .stats-grid, .stats, .card') !== null;
+    if (hasCards) {
+        control.style.display = 'flex';
+        // 恢复保存的宽度
+        const saved = localStorage.getItem('statCardWidth');
+        if (saved) {
+            slider.value = saved;
+            updateCardWidth(saved);
+        }
+        slider.addEventListener('input', (e) => updateCardWidth(e.target.value));
+    }
 }
 
 // 获取当前菜单顺序
@@ -288,6 +478,7 @@ async function initAdmin() {
             await loadMenuOrderFromAPI();
             console.log('[Admin] Current menu:', currentMenu.length, 'items');
             renderSidebar(currentMenu);
+            initCardWidthControl();
             console.log('[Admin] Sidebar rendered successfully');
         } else {
             console.log('[Admin] Not ok response, redirecting to login');

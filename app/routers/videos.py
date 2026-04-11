@@ -24,7 +24,7 @@ from data_models import (
     TranscodeTask, UploadSession, UploadSessionRead, Notification,
     SubtitleRead, SubtitleGenerateRequest
 )
-from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags
+from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags, can_bypass_upload_limit
 from tasks import transcode_video_task
 from config import settings, get_transcode_config, get_runtime_config
 import socketio_handler
@@ -75,19 +75,11 @@ async def upload_video(
     max_size_bytes = max_size_mb * 1024 * 1024
 
     if max_size_bytes > 0 and file_size > max_size_bytes:
-        # 检查用户是否可以绕过大小限制（管理员/运营）- 支持多角色
-        can_bypass = current_user.is_admin  # 管理员直接放行
-        if not can_bypass:
-            user_roles = session.exec(select(UserRole).where(UserRole.user_id == current_user.id)).all()
-            for ur in user_roles:
-                role = session.get(Role, ur.role_id)
-                if role and (role.permissions == "*" or "video:upload_bypass" in role.permissions.split(",")):
-                    can_bypass = True
-                    break
-        if not can_bypass:
+        # 检查用户是否可以绕过大小限制（管理员/运营人员）
+        if not can_bypass_upload_limit(current_user, session):
             raise HTTPException(
                 status_code=413,
-                detail=f"文件大小超过限制 ({max_size_mb}MB)"
+                detail=f"文件大小超过限制 ({max_size_mb}MB)，管理员和运营人员可绕过此限制"
             )
 
     # 获取分类
@@ -128,8 +120,8 @@ async def upload_video(
         session.commit()
         session.refresh(new_video)
 
-    # 触发转码任务
-    transcode_video_task.delay(str(new_video.id))
+    # 触发转码任务（使用视频ID作为task_id防止重复）
+    transcode_video_task.apply_async(args=[str(new_video.id)], task_id=str(new_video.id))
 
     return new_video
 
@@ -1875,7 +1867,7 @@ async def retry_video_transcode(
     session.add(video)
     session.commit()
 
-    transcode_video_task.delay(video_id)
+    transcode_video_task.apply_async(args=[video_id], task_id=video_id)
 
     return {"message": "Transcode retry scheduled", "retry_count": task.retry_count if task else 0}
 
@@ -2049,6 +2041,16 @@ async def init_upload_session(
     """
     初始化分片上传会话
     """
+    # 检查上传大小限制（管理员和运营人员除外）
+    if not can_bypass_upload_limit(current_user, session):
+        max_size_mb = get_runtime_config("MAX_UPLOAD_SIZE_MB", "2048")
+        max_size_bytes = int(max_size_mb) * 1024 * 1024
+        if max_size_bytes > 0 and file_size > max_size_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"文件大小超过限制 {max_size_mb}MB，管理员和运营人员可绕过此限制"
+            )
+
     total_chunks = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
     session_id = str(uuid4())
     temp_dir = settings.UPLOADS_DIR / f".chunks_{session_id}"
@@ -2235,8 +2237,8 @@ async def complete_upload_session(
     )
     session.commit()
 
-    # 触发转码任务
-    transcode_video_task.delay(str(video.id))
+    # 触发转码任务（使用视频ID作为task_id防止重复）
+    transcode_video_task.apply_async(args=[str(video.id)], task_id=str(video.id))
 
     # 推送完成事件
     socketio_handler.publish_upload_complete(

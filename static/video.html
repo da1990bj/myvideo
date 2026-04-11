@@ -787,7 +787,14 @@
         const streamUrl = video.stream_url || video.processed_file_path;
         const isHls = video.processed_file_path && video.processed_file_path.endsWith('.m3u8');
         if (Hls.isSupported() && isHls && streamUrl) {
-            const hls = new Hls();
+            const hlsConfig = {
+                enableWorker: true,
+                backBufferLength: 90,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 600,
+                fragBufferTimeBankSize: 500,
+            };
+            const hls = new Hls(hlsConfig);
             hls.loadSource(streamUrl);
             hls.attachMedia(player);
 
@@ -798,6 +805,22 @@
 
             hls.on(Hls.Events.ERROR, (event, data) => {
                 console.error('HLS error:', data);
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.error('Fatal network error, trying to recover...');
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.error('Fatal media error, trying to recover...');
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            console.error('Fatal error, destroying HLS instance...');
+                            hls.destroy();
+                            break;
+                    }
+                }
             });
 
             currentHls = hls;
@@ -1496,7 +1519,14 @@
                     errorDiv.innerHTML = `<div style="font-size:48px;margin-bottom:20px;">🚫</div><div style="font-size:18px;font-weight:500;margin-bottom:10px;">视频状态异常</div><div style="font-size:14px;color:#999;">${video.playable_message || '该视频暂时无法播放'}</div>`;
                     document.getElementById("player-wrapper").appendChild(errorDiv);
                 } else if (Hls.isSupported() && video.processed_file_path.endsWith('.m3u8')) {
-                    const hls = new Hls();
+                    const hlsConfig = {
+                        enableWorker: true,
+                        backBufferLength: 90,
+                        maxBufferLength: 30,
+                        maxMaxBufferLength: 600,
+                        fragBufferTimeBankSize: 500,
+                    };
+                    const hls = new Hls(hlsConfig);
                     const streamUrl = video.stream_url || video.processed_file_path;
                     hls.loadSource(streamUrl);
                     hls.attachMedia(player);
@@ -1524,13 +1554,16 @@
                         if (data.fatal) {
                             switch (data.type) {
                                 case Hls.ErrorTypes.NETWORK_ERROR:
-                                    console.error('Fatal network error');
+                                    console.error('Fatal network error, trying to recover...');
+                                    hls.startLoad();
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
-                                    console.error('Fatal media error');
+                                    console.error('Fatal media error, trying to recover...');
+                                    hls.recoverMediaError();
                                     break;
                                 default:
-                                    console.error('Fatal error');
+                                    console.error('Fatal error, destroying HLS instance...');
+                                    hls.destroy();
                                     break;
                             }
                         }

@@ -455,6 +455,13 @@ async def start_redis_listener(sio, redis_url: str):
                                     status=status
                                 )
 
+                            # 同时广播给所有管理员（用于后台管理页面实时显示进度）
+                            await manager.broadcast_transcode_update(
+                                sio=sio,
+                                event="transcode_progress",
+                                data=payload
+                            )
+
                         elif channel == "transcode:admin":
                             # 广播给所有管理员
                             await manager.broadcast_transcode_update(

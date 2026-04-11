@@ -41,8 +41,9 @@
         label { display: block; margin-bottom: 5px; font-weight: 500; }
         input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
         .modal-actions { text-align: right; margin-top: 20px; }
-        .refresh-indicator { font-size: 12px; color: #999; margin-left: 10px; opacity: 0; transition: opacity 0.5s; }
+        .refresh-indicator { font-size: 12px; color: #999; opacity: 0; transition: opacity 0.5s; }
         .refresh-indicator.show { opacity: 1; }
+        .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
 
         /* 标签组件样式 */
         .tags-container { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #fff; min-height: 42px; cursor: text; }
@@ -83,11 +84,15 @@
         </div>
     </div>
 
-    <h1 style="display:flex; justify-content:space-between; align-items:center;">
-        <span>内容管理 <span id="refresh-hint" class="refresh-indicator">自动刷新中...</span></span>
-        <div style="display:flex; gap:10px;">
-             <button id="tab-btn-videos" class="upload-btn" onclick="switchTab('videos')" style="background:#00a1d6;">我的视频</button>
-             <button id="tab-btn-collections" class="upload-btn" onclick="switchTab('collections')" style="background:#fff; color:#666; border:1px solid #ddd;">我的合集</button>
+    <h1>内容管理</h1>
+    <div class="refresh-info" style="margin-bottom: 15px;">
+        <span id="ws-status" style="margin-right: 15px; font-size: 12px;"></span>
+        上次更新：<span id="last-update-time">加载中...</span>
+        <button onclick="loadData()" style="padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">刷新</button>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom: 20px;">
+        <button id="tab-btn-videos" class="upload-btn" onclick="switchTab('videos')" style="background:#00a1d6;">我的视频</button>
+        <button id="tab-btn-collections" class="upload-btn" onclick="switchTab('collections')" style="background:#fff; color:#666; border:1px solid #ddd;">我的合集</button>
              <button id="tab-btn-uploads" class="upload-btn" onclick="switchTab('uploads')" style="background:#fff; color:#666; border:1px solid #ddd;">上传管理</button>
              <button id="tab-btn-private" class="upload-btn" onclick="switchTab('private')" style="background:#fff; color:#666; border:1px solid #ddd;">🔒 私密视频</button>
              <a href="/static/upload.html" class="upload-btn" style="background:#fb7299;">投稿</a>
@@ -310,6 +315,13 @@
 
         console.log('Initializing WebSocket connection via Nginx proxy...');
 
+        // 初始状态
+        const wsStatus = document.getElementById('ws-status');
+        if (wsStatus) {
+            wsStatus.textContent = '● WebSocket 连接中...';
+            wsStatus.style.color = '#f08c00';
+        }
+
         try {
             socket = io('/', socketOptions);
 
@@ -319,6 +331,12 @@
                 if (refreshTimer) {
                     clearInterval(refreshTimer);
                     refreshTimer = null;
+                }
+                // 更新连接状态指示器
+                const wsStatus = document.getElementById('ws-status');
+                if (wsStatus) {
+                    wsStatus.textContent = '● WebSocket 已连接';
+                    wsStatus.style.color = '#2f9e44';
                 }
             });
 
@@ -340,6 +358,12 @@
 
             socket.on('disconnect', (reason) => {
                 console.log('WebSocket disconnected (dashboard):', reason);
+                // 更新连接状态指示器
+                const wsStatus = document.getElementById('ws-status');
+                if (wsStatus) {
+                    wsStatus.textContent = '● WebSocket 已断开';
+                    wsStatus.style.color = '#f04c49';
+                }
                 // 启用轮询作为降级
                 if (!refreshTimer) {
                     refreshTimer = setInterval(() => loadMyVideos(true), 5000);
@@ -868,6 +892,12 @@
 
             if (res.ok) {
                 const videos = await res.json();
+                // 更新时间戳
+                const now = new Date();
+                document.getElementById("last-update-time").textContent =
+                    now.getHours().toString().padStart(2, '0') + ':' +
+                    now.getMinutes().toString().padStart(2, '0') + ':' +
+                    now.getSeconds().toString().padStart(2, '0');
                 // 只传给 renderTable 非私密视频
                 renderTable(videos.filter(v => v.visibility !== "private"));
 
@@ -1605,7 +1635,8 @@
             if(res.ok) {
                 const data = await res.json();
                 if(data.url) {
-                    document.getElementById("editThumbPreview").src = data.url;
+                    // 添加时间戳防止浏览器缓存旧图片
+                    document.getElementById("editThumbPreview").src = data.url + '?t=' + Date.now();
                 }
             } else {
                 const err = await res.json();
