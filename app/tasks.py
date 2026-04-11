@@ -127,11 +127,11 @@ def create_transcode_task(video_id: str, user_id: str, priority_type: str = "nor
             logger.info(f"Video {video_id} already completed, skipping task creation")
             return None
 
-        # 检查是否已有 pending/processing 任务
+        # 检查是否已有 pending/processing/paused 任务
         existing = session.exec(
             select(TranscodeTask).where(
                 TranscodeTask.video_id == UUID(video_id),
-                TranscodeTask.status.in_(["pending", "processing"])
+                TranscodeTask.status.in_(["pending", "processing", "paused"])
             )
         ).first()
 
@@ -310,6 +310,11 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
     if task_record is None and video_status == "completed":
         logger.info(f"Video {video_id} already completed, skipping transcode")
         return {"status": "skipped", "reason": "video_already_completed"}
+
+    # 如果视频状态为暂停，则跳过处理
+    if video_status == "paused":
+        logger.info(f"Video {video_id} is paused, skipping transcode")
+        return {"status": "skipped", "reason": "video_paused"}
 
     # 检查是否已有正在运行的 ffmpeg 进程（防止僵尸进程重复启动）
     import subprocess
@@ -571,6 +576,8 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
                 extracted_languages = extract_subtitle_streams(video_id, input_path, hls_dir)
                 if extracted_languages:
                     update_master_playlist_with_subtitles(video_id, extracted_languages)
+                    # 更新视频的字幕语言列表
+                    video.subtitle_languages = extracted_languages
                     logger.info(f"Extracted subtitles for video {video_id}: {extracted_languages}")
             except Exception as e:
                 logger.warning(f"Failed to extract subtitles for video {video_id}: {e}")
@@ -611,9 +618,13 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
 
     except Exception as e:
         # 标记任务失败
+        video_title = None
+        video_user_id = None
         with Session(engine) as session:
             video = session.exec(select(Video).where(Video.id == video_id)).first()
             if video:
+                video_title = video.title
+                video_user_id = str(video.user_id)
                 video.status = "failed"
                 session.add(video)
 
@@ -629,16 +640,14 @@ def transcode_video_task(self, video_id: str, priority_type: str = "normal", res
         broadcast_transcode_admin("transcode_queue_changed", {
             "video_id": str(video_id),
             "status": "failed",
-            "title": getattr(video, 'title', 'unknown') if 'video' in dir() else 'unknown',
+            "title": video_title or 'unknown',
             "timestamp": datetime.utcnow().isoformat()
         })
 
         # 推送失败状态
         try:
-            video_id_str = str(video_id)
-            user_id_str = str(video.user_id) if 'video' in dir() else ""
-            if user_id_str:
-                publish_transcode_progress(video_id_str, user_id_str, 0, "failed")
+            if video_user_id:
+                publish_transcode_progress(str(video_id), video_user_id, 0, "failed")
         except Exception:
             pass
 
@@ -1418,12 +1427,13 @@ def extract_subtitle_streams(video_id: str, input_path: str, hls_dir: str) -> Li
     """
     从原始视频中提取字幕流并转换为 WebVTT 格式
     返回提取成功的语言列表
+    支持多种字幕格式: subrip(srt), ass, ssa, webvtt, mov_text 等
     """
     try:
-        # 使用 ffprobe 获取字幕流信息
+        # 使用 ffprobe 获取字幕流信息（包括tags用于提取language）
         probe_result = subprocess.run(
             ["ffprobe", "-v", "error",
-             "-show_entries", "stream=index,codec_name,codec_type,language,Disposition",
+             "-show_entries", "stream=index,codec_name,codec_type,language,Disposition,Tags",
              "-select_streams", "s",
              "-of", "json",
              input_path],
@@ -1444,47 +1454,116 @@ def extract_subtitle_streams(video_id: str, input_path: str, hls_dir: str) -> Li
         subtitle_dir.mkdir(parents=True, exist_ok=True)
 
         extracted_languages = []
-        language_count = {}  # 用于处理相同语言的多个字幕
 
         for stream in streams:
-            stream_index = stream.get("index")
-            codec_name = stream.get("codec_name")
-            language = stream.get("language", "unknown")
+            try:
+                stream_index = stream.get("index")
+                codec_name = stream.get("codec_name")
 
-            # 跳过非字幕流
-            if stream.get("codec_type") != "subtitle":
-                continue
+                # 优先从 language 字段获取语言代码，否则从 tags.title 提取
+                language = stream.get("language")
+                if not language or language == "und":
+                    # 尝试从 tags.title 提取语言信息
+                    tags = stream.get("tags") or {}
+                    title = tags.get("title", "")
+                    # title 格式如 "English (forced)", "العربية", "English (SDH)"
+                    # 提取第一个单词作为语言标识
+                    if title:
+                        language = title.split(" ")[0].lower()
+                    else:
+                        language = "unknown"
 
-            # 处理相同语言的多个字幕（添加后缀区分）
-            if language in language_count:
-                language_count[language] += 1
-                lang_key = f"{language}_{language_count[language]}"
-            else:
-                language_count[language] = 0
-                lang_key = language
+                # 跳过非字幕流
+                if stream.get("codec_type") != "subtitle":
+                    continue
 
-            # 转换为 VTT 格式
-            vtt_path = subtitle_dir / f"{lang_key}.vtt"
+                # 使用 stream_index 命名字幕文件，避免覆盖
+                lang_key = f"track{stream_index}_{language}"
 
-            # subrip (srt) 可以直接转换或复制
-            if codec_name == "subrip":
-                # 提取字幕流
-                extract_result = subprocess.run(
-                    ["ffmpeg", "-i", input_path,
-                     "-map", f"0:s:{stream_index}",
-                     "-c:s", "webvtt",
-                     str(vtt_path), "-y"],
-                    capture_output=True, text=True
-                )
+                # 转换后的 VTT 文件路径（使用 lang_key 避免文件名冲突）
+                vtt_path = subtitle_dir / f"{lang_key}.vtt"
+
+                # 纯净的语言代码（用于返回和播放列表）
+                # 如果检测到未知语言但有 stream_index，使用 stream_index 作为后备标识
+                clean_language = language if language != "unknown" else f"track{stream_index}"
+                extracted_languages.append(clean_language)
+
+                # 根据不同字幕格式选择转换方式
+                if codec_name == "subrip":
+                    # subrip (srt) 转换为 webvtt
+                    extract_result = subprocess.run(
+                        ["ffmpeg", "-i", input_path,
+                         "-map", f"0:s:{stream_index}",
+                         "-c:s", "webvtt",
+                         str(vtt_path), "-y"],
+                        capture_output=True, text=True
+                    )
+                elif codec_name in ("ass", "ssa"):
+                    # ass/ssa 格式先转 srt 再转 webvtt（ffmpeg 直接转 ass 到 webvtt 可能丢失样式）
+                    srt_path = subtitle_dir / f"{lang_key}.srt"
+                    extract_result = subprocess.run(
+                        ["ffmpeg", "-i", input_path,
+                         "-map", f"0:s:{stream_index}",
+                         "-c:s", "subrip",
+                         str(srt_path), "-y"],
+                        capture_output=True, text=True
+                    )
+                    if extract_result.returncode == 0 and srt_path.exists():
+                        # 再转 webvtt
+                        extract_result = subprocess.run(
+                            ["ffmpeg", "-i", str(srt_path),
+                             "-c:s", "webvtt",
+                             str(vtt_path), "-y"],
+                            capture_output=True, text=True
+                        )
+                        # 清理中间文件
+                        try:
+                            srt_path.unlink()
+                        except Exception:
+                            pass
+                elif codec_name == "webvtt":
+                    # webvtt 直接复制
+                    extract_result = subprocess.run(
+                        ["ffmpeg", "-i", input_path,
+                         "-map", f"0:s:{stream_index}",
+                         "-c:s", "webvtt",
+                         str(vtt_path), "-y"],
+                        capture_output=True, text=True
+                    )
+                elif codec_name == "mov_text":
+                    # mov_text (常见于 mp4) 转换为 webvtt
+                    extract_result = subprocess.run(
+                        ["ffmpeg", "-i", input_path,
+                         "-map", f"0:s:{stream_index}",
+                         "-c:s", "webvtt",
+                         str(vtt_path), "-y"],
+                        capture_output=True, text=True
+                    )
+                else:
+                    # 尝试直接转换
+                    extract_result = subprocess.run(
+                        ["ffmpeg", "-i", input_path,
+                         "-map", f"0:s:{stream_index}",
+                         "-c:s", "webvtt",
+                         str(vtt_path), "-y"],
+                        capture_output=True, text=True
+                    )
 
                 if extract_result.returncode == 0 and vtt_path.exists():
-                    extracted_languages.append(lang_key)
-                    logger.info(f"Extracted subtitle: {lang_key} from stream {stream_index}")
+                    # extracted_languages 已经在前面添加了 clean_language
+                    logger.info(f"Extracted subtitle: {lang_key} (codec: {codec_name}) from stream {stream_index}")
+                else:
+                    logger.warning(f"Failed to extract subtitle stream {stream_index}: {extract_result.stderr[:200] if extract_result.stderr else 'unknown error'}")
+
+            except Exception as e:
+                # 单个字幕流提取失败不影响其他字幕
+                logger.warning(f"Error extracting subtitle stream {stream.get('index')}: {e}")
+                continue
 
         return extracted_languages
 
     except Exception as e:
-        logger.warning(f"Error extracting subtitles: {e}")
+        logger.warning(f"Error extracting subtitles for video {video_id}: {e}")
         return []
 
 
@@ -1524,10 +1603,13 @@ def update_master_playlist_with_subtitles(video_id: str, languages: List[str]):
         f.write("\n".join(new_lines))
 
     for lang in languages:
-        subtitle_playlist_path = settings.PROCESSED_DIR / str(video_id) / "subtitles" / f"{lang}.m3u8"
-        subtitle_file_path = settings.PROCESSED_DIR / str(video_id) / "subtitles" / f"{lang}.vtt"
+        subtitle_dir = settings.PROCESSED_DIR / str(video_id) / "subtitles"
+        subtitle_playlist_path = subtitle_dir / f"{lang}.m3u8"
 
-        if subtitle_file_path.exists():
+        # 查找匹配语言的 VTT 文件（可能名为 {lang}.vtt 或 track{index}_{lang}.vtt）
+        vtt_files = list(subtitle_dir.glob(f"*{lang}*.vtt")) if subtitle_dir.exists() else []
+        if vtt_files:
+            subtitle_file_path = vtt_files[0]
             playlist_content = f"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10.0,\n{subtitle_file_path.name}\n#EXT-X-ENDLIST\n"
             with open(subtitle_playlist_path, "w", encoding="utf-8") as f:
                 f.write(playlist_content)

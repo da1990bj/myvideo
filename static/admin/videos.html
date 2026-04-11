@@ -88,20 +88,20 @@
         </div>
 
         <!-- 统计卡片 -->
-        <div class="stats-row">
-            <div class="stat-card total">
+        <div class="stats-row" id="video-stats-row">
+            <div class="stat-card total" data-key="total">
                 <div class="label">总视频数</div>
                 <div class="num" id="stat-total">-</div>
             </div>
-            <div class="stat-card processing">
+            <div class="stat-card processing" data-key="processing">
                 <div class="label">转码中</div>
                 <div class="num" id="stat-processing">-</div>
             </div>
-            <div class="stat-card pending">
+            <div class="stat-card pending" data-key="pending">
                 <div class="label">待处理</div>
                 <div class="num" id="stat-pending">-</div>
             </div>
-            <div class="stat-card completed">
+            <div class="stat-card completed" data-key="completed">
                 <div class="label">今日完成</div>
                 <div class="num" id="stat-completed">-</div>
             </div>
@@ -133,23 +133,25 @@
         </div>
 
         <!-- 视频列表 -->
-        <table>
-            <thead>
-                <tr>
-                    <th>封面</th>
-                    <th>标题</th>
-                    <th>分类</th>
-                    <th>作者</th>
-                    <th>转码状态</th>
-                    <th>进度</th>
-                    <th>审核状态</th>
-                    <th sort="created_at" style="cursor:pointer;">上传时间 ↕</th>
-                    <th>审核操作</th>
-                    <th>转码操作</th>
-                </tr>
-            </thead>
-            <tbody id="video-list"></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>封面</th>
+                        <th>标题</th>
+                        <th>分类</th>
+                        <th>作者</th>
+                        <th>转码状态</th>
+                        <th>进度</th>
+                        <th>审核状态</th>
+                        <th sort="created_at" style="cursor:pointer;">上传时间 ↕</th>
+                        <th>审核操作</th>
+                        <th>转码操作</th>
+                    </tr>
+                </thead>
+                <tbody id="video-list"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -535,9 +537,17 @@
                 if (!res.ok) return;
                 const videos = await res.json();
                 const video = videos.find(v => v.id === videoId);
-                if (!video || !video.task) return alert("找不到转码任务");
+                if (!video) return alert("找不到视频");
 
-                const tres = await fetch(`/admin/transcode/${video.task.id}/cancel`, { method: "POST", headers });
+                let tres;
+                if (video.task && video.task.id) {
+                    // 有任务记录，通过task取消
+                    tres = await fetch(`/admin/transcode/${video.task.id}/cancel`, { method: "POST", headers });
+                } else {
+                    // 无任务记录，直接通过video取消
+                    tres = await fetch(`/admin/videos/${videoId}/cancel-transcode`, { method: "POST", headers });
+                }
+
                 if (tres.ok) {
                     alert("已取消任务");
                     loadData();
@@ -557,9 +567,17 @@
                 if (!res.ok) return;
                 const videos = await res.json();
                 const video = videos.find(v => v.id === videoId);
-                if (!video || !video.task) return alert("找不到转码任务");
+                if (!video) return alert("找不到视频");
 
-                const tres = await fetch(`/admin/transcode/${video.task.id}/bump`, { method: "POST", headers });
+                let tres;
+                if (video.task && video.task.id) {
+                    // 有任务记录，调用bump端点
+                    tres = await fetch(`/admin/transcode/${video.task.id}/bump`, { method: "POST", headers });
+                } else {
+                    // 无任务记录，使用重新转码端点（优先级）
+                    tres = await fetch(`/admin/videos/${videoId}/transcode`, { method: "POST", headers });
+                }
+
                 if (tres.ok) {
                     alert("已将任务插队到优先级队列");
                     loadData();
@@ -596,7 +614,10 @@
         }
 
         // 初始化
-        document.addEventListener("DOMContentLoaded", loadData);
+        document.addEventListener("DOMContentLoaded", () => {
+            loadData();
+            initCardDragSort('video-stats-row', 'videos_stats');
+        });
         // 每30秒自动刷新
         setInterval(loadData, 30000);
     </script>

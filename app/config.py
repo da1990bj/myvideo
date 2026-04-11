@@ -95,6 +95,9 @@ class MyVideoSettings(BaseSettings):
     CELERY_BROKER_URL: str = ""
     CELERY_RESULT_BACKEND: str = ""
 
+    # ==================== 站点信息 ====================
+    SITE_NAME: str = "MyVideo"
+
     # ==================== 日志 ====================
     LOG_LEVEL: str = "INFO"
     LOG_FILE: Optional[str] = None
@@ -290,6 +293,72 @@ class MyVideoSettings(BaseSettings):
             d.mkdir(parents=True, exist_ok=True)
             logger.debug(f"Ensured directory exists: {d}")
 
+    def setup_logging(self) -> None:
+        """配置统一日志格式，添加时间戳
+
+        必须在应用启动早期调用，通常在 main.py 的 lifespan 或模块导入时调用
+        """
+        import logging
+
+        log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        date_format = "%Y-%m-%d %H:%M:%S"
+
+        # 文件Handler - 写入 server.log
+        file_handler = logging.FileHandler(self.LOG_FILE_PATH)
+        file_handler.setFormatter(logging.Formatter(log_format, date_format))
+        file_handler.setLevel(logging.INFO)
+
+        # 控制台Handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter(log_format, date_format))
+        console_handler.setLevel(logging.INFO)
+
+        # 根日志器配置
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(file_handler)
+        root_logger.addHandler(console_handler)
+
+        # 第三方库日志级别调整
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)  # 降低访问日志
+        logging.getLogger("uvicorn.error").setLevel(logging.INFO)
+        logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)  # SQL日志太多
+        logging.getLogger("PIL").setLevel(logging.WARNING)  # 图片处理日志太多
+
+        logger.info(f"Logging configured: file={self.LOG_FILE_PATH}")
+
+    def update_logging_level(self) -> None:
+        """热更新日志级别（从运行时配置读取并应用到所有handler）"""
+        import logging
+
+        # 获取运行时日志级别配置
+        log_level_str = get_runtime_config("LOG_LEVEL", "INFO")
+        try:
+            log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+        except Exception:
+            log_level = logging.INFO
+
+        # 应用到根日志器
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+
+        # 应用到所有已配置的handler
+        for handler in root_logger.handlers:
+            handler.setLevel(log_level)
+
+        # 同时更新第三方库的日志级别（基于新的日志级别降低）
+        if log_level <= logging.DEBUG:
+            logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+            logging.getLogger("uvicorn.error").setLevel(logging.INFO)
+            logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+        else:
+            # 非DEBUG模式下，进一步降低第三方库日志
+            logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+            logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
+            logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
+
+        logger.info(f"Logging level updated: {log_level_str}")
+
 
 @lru_cache()
 def get_settings() -> MyVideoSettings:
@@ -374,6 +443,9 @@ def reload_runtime_config() -> None:
     _cache_loaded = False
     _load_runtime_config()
     logger.info("运行时配置已热更新")
+
+    # 热更新日志级别
+    settings.update_logging_level()
 
 
 def _get_config_override(key: str, default: any, session=None) -> any:

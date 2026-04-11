@@ -107,6 +107,13 @@ async def get_system_stats(session: Session = Depends(get_session)):
             "total": psutil.disk_usage('/').total,
             "free": psutil.disk_usage('/').free,
         },
+        "network": {
+            "bytes_sent": psutil.net_io_counters().bytes_sent,
+            "bytes_recv": psutil.net_io_counters().bytes_recv,
+            "packets_sent": psutil.net_io_counters().packets_sent,
+            "packets_recv": psutil.net_io_counters().packets_recv,
+        },
+        "connections_count": len(psutil.net_connections()),
     }
 
 
@@ -273,6 +280,7 @@ async def get_env_config(
     """
     # 配置分组定义（仅选填/可运行时修改的配置）
     GROUPS = {
+        "站点信息": ["SITE_NAME", "SHARE_BASE_URL"],
         "应用服务器": ["APP_HOST", "APP_PORT", "APP_DEBUG"],
         "安全/JWT": ["ALGORITHM", "ACCESS_TOKEN_EXPIRE_MINUTES"],
         "文件存储目录": ["STATIC_SUBDIR", "UPLOADS_SUBDIR", "PROCESSED_SUBDIR", "THUMBNAILS_SUBDIR", "AVATARS_SUBDIR", "DATA_SUBDIR"],
@@ -282,11 +290,14 @@ async def get_env_config(
         "日志": ["LOG_LEVEL", "LOG_FILE"],
         "敏感词": ["SENSITIVE_WORDS_FILE"],
         "冷存储": ["COLD_STORAGE_ENABLED", "COLD_STORAGE_TRIGGER_DAYS", "COLD_STORAGE_TRIGGER_VIEWS", "COLD_STORAGE_PATH_ROOT"],
-        "分享设置": ["SHARE_BASE_URL"],
     }
 
     # 构建配置数据
     config_data = {
+        "站点信息": {
+            "SITE_NAME": get_runtime_config("SITE_NAME", settings.SITE_NAME),
+            "SHARE_BASE_URL": get_runtime_config("SHARE_BASE_URL", settings.SHARE_BASE_URL) or "",
+        },
         "应用服务器": {
             "APP_HOST": settings.APP_HOST,
             "APP_PORT": settings.APP_PORT,
@@ -332,9 +343,6 @@ async def get_env_config(
             "COLD_STORAGE_TRIGGER_VIEWS": get_runtime_config("COLD_STORAGE_TRIGGER_VIEWS", settings.COLD_STORAGE_TRIGGER_VIEWS),
             "COLD_STORAGE_PATH_ROOT": get_runtime_config("COLD_STORAGE_PATH_ROOT", str(settings.COLD_STORAGE_PATH)),
         },
-        "分享设置": {
-            "SHARE_BASE_URL": get_runtime_config("SHARE_BASE_URL", settings.SHARE_BASE_URL) or "",
-        },
     }
 
     # 处理排除
@@ -356,6 +364,8 @@ async def update_env_config(
     """更新环境配置（支持运行时修改的配置项）"""
     # 允许运行时修改的配置项（必填配置如 DATABASE_* 等不在此处，如需修改请编辑 .env）
     allowed_keys = [
+        # 站点信息
+        "SITE_NAME",
         # 安全/JWT
         "ACCESS_TOKEN_EXPIRE_MINUTES",
         # 分享设置
@@ -675,6 +685,45 @@ async def update_menu_order(
     session.commit()
 
     return {"message": "Menu order updated"}
+
+
+@router.get("/card-order")
+async def get_card_order(
+    admin: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """获取管理后台卡片顺序"""
+    import json
+    orders = {}
+    # 获取所有以 card_order_ 开头的配置
+    configs = session.exec(select(SystemConfig).where(SystemConfig.key.like("card_order_%"))).all()
+    for conf in configs:
+        try:
+            orders[conf.key.replace("card_order_", "")] = json.loads(conf.value)
+        except:
+            orders[conf.key.replace("card_order_", "")] = []
+    return orders
+
+
+@router.put("/card-order/{page}")
+async def update_card_order(
+    page: str,
+    order: list = Body(...),
+    admin: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """更新管理后台指定页面的卡片顺序"""
+    import json
+    key = f"card_order_{page}"
+    conf = session.get(SystemConfig, key)
+    if conf:
+        conf.value = json.dumps(order)
+    else:
+        conf = SystemConfig(key=key, value=json.dumps(order))
+        session.add(conf)
+
+    session.commit()
+    return {"message": "Card order updated", "page": page}
 
 
 @router.get("/storage/usage")
@@ -1415,8 +1464,20 @@ async def bump_transcode_task(
     if task.priority_type not in ("vip_speedup", "paid_speedup"):
         task.priority_type = "vip_speedup"
 
+    # 更新视频状态为 processing（立即显示转码中）
+    video = session.get(Video, task.video_id)
+    if video:
+        video.status = "processing"
+        session.add(video)
+
     session.add(task)
     session.commit()
+
+    # 提交到 Celery（使用唯一的 task_id）
+    video_id_str = str(task.video_id)
+    from tasks import transcode_video_task
+    new_task_id = f"{video_id_str}-bump-{task.bump_count}"
+    transcode_video_task.apply_async(args=[video_id_str], task_id=new_task_id)
 
     return {"message": "Task bumped to priority queue", "priority": task.priority, "bump_count": task.bump_count}
 
@@ -1437,23 +1498,30 @@ async def cancel_transcode_task(
     if task.status in ("completed", "cancelled"):
         raise HTTPException(status_code=400, detail="Task cannot be cancelled")
 
-    # 终止 Celery 任务
-    if task.celery_task_id and task.status == "processing":
+    video_id = str(task.video_id)
+
+    # 终止 Celery 任务（无论状态如何，只要celery_task_id存在就尝试终止）
+    if task.celery_task_id:
         try:
             celery_app.control.revoke(task.celery_task_id, terminate=True)
         except Exception:
             pass
 
-    # 清理 Redis 锁
+    # 清理所有相关的 Redis 锁
     try:
         from tasks import get_redis_client
         redis_client = get_redis_client()
-        redis_client.delete(f"transcode_lock:{task.video_id}")
+        redis_client.delete(f"transcode_lock:{video_id}")
+        redis_client.delete(f"transcode_resume_percent:{video_id}")
+        redis_client.delete(f"transcode_resume_resolution:{video_id}")
+        redis_client.delete(f"transcode_resume_timestamp:{video_id}")
+        redis_client.delete(f"transcode_resolution:{video_id}")
+        redis_client.delete(f"transcode_timestamp:{video_id}")
     except Exception:
         pass
 
     # 清理缓存文件
-    processed_dir = settings.PROCESSED_DIR / str(task.video_id)
+    processed_dir = settings.PROCESSED_DIR / video_id
     if processed_dir.exists():
         shutil.rmtree(processed_dir)
 
@@ -1461,11 +1529,12 @@ async def cancel_transcode_task(
     task.pause_percent = 0
     task.pause_resolution = None
     task.pause_timestamp = None
+    task.celery_task_id = None
     session.add(task)
 
-    # 如果视频正在转码，标记为 failed
+    # 重置视频状态为 failed
     video = session.get(Video, task.video_id)
-    if video and video.status == "processing":
+    if video and video.status in ("processing", "paused", "pending"):
         video.status = "failed"
         video.progress = 0
         session.add(video)
@@ -1473,6 +1542,62 @@ async def cancel_transcode_task(
     session.commit()
 
     return {"message": "Task cancelled"}
+
+
+@router.post("/videos/{video_id}/cancel-transcode")
+async def cancel_video_transcode(
+    video_id: str,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    取消视频转码（通过video_id，不依赖task_id）
+    """
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # 清理缓存文件
+    processed_dir = settings.PROCESSED_DIR / str(video_id)
+    if processed_dir.exists():
+        shutil.rmtree(processed_dir)
+
+    # 清理所有相关的 Redis 锁
+    try:
+        from tasks import get_redis_client
+        redis_client = get_redis_client()
+        redis_client.delete(f"transcode_lock:{video_id}")
+        redis_client.delete(f"transcode_resume_percent:{video_id}")
+        redis_client.delete(f"transcode_resume_resolution:{video_id}")
+        redis_client.delete(f"transcode_resume_timestamp:{video_id}")
+        redis_client.delete(f"transcode_resolution:{video_id}")
+        redis_client.delete(f"transcode_timestamp:{video_id}")
+    except Exception:
+        pass
+
+    # 查找并删除该视频的所有转码任务
+    tasks = session.exec(select(TranscodeTask).where(
+        TranscodeTask.video_id == video_id,
+        TranscodeTask.status.in_(["pending", "processing", "paused"])
+    )).all()
+
+    for task in tasks:
+        # 终止 Celery 任务
+        if task.celery_task_id:
+            try:
+                celery_app.control.revoke(task.celery_task_id, terminate=True)
+            except Exception:
+                pass
+        session.delete(task)
+
+    # 重置视频状态
+    video.status = "failed"
+    video.progress = 0
+    session.add(video)
+
+    session.commit()
+
+    return {"message": "Transcode cancelled"}
 
 
 @router.post("/transcode/{task_id}/pause")
@@ -1515,6 +1640,12 @@ async def pause_transcode_task(
         pass
 
     session.add(task)
+
+    # 同时更新视频状态
+    if video:
+        video.status = "paused"
+        session.add(video)
+
     session.commit()
 
     return {"message": "Task paused", "pause_percent": task.pause_percent}
@@ -1553,17 +1684,18 @@ async def resume_transcode_task(
     task.celery_task_id = None  # 清除旧的task_id
     session.add(task)
 
-    # 视频状态重置为pending，同时恢复进度
+    # 视频状态设为 processing（立即显示转码中），同时恢复进度
     video = session.get(Video, task.video_id)
     if video:
-        video.status = "pending"
+        video.status = "processing"
         video.progress = task.pause_percent or 0  # 恢复实际进度
         session.add(video)
 
     session.commit()
 
-    # 重新提交Celery任务，传递恢复参数（使用视频ID作为task_id防止重复）
-    transcode_video_task.apply_async(args=[str(task.video_id)], kwargs={"resume": "resume"}, task_id=str(task.video_id))
+    # 重新提交Celery任务，传递恢复参数（使用唯一task_id）
+    new_task_id = f"{task.video_id}-resume"
+    transcode_video_task.apply_async(args=[str(task.video_id)], kwargs={"resume": "resume"}, task_id=new_task_id)
 
     return {"message": "Task resumed", "resume_from_percent": task.pause_percent}
 
@@ -1675,7 +1807,17 @@ async def trigger_transcode(
     video.progress = 0
     session.add(video)
 
-    # 3. 创建/更新转码任务记录
+    # 3. 删除旧的 cancelled/failed/completed 任务
+    old_tasks = session.exec(
+        select(TranscodeTask).where(
+            TranscodeTask.video_id == video.id,
+            TranscodeTask.status.in_(["cancelled", "failed", "completed"])
+        )
+    ).all()
+    for old_task in old_tasks:
+        session.delete(old_task)
+
+    # 4. 创建/更新转码任务记录
     existing_task = session.exec(
         select(TranscodeTask).where(
             TranscodeTask.video_id == video.id,
@@ -1705,8 +1847,10 @@ async def trigger_transcode(
 
     session.commit()
 
-    # 4. 触发 Celery 任务（使用视频ID作为task_id防止重复）
-    transcode_video_task.apply_async(args=[video_id], task_id=video_id)
+    # 5. 触发 Celery 任务（使用唯一的task_id）
+    import uuid
+    celery_task_id = f"{video_id}-transcode-{uuid.uuid4().hex[:8]}"
+    transcode_video_task.apply_async(args=[video_id], task_id=celery_task_id)
 
     return {"message": "Transcode triggered", "task_id": video_id}
 

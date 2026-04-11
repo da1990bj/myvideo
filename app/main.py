@@ -67,6 +67,7 @@ from routers import (
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
+    settings.setup_logging()  # 配置日志格式
     init_db()
     settings.ensure_dirs()
 
@@ -152,7 +153,14 @@ async def get_public_system_config():
         result = {}
         for c in configs:
             result[c.key] = c.value
-        return result
+
+    # 兼容：小写 site_name 映射到大写 SITE_NAME
+    if "site_name" not in result and "SITE_NAME" in result:
+        result["site_name"] = result["SITE_NAME"]
+    elif "site_name" not in result:
+        result["site_name"] = settings.SITE_NAME
+
+    return result
 
 
 # ==================== WebSocket 事件处理 ====================

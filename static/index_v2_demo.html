@@ -356,6 +356,19 @@
                 item.classList.add('active');
             });
         });
+
+        // 动态加载站点名称
+        (async function() {
+            try {
+                const res = await fetch("/system/config");
+                if (res.ok) {
+                    const config = await res.json();
+                    const siteName = config.SITE_NAME || 'MyVideo';
+                    document.title = siteName + ' - 首页';
+                    document.querySelector('.logo').textContent = siteName;
+                }
+            } catch(e) {}
+        })();
     </script>
 </body>
 </html>

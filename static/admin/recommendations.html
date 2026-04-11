@@ -28,6 +28,8 @@
         .form-button:hover { background: #0088b0; }
         .form-button.danger { background: #ff6b6b; }
         .form-button.danger:hover { background: #ff5252; }
+        .form-button.btn-save { background: #2f9e44; border: 2px solid #1a6b2a; font-weight: bold; }
+        .form-button.btn-save:hover { background: #268732; }
 
         /* 表格 */
         .table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
@@ -141,20 +143,20 @@
             <button class="form-button" onclick="loadAnalytics()">查询</button>
         </div>
 
-        <div class="stats">
-            <div class="stat-card">
+        <div class="stats" id="rec-stats-row">
+            <div class="stat-card" data-key="impressions">
                 <div class="stat-value" id="stat-impressions">--</div>
                 <div class="stat-label">总展示次数</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-key="clicks">
                 <div class="stat-value" id="stat-clicks">--</div>
                 <div class="stat-label">总点击次数</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-key="ctr">
                 <div class="stat-value" id="stat-ctr">--</div>
                 <div class="stat-label">点击率 (%)</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-key="watched">
                 <div class="stat-value" id="stat-watched">--</div>
                 <div class="stat-label">观看次数</div>
             </div>
@@ -240,7 +242,7 @@
         </div>
         <div class="modal-footer">
             <button class="form-button" style="background:#666;" onclick="closeModal('slot-modal')">取消</button>
-            <button class="form-button" onclick="saveSlot()">保存</button>
+            <button class="form-button btn-save" onclick="saveSlot()">保存</button>
             <button class="form-button danger" id="delete-slot-btn" style="display:none;" onclick="deleteSlot()">删除</button>
         </div>
     </div>
@@ -279,7 +281,7 @@
         </div>
         <div class="modal-footer">
             <button class="form-button" style="background:#666;" onclick="closeModal('recommendation-modal')">取消</button>
-            <button class="form-button" onclick="saveRecommendation()">添加</button>
+            <button class="form-button btn-save" onclick="saveRecommendation()">添加</button>
         </div>
     </div>
 </div>
@@ -297,6 +299,7 @@
         loadSlots();
         loadRecommendations();
         loadAnalytics();
+        initCardDragSort('rec-stats-row', 'recommendations_stats');
     });
 
     // ==================== Tab 切换 ====================

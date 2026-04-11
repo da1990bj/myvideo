@@ -9,18 +9,20 @@
     <div class="container">
         <h1>角色权限管理</h1>
         <p>注意：修改权限可能会影响系统功能。请谨慎操作。勾选下方权限复选框即可配置此角色的权限。</p>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>角色名称</th>
-                    <th>描述</th>
-                    <th>权限配置</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody id="roles-body"></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>角色名称</th>
+                        <th>描述</th>
+                        <th>权限配置</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="roles-body"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -93,7 +95,7 @@
                             </div>
                         </td>
                         <td style="width: 100px;">
-                            <button class="btn" onclick="saveRole(${role.id})">保存</button>
+                            <button class="btn btn-save" onclick="saveRole(${role.id})">保存</button>
                         </td>
                     `;
                     tbody.appendChild(tr);

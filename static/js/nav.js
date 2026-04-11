@@ -1,6 +1,6 @@
 // 统一导航栏渲染逻辑
 const NAV_API_BASE = "";
-let siteConfig = { site_name: "MyVideo" }; // 默认值
+let siteConfig = { site_name: "MyVideo" }; // 默认值（site_name 大小写敏感，需与后端 SITE_NAME 对应）
 let notifSocket = null; // WebSocket 连接实例
 
 // 带重试的 fetch
@@ -113,13 +113,29 @@ async function loadSiteConfig() {
         const res = await fetchWithRetry("/system/config");
         if (res.ok) {
             const config = await res.json();
-            if (config.site_name) {
-                siteConfig.site_name = config.site_name;
+            if (config.SITE_NAME) {
+                siteConfig.site_name = config.SITE_NAME;
             }
+            // 应用站点名到页面标题和logo
+            applySiteName();
         }
     } catch(e) {
         console.warn("Failed to load site config:", e);
     }
+}
+
+// 应用站点名到页面标题和logo
+function applySiteName() {
+    // 更新 document.title（格式: "页面名 - 站点名"）
+    const titleMatch = document.title.match(/^(.+) - .+$/);
+    if (titleMatch) {
+        document.title = titleMatch[1] + ' - ' + siteConfig.site_name;
+    }
+
+    // 更新所有 logo 元素
+    document.querySelectorAll('.logo').forEach(el => {
+        el.textContent = siteConfig.site_name;
+    });
 }
 
 async function checkNavUser() {

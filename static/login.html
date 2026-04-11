@@ -87,6 +87,19 @@
             eyeIcon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
         }
     }
+
+    // 动态加载站点名称
+    (async function() {
+        try {
+            const res = await fetch("/system/config");
+            if (res.ok) {
+                const config = await res.json();
+                const siteName = config.SITE_NAME || 'MyVideo';
+                document.title = '登录 - ' + siteName;
+                document.querySelector('.logo').textContent = siteName;
+            }
+        } catch(e) {}
+    })();
 </script>
 
 </body>

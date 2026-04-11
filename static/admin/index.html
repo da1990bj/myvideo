@@ -15,58 +15,70 @@
             上次更新：<span id="last-update-time">加载中...</span>
             <button onclick="loadStats()">刷新</button>
         </div>
-        <div class="stats-row">
-            <div class="card stat-card">
+        <div class="stats-row" id="basic-stats-row">
+            <div class="card stat-card" data-key="users">
                 <div class="label">注册用户</div>
                 <div class="num" id="user-count">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" data-key="videos">
                 <div class="label">视频投稿</div>
                 <div class="num" id="video-count">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" data-key="all-videos">
                 <div class="label">历史总数</div>
                 <div class="num" id="all-videos-count">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" data-key="private-videos">
                 <div class="label">私密视频</div>
                 <div class="num" id="private-videos-count">-</div>
             </div>
         </div>
 
         <h3>视频审核状态</h3>
-        <div class="stats-row">
-            <div class="card stat-card">
+        <div class="stats-row" id="audit-stats-row">
+            <div class="card stat-card" data-key="pending">
                 <div class="label">待审核</div>
                 <div class="num" id="pending-videos-count" style="color: #f08c00;">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" data-key="approved">
                 <div class="label">已通过</div>
                 <div class="num" id="approved-videos-count" style="color: #2f9e44;">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" data-key="banned">
                 <div class="label">已下架</div>
                 <div class="num" id="banned-videos-count" style="color: #f04c49;">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" data-key="comments">
                 <div class="label">评论总数</div>
                 <div class="num" id="comment-count">-</div>
             </div>
         </div>
 
         <h2>服务器状态</h2>
-        <div class="stats-row">
-            <div class="card stat-card">
+        <div class="stats-row sortable" id="server-stats-row">
+            <div class="card stat-card" draggable="true" data-key="cpu">
                 <div class="label">CPU 使用率</div>
                 <div class="num" id="cpu-stat">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" draggable="true" data-key="mem">
                 <div class="label">内存使用率</div>
                 <div class="num" id="mem-stat">-</div>
             </div>
-            <div class="card stat-card">
+            <div class="card stat-card" draggable="true" data-key="disk">
                 <div class="label">磁盘使用率</div>
                 <div class="num" id="disk-stat">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="net-sent">
+                <div class="label">网络已发送</div>
+                <div class="num" id="net-sent-stat">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="net-recv">
+                <div class="label">网络已接收</div>
+                <div class="num" id="net-recv-stat">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="conn">
+                <div class="label">网络连接数</div>
+                <div class="num" id="conn-count-stat">-</div>
             </div>
         </div>
     </div>
@@ -100,6 +112,9 @@
                 document.getElementById("cpu-stat").innerText = data.cpu_percent + "%";
                 document.getElementById("mem-stat").innerText = data.memory.percent + "%";
                 document.getElementById("disk-stat").innerText = data.disk.percent + "%";
+                document.getElementById("net-sent-stat").innerText = formatBytes(data.network.bytes_sent);
+                document.getElementById("net-recv-stat").innerText = formatBytes(data.network.bytes_recv);
+                document.getElementById("conn-count-stat").innerText = data.connections_count;
             }
 
             // 更新最后刷新时间
@@ -155,7 +170,20 @@
                 wsEl.textContent = '● WebSocket 连接中...';
                 wsEl.style.color = '#f08c00';
             }
+            // 初始化卡片拖拽排序
+            initCardDragSort('basic-stats-row', 'dashboard_basic');
+            initCardDragSort('audit-stats-row', 'dashboard_audit');
+            initCardDragSort('server-stats-row', 'dashboard_server');
         });
+
+        // 字节数格式化
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
     </script>
 </body>
 </html>

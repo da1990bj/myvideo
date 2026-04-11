@@ -20,6 +20,24 @@ let currentMenu = [...DEFAULT_MENU];
 let apiMenuLoaded = false;
 let sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
 
+// 站点配置
+let siteConfig = { site_name: "MyVideo" }; // 默认值
+
+// 加载站点配置
+async function loadSiteConfig() {
+    try {
+        const res = await fetch("/system/config");
+        if (res.ok) {
+            const config = await res.json();
+            if (config.site_name) {
+                siteConfig.site_name = config.site_name;
+            }
+        }
+    } catch(e) {
+        console.warn("Failed to load site config:", e);
+    }
+}
+
 // 切换侧边栏显示/隐藏
 function toggleSidebar() {
     sidebarCollapsed = !sidebarCollapsed;
@@ -142,13 +160,23 @@ function injectCommonStyles() {
         .stat-card .num, .card .num { font-size: 28px; font-weight: bold; color: #00a1d6; }
         .stat-card .stat-value { font-size: 24px; font-weight: 600; color: #00a1d6; margin-bottom: 4px; }
         .stat-card .stat-label, .card .stat-label { font-size: 12px; color: #999; }
+        .stat-card[draggable="true"], .card[draggable="true"] { cursor: grab; }
+        .stat-card[draggable="true"]:active, .card[draggable="true"]:active { cursor: grabbing; }
+        .stat-card.dragging, .card.dragging { opacity: 0.5; background: #e3f2fd; }
+        .stat-card.drag-over, .card.drag-over { border-top: 3px solid #00a1d6; }
+        .stat-card.drag-over-next, .card.drag-over-next { border-bottom: 3px solid #00a1d6; }
 
         /* 表格样式 */
+        .table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { background: #f5f7fa; padding: 12px; text-align: left; font-size: 14px; font-weight: 600; color: #18191c; border-bottom: 1px solid #f0f0f0; }
+        .table td { padding: 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        .table tr:hover { background: #f5f7fa; }
+        /* 兼容旧的 table 直接样式 */
         table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #fafafa; font-weight: 500; color: #555; }
-        tr:last-child td { border-bottom: none; }
-        tr:hover { background: #f9f9f9; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        th { background: #f5f7fa; font-weight: 600; color: #18191c; font-size: 14px; }
+        tr:hover { background: #f5f7fa; }
 
         /* 状态标签 */
         .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
@@ -176,6 +204,8 @@ function injectCommonStyles() {
         .btn-purple:hover { background: #f3e5f5; }
         .btn-small { padding: 3px 8px; font-size: 11px; }
         .btn-secondary { color: #666; border-color: #ddd; }
+        .btn-save { background: #2f9e44; color: #fff; border: 2px solid #1a6b2a; font-weight: bold; }
+        .btn-save:hover { background: #268732; }
 
         /* 刷新提示 */
         .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
@@ -212,7 +242,7 @@ function renderSidebar(menu) {
     <div id="admin-sidebar">
         <div id="sidebar-inner" style="padding: 20px; height: 100%; box-sizing: border-box; overflow-y: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2 style="margin:0; color:#00a1d6;">MyVideo Admin</h2>
+                <h2 style="margin:0; color:#00a1d6;">${siteConfig.site_name}</h2>
                 <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:none; border:none; cursor:pointer; font-size:20px; color:#999; padding:4px;" title="收起菜单">&#9776;</button>
             </div>
             <div id="menu-container">
@@ -276,11 +306,10 @@ function initSidebarResize() {
     const handle = document.getElementById('sidebar-resize-handle');
     if (!sidebar || !handle) return;
 
-    // 重置为默认宽度
-    sidebar.style.width = defaultWidth + 'px';
-    handle.style.left = defaultWidth + 'px';
-    document.body.style.setProperty('--sidebar-width', (defaultWidth + 40) + 'px');
-    localStorage.setItem('sidebarWidth', defaultWidth);
+    // 恢复保存的宽度
+    sidebar.style.width = savedWidth + 'px';
+    handle.style.left = savedWidth + 'px';
+    document.body.style.setProperty('--sidebar-width', (savedWidth + 40) + 'px');
 
     let isResizing = false;
     let startX = 0;
@@ -289,7 +318,7 @@ function initSidebarResize() {
     handle.addEventListener('mousedown', (e) => {
         isResizing = true;
         startX = e.clientX;
-        startWidth = parseInt(sidebar.style.width) || defaultWidth;
+        startWidth = parseInt(sidebar.style.width) || savedWidth;
         handle.classList.add('resizing');
         e.preventDefault();
     });
@@ -307,7 +336,7 @@ function initSidebarResize() {
         if (!isResizing) return;
         isResizing = false;
         handle.classList.remove('resizing');
-        const finalWidth = parseInt(sidebar.style.width) || defaultWidth;
+        const finalWidth = parseInt(sidebar.style.width) || savedWidth;
         localStorage.setItem('sidebarWidth', finalWidth);
     });
 }
@@ -449,6 +478,127 @@ function initDragAndDrop() {
     });
 }
 
+// 通用卡片拖拽排序初始化
+// pageKey: 页面标识（如 'dashboard_basic'），用于存储到数据库
+function initCardDragSort(containerId, pageKey) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.stat-card, .card');
+    if (cards.length === 0) return;
+
+    let draggedCard = null;
+
+    // 从数据库加载顺序
+    loadCardOrderFromDB(pageKey, (savedOrder) => {
+        if (savedOrder && savedOrder.length > 0) {
+            savedOrder.forEach(key => {
+                const card = container.querySelector(`[data-key="${key}"], [data-id="${key}"]`);
+                if (card) container.appendChild(card);
+            });
+        }
+    });
+
+    cards.forEach(card => {
+        card.setAttribute('draggable', 'true');
+
+        card.addEventListener('dragstart', (e) => {
+            draggedCard = card;
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', card.dataset.key || card.dataset.id || '');
+        });
+
+        card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            cards.forEach(c => {
+                c.classList.remove('drag-over');
+                c.classList.remove('drag-over-next');
+            });
+            // 保存顺序
+            const order = Array.from(container.querySelectorAll('.stat-card, .card')).map(c => c.dataset.key || c.dataset.id || '');
+            // 保存到 localStorage（本地缓存）
+            localStorage.setItem('card_order_' + pageKey, JSON.stringify(order));
+            // 保存到数据库
+            saveCardOrderToDB(pageKey, order);
+            draggedCard = null;
+        });
+
+        card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (card === draggedCard) return;
+
+            cards.forEach(c => c.classList.remove('drag-over', 'drag-over-next'));
+            const rect = card.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            if (e.clientY < midY) {
+                card.classList.add('drag-over');
+            } else {
+                card.classList.add('drag-over-next');
+            }
+        });
+
+        card.addEventListener('dragleave', () => {
+            card.classList.remove('drag-over', 'drag-over-next');
+        });
+
+        card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (card === draggedCard) return;
+
+            const rect = card.getBoundingClientRect();
+            const insertBefore = e.clientY < rect.top + rect.height / 2;
+
+            draggedCard.remove();
+            if (insertBefore) {
+                container.insertBefore(draggedCard, card);
+            } else {
+                container.insertBefore(draggedCard, card.nextSibling);
+            }
+        });
+    });
+}
+
+// 从数据库加载卡片顺序
+async function loadCardOrderFromDB(pageKey, callback) {
+    try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch('/admin/card-order/' + pageKey, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            callback(data);
+        } else {
+            // 失败则尝试从 localStorage 加载
+            const local = localStorage.getItem('card_order_' + pageKey);
+            if (local) callback(JSON.parse(local));
+        }
+    } catch (e) {
+        // 失败则尝试从 localStorage 加载
+        const local = localStorage.getItem('card_order_' + pageKey);
+        if (local) callback(JSON.parse(local));
+    }
+}
+
+// 保存卡片顺序到数据库
+async function saveCardOrderToDB(pageKey, order) {
+    try {
+        const token = localStorage.getItem('access_token');
+        await fetch('/admin/card-order/' + pageKey, {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(order)
+        });
+    } catch (e) {
+        console.warn('Failed to save card order to DB:', e);
+    }
+}
+
 // 初始化
 async function initAdmin() {
     console.log('[Admin] Initializing admin panel...');
@@ -476,6 +626,8 @@ async function initAdmin() {
             // 先加载菜单顺序，再渲染侧边栏
             console.log('[Admin] Loading menu order...');
             await loadMenuOrderFromAPI();
+            console.log('[Admin] Loading site config...');
+            await loadSiteConfig();
             console.log('[Admin] Current menu:', currentMenu.length, 'items');
             renderSidebar(currentMenu);
             initCardWidthControl();

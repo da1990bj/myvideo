@@ -115,7 +115,7 @@
         .ctrl-dropdown {
             position: relative;
         }
-        #settings-dropdown {
+        #settings-dropdown, #subtitle-dropdown {
             position: static;
         }
         .dropdown-menu {
@@ -125,12 +125,17 @@
             background: rgba(0,0,0,0.9);
             border-radius: 4px;
             padding: 4px 0;
-            min-width: 80px;
+            min-width: 120px;
             z-index: 200;
             display: none;
+            text-align: left;
         }
         .dropdown-menu.show {
             display: block;
+        }
+        #subtitle-menu {
+            max-height: 200px;
+            overflow-y: auto;
         }
         .dropdown-item {
             padding: 6px 12px;
@@ -460,6 +465,11 @@
     <div class="main-content">
         <div class="player-wrapper" id="player-wrapper">
             <video id="player" autoplay poster=""></video>
+
+            <!-- 字幕覆盖层 -->
+            <div id="subtitle-overlay" style="position:absolute; bottom:60px; left:50%; transform:translateX(-50%); text-align:center; width:80%; max-width:800px; pointer-events:none; z-index:100; display:none;">
+                <div id="subtitle-text" style="background:rgba(0,0,0,0.75); color:#fff; font-size:18px; line-height:1.6; padding:8px 16px; border-radius:4px; display:inline-block;"></div>
+            </div>
 
             <!-- 右上角：投屏和画中画 -->
             <div id="top-controls" class="top-controls">
@@ -800,6 +810,16 @@
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 hlsReady = true;
+
+                // 禁用 HLS 内嵌字幕，使用外部字幕渲染
+                if (hls.subtitleTracks && hls.subtitleTracks.length > 0) {
+                    console.log('[MANIFEST] HLS subtitle tracks found:', hls.subtitleTracks.length, '(using external subtitles)');
+                    hls.subtitleTracks.forEach((track, idx) => {
+                        console.log(`[MANIFEST] Track ${idx}: lang=${track.lang}, url=${track.url || 'none'}`);
+                    });
+                }
+                hls.subtitleTrack = -1;  // 禁用 HLS 字幕，使用手动渲染
+
                 player.play().catch(() => {});
             });
 
@@ -1551,6 +1571,16 @@
                     hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
                         hlsReady = true;
                         setupHlsQuality(hls);
+
+                        // 禁用 HLS 内嵌字幕，使用外部字幕渲染
+                        if (hls.subtitleTracks && hls.subtitleTracks.length > 0) {
+                            console.log('[MANIFEST] HLS subtitle tracks found:', hls.subtitleTracks.length, '(using external subtitles)');
+                            hls.subtitleTracks.forEach((track, idx) => {
+                                console.log(`[MANIFEST] Track ${idx}: lang=${track.lang}, url=${track.url || 'none'}`);
+                            });
+                        }
+                        hls.subtitleTrack = -1;  // 禁用 HLS 字幕，使用手动渲染
+
                         // 如果 loadedmetadata 已触发，直接恢复位置
                         if (player.duration > 0) {
                             restorePlaybackPosition();
@@ -2270,50 +2300,183 @@
     }
 
     function getLanguageName(code) {
+        // 扩展语言代码映射表
         const names = {
-            "en": "English", "zh": "中文", "zh-Hans": "简体中文",
-            "zh-Hant": "繁体中文", "es": "Español", "fr": "Français",
-            "de": "Deutsch", "ja": "日本語", "ko": "한국어"
+            // 标准 ISO 639-1 代码
+            "en": "English", "zh": "中文", "es": "Español", "fr": "Français",
+            "de": "Deutsch", "ja": "日本語", "ko": "한국어", "it": "Italiano",
+            "pt": "Português", "ru": "Русский", "ar": "العربية", "hi": "हिन्दी",
+            "th": "ไทย", "vi": "Tiếng Việt", "id": "Bahasa Indonesia",
+            "ms": "Bahasa Melayu", "fil": "Filipino", "nl": "Nederlands",
+            "pl": "Polski", "tr": "Türkçe", "uk": "Українська",
+            // 中文变体
+            "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "zh-CN": "简体中文",
+            "zh-TW": "繁體中文", "zh-HK": "繁體中文",
+            // 常见英文别名
+            "english": "English", "chinese": "中文", "japanese": "日本語",
+            "korean": "한국어", "spanish": "Español", "french": "Français",
+            "german": "Deutsch", "portuguese": "Português",
+            // 常见中文别名
+            "英文": "English", "中文": "中文", "日文": "日本語", "韩文": "한국어",
+            "法文": "Français", "德文": "Deutsch", "西班牙语": "Español",
         };
-        return names[code] || code.toUpperCase();
+        // 转为小写匹配
+        const lowerCode = code.toLowerCase();
+        return names[lowerCode] || names[code] || code;
     }
+
+    // 字幕状态管理
+    let currentSubtitle = null;
+    let subtitleCues = [];  // 解析后的字幕条目
+    let subtitleUpdateTimer = null;
 
     function enableSubtitle(sub) {
         const player = document.getElementById('player');
 
-        // Hide all existing tracks
-        for (let i = player.textTracks.length - 1; i >= 0; i--) {
-            player.textTracks[i].mode = 'disabled';
+        console.log('[Subtitle] Enabling subtitle:', sub);
+
+        // 禁用 HLS 内嵌字幕
+        if (window.hls) {
+            window.hls.subtitleTrack = -1;
         }
 
-        // Add the subtitle track
-        const track = document.createElement('track');
-        track.kind = 'subtitles';
-        track.label = getLanguageName(sub.language);
-        track.src = sub.url;
-        track.srclang = sub.language;
-        track.mode = 'showing';
-        player.appendChild(track);
-        currentSubtitleTrack = track;
+        // 隐藏所有 textTracks
+        for (let i = player.textTracks.length - 1; i >= 0; i--) {
+            player.textTracks[i].mode = 'hidden';
+        }
+
+        // 清除之前的字幕
+        disableSubtitles();
+
+        currentSubtitle = sub;
         currentSubtitleLang = sub.language;
+
+        // 显示字幕覆盖层
+        const overlay = document.getElementById('subtitle-overlay');
+        if (overlay) overlay.style.display = 'block';
+
+        // 加载并解析字幕文件
+        loadSubtitleFile(sub.url);
 
         // Refresh menu to show active state
         setupSubtitleUI(availableSubtitles);
     }
 
-    function disableSubtitles() {
-        if (currentSubtitleTrack) {
-            currentSubtitleTrack.mode = 'hidden';
-            currentSubtitleTrack = null;
+    function loadSubtitleFile(url) {
+        fetch(url)
+            .then(res => res.text())
+            .then(text => {
+                subtitleCues = parseVTT(text);
+                console.log('[Subtitle] Loaded', subtitleCues.length, 'cues');
+                startSubtitleSync();
+            })
+            .catch(err => {
+                console.error('[Subtitle] Failed to load subtitle file:', err);
+            });
+    }
+
+    function parseVTT(text) {
+        const cues = [];
+        const lines = text.split('\n');
+        let i = 0;
+
+        // 跳过 WEBVTT 头
+        while (i < lines.length && !lines[i].includes('-->')) {
+            i++;
         }
-        currentSubtitleLang = null;
-        // Also clear all text tracks
+
+        while (i < lines.length) {
+            const line = lines[i].trim();
+            if (line.includes('-->')) {
+                const [start, end] = line.split('-->').map(t => t.trim());
+                let text = '';
+                i++;
+                while (i < lines.length && lines[i].trim() !== '') {
+                    text += (text ? '\n' : '') + lines[i].trim();
+                    i++;
+                }
+                if (text) {
+                    cues.push({
+                        start: parseTimestamp(start),
+                        end: parseTimestamp(end),
+                        text: text
+                    });
+                }
+            } else {
+                i++;
+            }
+        }
+        return cues;
+    }
+
+    function parseTimestamp(ts) {
+        // 解析 VTT 时间戳 (00:00:00.000 或 00:00.000)
+        const parts = ts.split(':');
+        let seconds = 0;
+        if (parts.length === 3) {
+            seconds = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
+        } else if (parts.length === 2) {
+            seconds = parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+        }
+        return seconds;
+    }
+
+    function startSubtitleSync() {
         const player = document.getElementById('player');
-        for (let i = player.textTracks.length - 1; i >= 0; i--) {
-            player.textTracks[i].mode = 'hidden';
+        const subtitleText = document.getElementById('subtitle-text');
+
+        if (subtitleUpdateTimer) {
+            clearInterval(subtitleUpdateTimer);
         }
+
+        subtitleUpdateTimer = setInterval(() => {
+            if (!currentSubtitle || !player) return;
+
+            const currentTime = player.currentTime;
+            const cue = subtitleCues.find(c => currentTime >= c.start && currentTime <= c.end);
+
+            if (cue) {
+                subtitleText.textContent = cue.text;
+            } else {
+                subtitleText.textContent = '';
+            }
+        }, 100);  // 每100ms检查一次
+    }
+
+    function disableSubtitles() {
+        if (subtitleUpdateTimer) {
+            clearInterval(subtitleUpdateTimer);
+            subtitleUpdateTimer = null;
+        }
+        subtitleCues = [];
+        currentSubtitle = null;
+        currentSubtitleLang = null;
+
+        // 禁用 HLS 字幕
+        if (window.hls) {
+            window.hls.subtitleTrack = -1;
+        }
+
+        // 隐藏字幕覆盖层
+        const overlay = document.getElementById('subtitle-overlay');
+        if (overlay) overlay.style.display = 'none';
+
+        // 清空字幕文本
+        const subtitleText = document.getElementById('subtitle-text');
+        if (subtitleText) subtitleText.textContent = '';
+
+        // 隐藏所有 textTracks
+        const player = document.getElementById('player');
+        if (player) {
+            for (let i = player.textTracks.length - 1; i >= 0; i--) {
+                player.textTracks[i].mode = 'hidden';
+            }
+        }
+
         // Refresh menu to show active state
-        setupSubtitleUI(availableSubtitles);
+        if (typeof setupSubtitleUI === 'function') {
+            setupSubtitleUI(availableSubtitles);
+        }
     }
 
     // ==================== 播放位置记忆 ====================

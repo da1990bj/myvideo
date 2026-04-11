@@ -8,18 +8,20 @@
     <script src="/static/admin/admin.js"></script>
     <div class="container">
         <h1>操作日志</h1>
-        <table>
-            <thead>
-                <tr>
-                    <th>时间</th>
-                    <th>管理员</th>
-                    <th>动作</th>
-                    <th>目标ID</th>
-                    <th>详情</th>
-                </tr>
-            </thead>
-            <tbody id="logs-body"></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>管理员</th>
+                        <th>动作</th>
+                        <th>目标ID</th>
+                        <th>详情</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-body"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>

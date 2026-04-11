@@ -2445,14 +2445,19 @@ async def get_subtitles(
 
     subtitles = []
     if video.subtitle_languages:
+        subtitle_dir = settings.PROCESSED_DIR / str(video_id) / "subtitles"
         for lang in video.subtitle_languages:
-            url = f"/static/videos/processed/{video_id}/subtitles/{lang}.vtt"
-            is_auto = video.auto_subtitle and video.auto_subtitle_language == lang
-            subtitles.append(SubtitleRead(
-                language=lang,
-                url=url,
-                is_auto_generated=is_auto
-            ))
+            # 查找匹配语言的 VTT 文件（可能名为 {lang}.vtt 或 track{index}_{lang}.vtt）
+            vtt_files = list(subtitle_dir.glob(f"*{lang}*.vtt")) if subtitle_dir.exists() else []
+            if vtt_files:
+                vtt_file = vtt_files[0]
+                url = f"/static/videos/processed/{video_id}/subtitles/{vtt_file.name}"
+                is_auto = video.auto_subtitle and video.auto_subtitle_language == lang
+                subtitles.append(SubtitleRead(
+                    language=lang,
+                    url=url,
+                    is_auto_generated=is_auto
+                ))
     return subtitles
 
 
@@ -2471,13 +2476,15 @@ async def delete_subtitle(
     if video.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    subtitle_path = settings.PROCESSED_DIR / str(video_id) / "subtitles" / f"{language}.vtt"
-    if subtitle_path.exists():
-        subtitle_path.unlink()
+    subtitle_dir = settings.PROCESSED_DIR / str(video_id) / "subtitles"
+    # 查找匹配语言的 VTT 文件（可能名为 {lang}.vtt 或 track{index}_{lang}.vtt）
+    vtt_files = list(subtitle_dir.glob(f"*{language}*.vtt")) if subtitle_dir.exists() else []
+    for vtt_file in vtt_files:
+        vtt_file.unlink()
 
-    subtitle_m3u8 = settings.PROCESSED_DIR / str(video_id) / "subtitles" / f"{language}.m3u8"
-    if subtitle_m3u8.exists():
-        subtitle_m3u8.unlink()
+    m3u8_files = list(subtitle_dir.glob(f"*{language}*.m3u8")) if subtitle_dir.exists() else []
+    for m3u8_file in m3u8_files:
+        m3u8_file.unlink()
 
     if video.subtitle_languages and language in video.subtitle_languages:
         video.subtitle_languages.remove(language)

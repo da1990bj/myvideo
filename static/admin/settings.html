@@ -29,6 +29,8 @@
         .btn:hover { background: #008dbd; }
         .btn-success { background: #2f9e44; }
         .btn-success:hover { background: #268732; }
+        #env-save-btn { background: #2f9e44 !important; font-weight: bold; border: 2px solid #1a6b2a !important; }
+        #env-save-btn:hover { background: #268732 !important; }
         .btn-warning { background: #f08c00; }
         .btn-warning:hover { background: #d77900; }
         .btn-danger { background: #f04c49; }
@@ -57,8 +59,8 @@
         .message.info { background: #e3f2fd; color: #00a1d6; }
 
         /* 浮动保存按钮 */
-        #save-btn { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; background: #2f9e44; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; display: none; }
-        #save-btn:hover { background: #268732; }
+        #save-btn { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; background: #2f9e44 !important; color: #fff !important; border: 2px solid #1a6b2a !important; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; display: none; }
+        #save-btn:hover { background: #268732 !important; border-color: #14521d !important; }
         #save-btn.show { display: block; }
 
         /* 任务管理 */
@@ -153,7 +155,7 @@
             </div>
 
             <div style="margin-top: 15px;">
-                <button class="btn" onclick="saveStorageToDb()">保存配置</button>
+                <button class="btn btn-save" onclick="saveStorageToDb()">保存配置</button>
                 <span style="color: #888; margin-left: 10px;">保存后自动热更新</span>
             </div>
 
@@ -210,7 +212,7 @@
             </div>
 
             <div style="margin-top: 20px;">
-                <button class="btn" onclick="saveTranscodeConfig()">保存转码配置</button>
+                <button class="btn btn-save" onclick="saveTranscodeConfig()">保存转码配置</button>
                 <span style="color: #888; margin-left: 10px;">部分配置需要重启 Celery worker 生效</span>
             </div>
         </div>
@@ -220,12 +222,12 @@
             <div id="cold-message"></div>
 
             <h3>冷存储配置</h3>
-            <div class="stats-grid">
-                <div class="stat-card">
+            <div class="stats-grid" id="cold-stats-row">
+                <div class="stat-card" data-key="candidates">
                     <div class="label">待迁移视频</div>
                     <div class="value" id="cold-candidates">-</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" data-key="cold-count">
                     <div class="label">冷存储视频</div>
                     <div class="value" id="cold-count">-</div>
                 </div>
@@ -252,7 +254,7 @@
                     <label class="label">触发冷存储播放量阈值（低于此播放量）</label>
                     <input type="number" class="input" id="cold-views-input" style="max-width: 200px;" min="0">
                 </div>
-                <button class="btn" onclick="saveColdStorageConfig()">保存冷存储配置</button>
+                <button class="btn btn-save" onclick="saveColdStorageConfig()">保存冷存储配置</button>
             </div>
 
             <h3 style="margin-top:30px;">可迁移视频 <span id="candidates-count" style="font-size:14px;color:#888;font-weight:normal;">(超过设定天数且播放量低于阈值)</span></h3>
@@ -306,6 +308,7 @@
             "APP_HOST": "服务监听地址",
             "APP_PORT": "服务监听端口",
             "APP_DEBUG": "调试模式",
+            "SITE_NAME": "站点名称",
             "SHARE_BASE_URL": "分享链接公开地址",
             "STATIC_SUBDIR": "静态文件目录",
             "UPLOADS_SUBDIR": "上传视频目录",
@@ -420,16 +423,28 @@
                     const displayValue = isPassword ? '••••••••' : value;
                     const displayName = CONFIG_NAMES[key] || key;
 
-                    group.innerHTML = `
-                        <label class="label" title="${key}">${displayName}</label>
-                        <input type="${inputType}"
-                               class="input"
-                               id="env-${key}"
-                               value="${escapeHtml(value)}"
-                               data-original="${escapeHtml(value)}"
-                               placeholder="${displayName}"
-                               ${isPassword ? 'readonly onfocus="this.removeAttribute(\'readonly\')"' : ''}>
-                    `;
+                    // LOG_LEVEL 使用下拉选择
+                    if (key === 'LOG_LEVEL') {
+                        const levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
+                        const currentLevel = (value || 'INFO').toUpperCase();
+                        group.innerHTML = `
+                            <label class="label" title="${key}">${displayName}</label>
+                            <select class="input" id="env-${key}" data-original="${currentLevel}" style="max-width: 150px;">
+                                ${levels.map(l => `<option value="${l}" ${l === currentLevel ? 'selected' : ''}>${l}</option>`).join('')}
+                            </select>
+                        `;
+                    } else {
+                        group.innerHTML = `
+                            <label class="label" title="${key}">${displayName}</label>
+                            <input type="${inputType}"
+                                   class="input"
+                                   id="env-${key}"
+                                   value="${escapeHtml(value)}"
+                                   data-original="${escapeHtml(value)}"
+                                   placeholder="${displayName}"
+                                   ${isPassword ? 'readonly onfocus="this.removeAttribute(\'readonly\')"' : ''}>
+                        `;
+                    }
                     sectionDiv.appendChild(group);
                 }
 
@@ -439,6 +454,9 @@
             // 添加变更检测
             container.querySelectorAll('.input').forEach(input => {
                 input.addEventListener('input', () => {
+                    checkChanges();
+                });
+                input.addEventListener('change', () => {
                     checkChanges();
                 });
             });
@@ -580,7 +598,7 @@
                                            value="${d.subdir}" style="max-width: 300px;">
                                 </td>
                                 <td style="padding: 8px; text-align: right;">
-                                    <button class="btn" onclick="saveStorageDir('${d.key}')">保存</button>
+                                    <button class="btn btn-save" onclick="saveStorageDir('${d.key}')">保存</button>
                                 </td>
                             </tr>
                         `).join("")}
@@ -1206,6 +1224,7 @@
             loadStorageConfig();
             loadTranscodeConfig();
             loadColdStorageConfig();
+            initCardDragSort('cold-stats-row', 'settings_cold');
         });
     </script>
 </body>

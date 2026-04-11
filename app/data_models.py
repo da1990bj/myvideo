@@ -99,7 +99,7 @@ class Video(SQLModel, table=True):
     processed_file_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
 
-    status: str = Field(default="pending")  # 转码状态: pending, processing, completed, failed
+    status: str = Field(default="pending")  # 转码状态: pending, processing, paused, completed, failed
     is_approved: str = Field(default="pending", index=True)  # 审核状态: pending, approved, banned, appealing
     is_deleted: bool = Field(default=False, index=True)  # 软删除
     visibility: str = Field(default="public")
