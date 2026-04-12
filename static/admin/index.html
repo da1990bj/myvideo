@@ -28,6 +28,10 @@
                 <div class="label">历史总数</div>
                 <div class="num" id="all-videos-count">-</div>
             </div>
+            <div class="card stat-card" data-key="comments">
+                <div class="label">评论总数</div>
+                <div class="num" id="comment-count">-</div>
+            </div>
             <div class="card stat-card" data-key="private-videos">
                 <div class="label">私密视频</div>
                 <div class="num" id="private-videos-count">-</div>
@@ -48,9 +52,9 @@
                 <div class="label">已下架</div>
                 <div class="num" id="banned-videos-count" style="color: #f04c49;">-</div>
             </div>
-            <div class="card stat-card" data-key="comments">
-                <div class="label">评论总数</div>
-                <div class="num" id="comment-count">-</div>
+            <div class="card stat-card" data-key="appealing">
+                <div class="label">申诉数</div>
+                <div class="num" id="appealing-videos-count" style="color: #8b5cf6;">-</div>
             </div>
         </div>
 
@@ -100,6 +104,7 @@
                 document.getElementById("pending-videos-count").innerText = data.pending_videos_count;
                 document.getElementById("approved-videos-count").innerText = data.approved_videos_count;
                 document.getElementById("banned-videos-count").innerText = data.banned_videos_count;
+                document.getElementById("appealing-videos-count").innerText = data.appealing_videos_count;
                 document.getElementById("comment-count").innerText = data.comments;
             }
 

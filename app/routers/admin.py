@@ -135,6 +135,7 @@ async def get_admin_stats(
     pending_videos = session.exec(select(func.count()).select_from(Video).where(Video.is_deleted == False, Video.is_approved == "pending")).one()
     approved_videos = session.exec(select(func.count()).select_from(Video).where(Video.is_deleted == False, Video.is_approved == "approved")).one()
     banned_videos = session.exec(select(func.count()).select_from(Video).where(Video.is_deleted == False, Video.is_approved == "banned")).one()
+    appealing_videos = session.exec(select(func.count()).select_from(Video).where(Video.is_deleted == False, Video.is_approved == "appealing")).one()
 
     pending = session.exec(select(Video).where(Video.status == "pending", Video.is_deleted == False).order_by(Video.created_at)).all()
     processing = session.exec(select(Video).where(Video.status == "processing", Video.is_deleted == False).order_by(Video.created_at)).all()
@@ -154,6 +155,7 @@ async def get_admin_stats(
         "pending_videos_count": pending_videos,
         "approved_videos_count": approved_videos,
         "banned_videos_count": banned_videos,
+        "appealing_videos_count": appealing_videos,
         "comments": comments,
         "pending_videos": pending,
         "processing_videos": processing,

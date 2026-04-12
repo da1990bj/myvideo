@@ -17,6 +17,9 @@
         /* 视频信息 */
         .video-title { font-size: 20px; font-weight: 600; margin: 0 0 10px; line-height: 28px; }
 
+        /* 视频信息 */
+        .video-title { font-size: 20px; font-weight: 600; margin: 0 0 12px; line-height: 28px; }
+
         /* 自定义控件栏 */
         .custom-controls {
             position: absolute;
@@ -100,6 +103,13 @@
             opacity: 0.4;
             cursor: not-allowed;
             pointer-events: none;
+        }
+        .ctrl-btn.active {
+            background: rgba(255,255,255,0.3);
+            color: #4fc3f7;
+        }
+        #rotate-btn {
+            display: none;
         }
         .time-display {
             color: white;
@@ -285,7 +295,7 @@
         }
 
         /* 视频信息 */
-        .video-title { font-size: 20px; font-weight: 600; margin: 0 0 10px; line-height: 28px; }
+        .video-title { font-size: 20px; font-weight: 600; margin: 0 0 12px; line-height: 28px; }
         .video-meta { font-size: 14px; color: #606060; display: flex; align-items: center; gap: 10px; margin-bottom: 12px;}
 
         .description-box { background: #f2f2f2; padding: 12px; border-radius: 12px; font-size: 14px; line-height: 20px; margin-bottom: 24px; color: #0f0f0f;}
@@ -501,6 +511,14 @@
                     </div>
                     <span id="time-display" class="time-display">0:00 / 0:00</span>
 
+                    <!-- 5秒后退/前进 -->
+                    <button id="rewind-btn" class="ctrl-btn" title="后退5秒">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="12" y="15" font-size="7" text-anchor="middle" fill="currentColor">5</text></svg>
+                    </button>
+                    <button id="forward-btn" class="ctrl-btn" title="前进5秒">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="12" y="15" font-size="7" text-anchor="middle" fill="currentColor">5</text></svg>
+                    </button>
+
                     <div class="ctrl-right">
                         <!-- 分辨率选择 -->
                         <select id="quality-select" class="ctrl-select" style="display:none;">
@@ -541,6 +559,11 @@
                         </div>
                         <button id="theater-btn" class="ctrl-btn" onclick="toggleTheaterMode()" title="宽屏模式">
                             <svg id="theater-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H5V8h14v8z"/></svg>
+                        </button>
+                        <!-- 横屏/竖屏切换 -->
+                        <button id="rotate-btn" class="ctrl-btn" onclick="toggleRotate()" title="横屏/竖屏">
+                            <svg id="rotate-portrait-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.17l6.36-6.36 12.02 12.02-6.36 6.36zm-7.31.29C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/></svg>
+                            <svg id="rotate-landscape-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.17l6.36-6.36 12.02 12.02-6.36 6.36zm-7.31.29C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/></svg>
                         </button>
                         <button id="fullscreen-btn" class="ctrl-btn" title="全屏">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
@@ -628,7 +651,7 @@
             </div>
         </div>
 
-        <div id="rec-list"></div>
+        <div id="rec-list" style="background:#fff; border:1px solid #e5e5e5; border-radius:12px; overflow:hidden;"></div>
     </div>
 </div>
 
@@ -1724,7 +1747,7 @@
 
                 // 添加标题
                 const title = document.createElement("div");
-                title.style.cssText = "padding:12px; font-size:14px; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; margin-bottom:8px;";
+                title.style.cssText = "padding:12px; font-size:14px; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0;";
                 title.innerHTML = `<span style="color:#00a1d6;">✨</span> 相关推荐`;
                 l.appendChild(title);
 
@@ -1947,6 +1970,91 @@
         }
     }
 
+    // ==================== 横屏/竖屏切换 ====================
+    let isLandscape = false;  // 当前是否横屏锁定
+
+    function toggleRotate() {
+        // 检查 Screen Orientation API 是否可用
+        if (!screen.orientation || !screen.orientation.lock) {
+            // 不支持 Screen Orientation API，尝试使用全屏旋转方式
+            toggleRotateFullscreen();
+            return;
+        }
+
+        const portraitIcon = document.getElementById('rotate-portrait-icon');
+        const landscapeIcon = document.getElementById('rotate-landscape-icon');
+        const btn = document.getElementById('rotate-btn');
+
+        if (!isLandscape) {
+            // 锁定横屏
+            screen.orientation.lock('landscape').then(() => {
+                isLandscape = true;
+                portraitIcon.style.display = 'none';
+                landscapeIcon.style.display = 'block';
+                btn.classList.add('active');
+            }).catch(err => {
+                console.warn('锁定横屏失败，尝试全屏方式:', err);
+                toggleRotateFullscreen();
+            });
+        } else {
+            // 解除锁定
+            screen.orientation.unlock();
+            isLandscape = false;
+            portraitIcon.style.display = 'block';
+            landscapeIcon.style.display = 'none';
+            btn.classList.remove('active');
+        }
+    }
+
+    // 全屏旋转方式（备选方案）
+    function toggleRotateFullscreen() {
+        const portraitIcon = document.getElementById('rotate-portrait-icon');
+        const landscapeIcon = document.getElementById('rotate-landscape-icon');
+        const btn = document.getElementById('rotate-btn');
+        const playerWrapper = document.getElementById('player-wrapper');
+
+        if (!isLandscape) {
+            // 进入全屏并旋转
+            if (!document.fullscreenElement) {
+                playerWrapper.requestFullscreen().then(() => {
+                    screen.orientation.lock('landscape').catch(() => {});
+                }).catch(err => {
+                    console.warn('全屏失败:', err);
+                });
+            } else {
+                screen.orientation.lock('landscape').catch(() => {});
+            }
+            isLandscape = true;
+            portraitIcon.style.display = 'none';
+            landscapeIcon.style.display = 'block';
+            btn.classList.add('active');
+        } else {
+            // 退出全屏
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            }
+            isLandscape = false;
+            portraitIcon.style.display = 'block';
+            landscapeIcon.style.display = 'none';
+            btn.classList.remove('active');
+        }
+    }
+
+    // 监听屏幕方向变化（解除锁定时重置状态）
+    if (screen.orientation) {
+        screen.orientation.addEventListener('change', () => {
+            if (!screen.orientation.type.includes('landscape')) {
+                isLandscape = false;
+                const portraitIcon = document.getElementById('rotate-portrait-icon');
+                const landscapeIcon = document.getElementById('rotate-landscape-icon');
+                const btn = document.getElementById('rotate-btn');
+                if (portraitIcon) portraitIcon.style.display = 'block';
+                if (landscapeIcon) landscapeIcon.style.display = 'none';
+                if (btn) btn.classList.remove('active');
+            }
+        });
+    }
+
     // ==================== 自定义播放器控件 ====================
     let hlsInstance = null;  // 保存HLS实例供控件使用
     let hlsReady = false;  // HLS是否已就绪
@@ -2123,7 +2231,10 @@
 	        const topControls = document.getElementById('top-controls');
 	        document.addEventListener('fullscreenchange', () => {
 	            const isFullscreen = !!document.fullscreenElement;
+	            const rotateBtn = document.getElementById('rotate-btn');
 	            if (isFullscreen) {
+	                // 全屏时显示横屏按钮
+	                if (rotateBtn) rotateBtn.style.display = '';
 	                const showControls = () => {
 	                    customControls.style.opacity = '1';
 	                    topControls.style.opacity = '1';
@@ -2135,9 +2246,21 @@
 	                playerWrapper.addEventListener('mousemove', showControls);
 	                showControls();
 	            } else {
+	                // 退出全屏时隐藏横屏按钮
+	                if (rotateBtn) rotateBtn.style.display = 'none';
 	                customControls.style.opacity = '1';
 	                if (controlsTimeout) clearTimeout(controlsTimeout);
 	            }
+	        });
+
+	        // 5秒后退/前进按钮
+	        document.getElementById('rewind-btn').addEventListener('click', () => {
+	            const targetTime = Math.max(0, player.currentTime - 5);
+	            player.currentTime = targetTime;
+	        });
+	        document.getElementById('forward-btn').addEventListener('click', () => {
+	            const targetTime = Math.min(player.duration, player.currentTime + 5);
+	            player.currentTime = targetTime;
 	        });
 
 	        // 画中画按钮
