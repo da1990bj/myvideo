@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>合集详情 - MyVideo</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f5f7; color: #333; }
+        .container { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 1fr 400px; gap: 24px; }
+        .main-content { grid-column: 1 / 2; }
+
+        /* 播放器区域 */
+        .player-wrapper { width: 100%; aspect-ratio: 16/9; background: #000; margin-bottom: 16px; position: relative; }
+        .player-wrapper video { width: 100%; height: 100%; }
+
+        header { background: #fff; height: 64px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+        .logo { font-size: 24px; font-weight: bold; color: #00a1d6; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .nav-center { flex: 1; max-width: 600px; margin: 0 40px; }
+        .search-box { width: 100%; padding: 8px 16px; border-radius: 20px; border: 1px solid #e7e7e7; background: #f4f4f4; outline: none; transition: 0.2s; }
+        .search-box:focus { background: #fff; border-color: #00a1d6; }
+        .nav-right { display: flex; gap: 20px; align-items: center; }
+        .upload-btn { background: #fb7299; color: #fff; padding: 6px 20px; border-radius: 4px; text-decoration: none; font-size: 14px; transition: 0.2s; }
+        .upload-btn:hover { background: #ff85ad; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: #ccc; cursor: pointer; object-fit: cover; }
+        .login-btn { color: #00a1d6; text-decoration: none; font-size: 14px; cursor: pointer; }
+
+        /* 合集信息 */
+        .collection-title-bar { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+        .collection-title-text { font-size: 18px; font-weight: bold; color: #18191c; }
+        .collection-meta-bar { font-size: 13px; color: #9499a0; }
+        .collection-meta-bar span { margin-right: 16px; }
+
+        /* 视频信息区 */
+        .video-info-section { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .video-title { font-size: 20px; font-weight: 600; color: #18191c; margin: 0 0 12px; line-height: 1.4; }
+        .video-meta { font-size: 13px; color: #666; margin-bottom: 12px; }
+        .video-meta span { margin-right: 16px; }
+        .video-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .video-tag { background: #f4f5f7; color: #666; padding: 4px 12px; border-radius: 16px; font-size: 12px; }
+        .video-actions { display: flex; gap: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+        .action-btn { padding: 8px 20px; border-radius: 4px; font-size: 14px; cursor: pointer; transition: 0.2s; border: none; }
+        .action-btn.like { background: #fff0f5; color: #e6507a; border: 1px solid #e6507a; }
+        .action-btn.like:hover { background: #ffe6ec; }
+        .action-btn.share { background: #f0f9ff; color: #00a1d6; border: 1px solid #00a1d6; }
+        .action-btn.share:hover { background: #e0f4ff; }
+
+        /* 播放列表 */
+        .playlist-section { background: #fff; border-radius: 8px; overflow: hidden; }
+        .playlist-header { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+        .playlist-count { font-size: 13px; color: #9499a0; font-weight: normal; }
+        .playlist-item { display: flex; gap: 12px; padding: 12px 20px; cursor: pointer; transition: background 0.2s; }
+        .playlist-item:hover { background: #f5f5f5; }
+        .playlist-item.active { background: #e7f5ff; }
+        .playlist-thumb { width: 100px; height: 56px; border-radius: 6px; overflow: hidden; flex-shrink: 0; background: #f0f0f0; position: relative; }
+        .playlist-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .playlist-thumb .duration { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+        .playlist-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .playlist-title { font-size: 14px; color: #18191c; margin-bottom: 4px; }
+        .playlist-meta { font-size: 12px; color: #9499a0; }
+
+        .loading { text-align: center; padding: 60px; color: #999; }
+        .empty { text-align: center; padding: 60px; color: #999; }
+        .no-video { text-align: center; padding: 40px; color: #999; }
+
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<script src="/static/js/nav.js"></script>
+
+<div class="container">
+    <!-- 左侧主内容 -->
+    <div class="main-content">
+        <!-- 播放器 -->
+        <div class="player-wrapper" id="player-wrapper">
+            <div class="no-video">点击下方剧集开始播放</div>
+        </div>
+
+        <!-- 视频信息 -->
+        <div class="video-info-section" id="video-info">
+            <h1 class="video-title" id="video-title">选择一个视频开始播放</h1>
+            <div class="video-meta" id="video-meta"></div>
+            <div class="video-tags" id="video-tags"></div>
+            <div class="video-actions">
+                <button class="action-btn like" id="like-btn" onclick="toggleLike()">👍 点赞</button>
+                <button class="action-btn share" onclick="shareVideo()">📤 分享</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧播放列表 -->
+    <div class="playlist-section">
+        <div class="playlist-header">
+            <span id="playlist-title">选集</span>
+            <span class="playlist-count" id="playlist-count"></span>
+        </div>
+        <div class="playlist-items" id="playlist-items">
+            <div class="loading">正在加载...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const collectionId = urlParams.get('id');
+    let collectionData = null;
+    let currentVideoId = null;
+    let playlistVideos = [];
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!collectionId) {
+            alert("合集不存在");
+            window.location.href = "/";
+            return;
+        }
+        loadCollection();
+    });
+
+    async function loadCollection() {
+        try {
+            const res = await fetch(`/collections/${collectionId}`);
+            if (!res.ok) throw new Error("Failed to load collection");
+            collectionData = await res.json();
+
+            // 更新标题栏
+            document.getElementById("playlist-title").textContent = collectionData.title || '选集';
+            document.getElementById("playlist-count").textContent = `${collectionData.videos?.length || 0} 集`;
+
+            // 更新合集信息
+            const videos = collectionData.videos || [];
+            playlistVideos = videos;
+
+            if (videos.length > 0) {
+                // 自动加载第一个视频
+                playVideo(videos[0].id, videos[0]);
+                renderPlaylist(videos);
+            } else {
+                document.getElementById("playlist-items").innerHTML = '<div class="no-video">暂无视频</div>';
+            }
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById("playlist-items").innerHTML = '<div class="empty">加载失败</div>';
+        }
+    }
+
+    function playVideo(videoId, videoData) {
+        currentVideoId = videoId;
+
+        // 更新播放器
+        const playerWrapper = document.getElementById("player-wrapper");
+        if (videoData.processed_file_path || videoData.original_file_path) {
+            const videoSrc = videoData.processed_file_path || videoData.original_file_path;
+            playerWrapper.innerHTML = `
+                <video id="video-player" controls autoplay style="width:100%;height:100%;">
+                    <source src="${videoSrc}" type="video/mp4">
+                </video>
+            `;
+        } else {
+            playerWrapper.innerHTML = '<div class="no-video">视频不可用</div>';
+        }
+
+        // 更新视频信息
+        document.getElementById("video-title").textContent = videoData.title || '无标题';
+
+        const metaItems = [];
+        if (videoData.views) metaItems.push(`${videoData.views} 次播放`);
+        if (videoData.duration) metaItems.push(formatDuration(videoData.duration));
+        if (videoData.drama_region) metaItems.push(Array.isArray(videoData.drama_region) ? videoData.drama_region.join(', ') : videoData.drama_region);
+        document.getElementById("video-meta").innerHTML = metaItems.map(m => `<span>${m}</span>`).join('');
+
+        // 更新标签
+        const tagsContainer = document.getElementById("video-tags");
+        if (videoData.tags && typeof videoData.tags === 'string') {
+            const tags = videoData.tags.split(',').map(t => t.trim()).filter(t => t);
+            tagsContainer.innerHTML = tags.map(t => `<span class="video-tag">${t}</span>`).join('');
+        } else {
+            tagsContainer.innerHTML = '';
+        }
+
+        // 更新播放列表高亮
+        document.querySelectorAll('.playlist-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.id === videoId);
+        });
+    }
+
+    function renderPlaylist(videos) {
+        const container = document.getElementById("playlist-items");
+        container.innerHTML = videos.map((v, idx) => {
+            const thumb = v.thumbnail_path || "";
+            const duration = v.duration ? formatDuration(v.duration) : "";
+            const episodeTitle = v.title || `第 ${idx + 1} 集`;
+
+            return `
+                <div class="playlist-item" data-id="${v.id}" onclick="playVideo('${v.id}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">
+                    <div class="playlist-thumb">
+                        ${thumb ? `<img src="${thumb}" alt="">` : '<div style="width:100%;height:100%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;">📺</div>'}
+                        ${duration ? `<span class="duration">${duration}</span>` : ''}
+                    </div>
+                    <div class="playlist-info">
+                        <div class="playlist-title">${episodeTitle}</div>
+                        <div class="playlist-meta">${v.views || 0}次播放</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function formatDuration(seconds) {
+        if (!seconds) return '';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        if (h > 0) {
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    async function toggleLike() {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            alert("请先登录");
+            window.location.href = "/static/login.html";
+            return;
+        }
+        // TODO: 实现点赞功能
+    }
+
+    function shareVideo() {
+        const url = window.location.href;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => {
+                alert("链接已复制到剪贴板");
+            });
+        } else {
+            prompt("复制以下链接分享:", url);
+        }
+    }
+</script>
+</body>
+</html>

@@ -39,6 +39,14 @@
         .modal.success .modal-icon { color: #28a745; }
         .modal.warning .modal-icon { color: #ffc107; }
         .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
+
+        /* 多选下拉样式 */
+        .multi-select-container { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; background: #fff; min-height: 38px; align-items: center; }
+        .multi-select-container:focus-within { border-color: #00a1d6; }
+        .selected-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+        .selected-tag { background: #e7f5ff; color: #00a1d6; padding: 2px 8px; border-radius: 12px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+        .selected-tag .remove { cursor: pointer; font-weight: bold; opacity: 0.6; }
+        .multi-select-container select { border: none; outline: none; background: transparent; font-size: 13px; color: #666; min-width: 80px; }
     </style>
 </head>
 <body>
@@ -89,6 +97,17 @@
             </div>
         </div>
 
+        <!-- 剧集系列选择（正剧上传时使用）-->
+        <div id="series-selection" style="display:none; margin-top:16px; padding:16px; background:#fff3e0; border-radius:8px; border:1px solid #ffe0b2;">
+            <h4 style="margin:0 0 12px; color:#e65100;">剧集系列 *</h4>
+            <p style="margin:0 0 12px; font-size:13px; color:#666;">请先在「剧集管理」页面创建剧集系列</p>
+            <div class="form-group" style="margin:0;">
+                <select id="series_select" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="">-- 选择剧集系列 --</option>
+                </select>
+            </div>
+        </div>
+
         <div class="form-group">
             <label>视频标签 (Tags)</label>
             <div class="tags-container" onclick="document.getElementById('tagInput').focus()">
@@ -105,9 +124,13 @@
             <label>视频文件</label>
             <div class="file-drop-area" id="dropZone">
                 <p id="fileName" style="margin:0; color:#999;">点击或拖拽文件至此 (支持批量上传)</p>
-                <input type="file" id="fileInput" accept="video/*" style="display:none;" required multiple>
+                <input type="file" id="fileInput" accept="video/*,.ts" style="display:none;" multiple>
             </div>
             <div id="fileList" style="margin-top: 20px;"></div>
+            <div id="title-template-hint" style="margin-top:12px; padding:12px; background:#f0f9ff; border-radius:6px; font-size:13px; color:#666; display:none;">
+                <strong>批量上传标题提示：</strong>多文件上传时，标题会自动按集数递增<br>
+                示例：<code>{series_title} 第{episode}集</code> → "进击的巨人 第1集", "进击的巨人 第2集", ...
+            </div>
         </div>
 
         <div class="form-group">
@@ -122,7 +145,6 @@
         <button type="submit" class="btn" id="submitBtn">立即投稿</button>
     </form>
 </div>
-</div>
 
 <script src="/static/js/socket.io.js"></script>
 <script>
@@ -131,9 +153,9 @@
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
     // 支持的视频格式
-    const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv", "video/webm", "video/x-matroska", "video/matroska", "video/3gpp", "video/x-flv", "video/x-m4v", "video/ogg", "application/octet-stream"];
-    const ALLOWED_EXTENSIONS = [".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv"];
-    const ALLOWED_EXT_NAMES = ["MP4", "MOV", "AVI", "WMV", "WebM", "MKV", "MPEG", "3GP", "FLV", "M4V", "OGV"];
+    const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv", "video/webm", "video/x-matroska", "video/matroska", "video/3gpp", "video/x-flv", "video/x-m4v", "video/ogg", "video/mp2t", "application/octet-stream"];
+    const ALLOWED_EXTENSIONS = [".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv", ".ts"];
+    const ALLOWED_EXT_NAMES = ["MP4", "MOV", "AVI", "WMV", "WebM", "MKV", "MPEG", "3GP", "FLV", "M4V", "OGV", "TS"];
 
     // 分片大小 5MB
     const CHUNK_SIZE = 5 * 1024 * 1024;
@@ -150,6 +172,8 @@
     let uploadSocket = null;
     // 当前上传会话
     let currentUploads = {};  // { sessionId: { file, sessionId, uploadedChunks, totalChunks, status } }
+    // 已选择的文件（因为 input.files 是只读的）
+    let selectedUploadFiles = [];
     let modalCallback = null;  // 弹窗确认回调
 
     // 检查用户是否可跳过上传大小限制（管理员或运营人员）
@@ -161,11 +185,24 @@
     }
 
     // 刷新 access_token
+    // Token 刷新锁，避免多个请求同时刷新 token 导致竞态条件
+    let isRefreshingToken = false;
+    let tokenRefreshQueue = [];
+
     async function refreshAccessToken() {
+        // 如果正在刷新，将当前请求加入队列等待
+        if (isRefreshingToken) {
+            return new Promise((resolve, reject) => {
+                tokenRefreshQueue.push({ resolve, reject });
+            });
+        }
+
         const refresh_token = localStorage.getItem("refresh_token");
         if (!refresh_token) {
             throw new Error("No refresh token");
         }
+
+        isRefreshingToken = true;
 
         try {
             const res = await fetch("/auth/refresh", {
@@ -187,9 +224,19 @@
             localStorage.setItem("access_token", data.access_token);
             localStorage.setItem("refresh_token", data.refresh_token);
             console.log('Token refreshed successfully');
-            return data.access_token;
+
+            // 刷新成功，通知所有排队的请求
+            isRefreshingToken = false;
+            const newToken = data.access_token;
+            tokenRefreshQueue.forEach(p => p.resolve(newToken));
+            tokenRefreshQueue = [];
+            return newToken;
         } catch (e) {
             console.error("Token refresh error:", e);
+            isRefreshingToken = false;
+            // 刷新失败，通知所有排队的请求失败
+            tokenRefreshQueue.forEach(p => p.reject(e));
+            tokenRefreshQueue = [];
             throw e;
         }
     }
@@ -290,14 +337,7 @@
             return { valid: false, error: `不支持的视频格式 "${ext.toUpperCase()}"。支持格式: ${ALLOWED_EXT_NAMES.join(', ')}` };
         }
 
-        const typeOk = ALLOWED_VIDEO_TYPES.includes(file.type) ||
-                       file.type.startsWith('video/') ||
-                       file.type === 'application/octet-stream' ||
-                       !file.type;
-        if (!typeOk) {
-            return { valid: false, error: `文件类型不被支持: ${file.type || '未知'}` };
-        }
-
+        // 扩展名合法即可通过，不检查 MIME 类型（浏览器对某些格式如 .ts 的 MIME 识别不准确）
         const maxBytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
         // 管理员或运营人员不限制上传大小
         if (!canBypassUploadLimit() && maxBytes > 0 && file.size > maxBytes) {
@@ -443,11 +483,31 @@
                 const categories = await res.json();
                 const select = document.getElementById("category");
                 select.innerHTML = '<option value="" disabled selected>选择分类...</option>';
+                window.allCategories = categories; // 存储分类数据
+
+                // 检查用户权限：is_admin 或 role_names 包含 Operations
+                const canUploadDrama = currentUser && (
+                    currentUser.is_admin ||
+                    (currentUser.role_names && currentUser.role_names.includes('Operations'))
+                );
+
                 categories.forEach(cat => {
+                    // 非管理员/运营人员，隐藏正剧分类
+                    if (!canUploadDrama && DRAMA_SLUGS.includes(cat.slug)) {
+                        return;
+                    }
                     const opt = document.createElement("option");
                     opt.value = cat.id;
                     opt.text = cat.name;
+                    opt.dataset.slug = cat.slug; // 存储 slug
                     select.appendChild(opt);
+                });
+
+                // 添加分类变更事件监听
+                select.addEventListener("change", function() {
+                    const selectedOpt = select.options[select.selectedIndex];
+                    const slug = selectedOpt.dataset.slug;
+                    checkDramaCategoryPermission(slug);
                 });
             }
         } catch (e) { console.error(e); }
@@ -491,6 +551,38 @@
         });
     }
 
+    // 多选标签管理
+    const multiSelectValues = {
+        region: [],
+        language: [],
+        style: []
+    };
+
+    function addMultiSelectTag(type, value) {
+        if (!value || multiSelectValues[type].includes(value)) return;
+        multiSelectValues[type].push(value);
+        renderMultiSelectTags(type);
+        updateHiddenInput(type);
+    }
+
+    function removeMultiSelectTag(type, value) {
+        const idx = multiSelectValues[type].indexOf(value);
+        if (idx > -1) multiSelectValues[type].splice(idx, 1);
+        renderMultiSelectTags(type);
+        updateHiddenInput(type);
+    }
+
+    function renderMultiSelectTags(type) {
+        const tagsContainer = document.getElementById(`${type}-tags`);
+        tagsContainer.innerHTML = multiSelectValues[type].map(v =>
+            `<span class="selected-tag">${v}<span class="remove" onclick="removeMultiSelectTag('${type}', '${v}')">×</span></span>`
+        ).join('');
+    }
+
+    function updateHiddenInput(type) {
+        document.getElementById(`drama_${type}`).value = multiSelectValues[type].join(",");
+    }
+
     function renderTags() {
         const container = document.querySelector(".tags-container");
         const input = document.getElementById("tagInput");
@@ -519,6 +611,97 @@
         }
     }
 
+    // 检查正剧分类权限
+    const DRAMA_SLUGS = ['movie', 'tv', 'anime'];
+    // 加载正剧筛选选项到多选下拉
+    async function loadDramaFilterOptions() {
+        const categorySlug = document.getElementById('category').value;
+        if (!categorySlug) return;
+
+        // 获取当前分类的 slug
+        const select = document.getElementById('category');
+        const selectedOption = select.options[select.selectedIndex];
+        const slug = selectedOption.dataset.slug;
+
+        if (!DRAMA_SLUGS.includes(slug)) return;
+
+        try {
+            const res = await fetch(`/dramas/filters/${slug}`);
+            if (res.ok) {
+                const filters = await res.json();
+                populateMultiSelect('region', filters.tabs.find(t => t.slug === 'region')?.options || []);
+                populateMultiSelect('language', filters.tabs.find(t => t.slug === 'language')?.options || []);
+                populateMultiSelect('style', filters.tabs.find(t => t.slug === 'style')?.options || []);
+            }
+        } catch (e) {
+            console.error('Failed to load filter options:', e);
+        }
+    }
+
+    function populateMultiSelect(type, values) {
+        const select = document.getElementById(`drama_${type}_select`);
+        select.innerHTML = '<option value="">选择...</option>';
+        values.forEach(value => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            select.appendChild(option);
+        });
+    }
+
+    function checkDramaCategoryPermission(categorySlug) {
+        // 检查用户权限：is_admin 或 role_names 包含 Operations
+        const canUpload = currentUser && (
+            currentUser.is_admin ||
+            (currentUser.role_names && currentUser.role_names.includes('Operations'))
+        );
+
+        if (!DRAMA_SLUGS.includes(categorySlug)) {
+            // 非正剧分类，隐藏剧集系列选择
+            document.getElementById('series-selection').style.display = 'none';
+            return;
+        }
+
+        // 是正剧分类，但用户无权上传
+        if (!canUpload) {
+            showModal('warning', '无权上传正剧内容', '电影、电视剧、动漫分类仅限管理员和运营人员上传');
+            // 重置选择
+            document.getElementById('category').value = '';
+            document.getElementById('series-selection').style.display = 'none';
+            return;
+        }
+
+        // 正剧分类显示剧集系列选择
+        document.getElementById('series-selection').style.display = 'block';
+        loadSeriesList(categorySlug);
+    }
+
+    // 加载剧集系列列表
+    async function loadSeriesList(categorySlug) {
+        const select = document.getElementById('series_select');
+        select.innerHTML = '<option value="">-- 不属于任何剧集 --</option>';
+
+        try {
+            // 根据分类确定drama_type
+            let dramaType = 'tv';
+            if (categorySlug === 'anime') dramaType = 'anime';
+            else if (categorySlug === 'movie') dramaType = 'movie';
+
+            const res = await fetch(`/drama-series?drama_type=${dramaType}`);
+            if (res.ok) {
+                const series = await res.json();
+                series.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.id;
+                    option.textContent = `${s.title} (${s.video_count || 0}集)`;
+                    select.appendChild(option);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load series list:', e);
+        }
+    }
+
     window.removeTag = function(index) {
         tags.splice(index, 1);
         renderTags();
@@ -531,17 +714,38 @@
         dropZone.onclick = () => fileInput.click();
 
         fileInput.onchange = () => {
-            updateFileList(fileInput.files);
+            addFilesToSelection(fileInput.files);
         };
 
         dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "#00a1d6"; };
         dropZone.ondrop = (e) => {
             e.preventDefault();
             if (e.dataTransfer.files) {
-                fileInput.files = e.dataTransfer.files;
-                updateFileList(fileInput.files);
+                addFilesToSelection(e.dataTransfer.files);
             }
         };
+    }
+
+    // 添加文件到选择列表（合并而非替换）
+    function addFilesToSelection(files) {
+        Array.from(files).forEach(function(file) {
+            // 检查是否已存在（避免重复）
+            var exists = selectedUploadFiles.some(function(existing) {
+                return existing.name === file.name && existing.size === file.size;
+            });
+            if (!exists) {
+                selectedUploadFiles.push(file);
+            }
+        });
+        updateFileList();
+        // 清空 input 以允许重新选择相同文件
+        document.getElementById("fileInput").value = '';
+    }
+
+    // 从选择列表中移除文件
+    function removeFileFromSelection(index) {
+        selectedUploadFiles.splice(index, 1);
+        updateFileList();
     }
 
     function initSubtitleDropZone() {
@@ -574,10 +778,17 @@
         list.innerHTML = `已选择: ${names}`;
     }
 
-    function updateFileList(files) {
+    function updateFileList() {
         const list = document.getElementById("fileList");
         list.innerHTML = "";
         let hasInvalid = false;
+
+        // 如果没有选择文件
+        if (selectedUploadFiles.length === 0) {
+            document.getElementById("fileName").innerText = "点击或拖拽文件至此上传";
+            document.getElementById("fileName").style.color = "#999";
+            return;
+        }
 
         // 检查是否有待恢复的上传
         const pendingStr = localStorage.getItem('pendingUploadSessions');
@@ -588,7 +799,7 @@
             pendingByName[s.filename] = s;
         });
 
-        Array.from(files).forEach((file, index) => {
+        selectedUploadFiles.forEach((file, index) => {
             const validation = validateFile(file);
             const pending = pendingByName[file.name];
             const item = document.createElement("div");
@@ -604,9 +815,14 @@
             }
 
             item.innerHTML = `
-                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <span style="font-size:14px; color:#333;">${file.name}</span>
-                    <span id="status-${index}" style="font-size:13px; color:${statusColor};">${statusText}</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <div style="flex:1;">
+                        <span style="font-size:14px; color:#333;">${file.name}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="status-${index}" style="font-size:13px; color:${statusColor};">${statusText}</span>
+                        <button type="button" onclick="removeFileFromSelection(${index})" style="padding:2px 8px; border:none; background:#f56c6c; color:#fff; border-radius:4px; cursor:pointer; font-size:12px;">删除</button>
+                    </div>
                 </div>
                 <div class="progress-bar" id="bar-${index}" style="display:block; margin-top:5px;">
                     <div class="progress-fill" id="fill-${index}" style="width:0%"></div>
@@ -615,22 +831,80 @@
             list.appendChild(item);
             if (!validation.valid) hasInvalid = true;
         });
-        document.getElementById("fileName").innerText = `已选择 ${files.length} 个文件`;
+        document.getElementById("fileName").innerText = `已选择 ${selectedUploadFiles.length} 个文件`;
         document.getElementById("fileName").style.color = hasInvalid ? "#dc3545" : "#333";
+
+        // 显示/隐藏标题模板提示
+        const hint = document.getElementById('title-template-hint');
+        if (selectedUploadFiles.length > 1) {
+            hint.style.display = 'block';
+        } else {
+            hint.style.display = 'none';
+        }
+    }
+
+    // 生成递增集数的标题
+    // 支持模式：第1集、第01集、第1季第1集、01、我的世界01 等
+    function generateEpisodeTitle(baseTitle, index, totalFiles) {
+        if (totalFiles <= 1) return baseTitle;
+
+        // 匹配各种集数模式
+        // 模式1: 第X集、第X季第Y集 等 (中文数字)
+        // 模式2: 01、001 (纯数字，前面可能有0)
+
+        // 先尝试匹配 "第数字集" 或 "第数字季第数字集" 模式
+        const chinesePattern = /^(.*?)(第)(\d+)(集|季)(第)?(\d+)?(集)?(.*)$/;
+        const match = baseTitle.match(chinesePattern);
+
+        if (match) {
+            const [, prefix, , num1, unit1, , num2, unit2, suffix] = match;
+
+            // 如果是 "第X集" 格式
+            if (unit1 === '集' && !num2) {
+                const newNum = parseInt(num1) + index;
+                return `${prefix}第${newNum}集${suffix}`;
+            }
+            // 如果是 "第X季" 格式 (没有集)
+            if (unit1 === '季' && !num2) {
+                return `${prefix}第${parseInt(num1)}季第${index + 1}集${suffix}`;
+            }
+            // 如果是 "第X季第Y集" 格式
+            if (unit1 === '季' && unit2 === '集') {
+                const newNum = parseInt(num2) + index;
+                return `${prefix}第${num1}季第${newNum}集${suffix}`;
+            }
+        }
+
+        // 尝试匹配纯数字模式 (如 "我的世界01" 或 "01")
+        const numPattern = /^(.*?)(\d+)(\D*)$/;
+        const numMatch = baseTitle.match(numPattern);
+
+        if (numMatch) {
+            const [, prefix, numStr, suffix] = numMatch;
+            // 确保是纯数字结尾（不是日期等）
+            if (suffix === '' || /^[第集季]/.test(suffix)) {
+                const num = parseInt(numStr);
+                const padding = numStr.length; // 保持原长度（01 -> 2位）
+                const newNum = (num + index).toString().padStart(padding, '0');
+                return `${prefix}${newNum}${suffix}`;
+            }
+        }
+
+        // 没有匹配到数字模式，默认添加 (1), (2)...
+        return `${baseTitle} (${index + 1})`;
     }
 
     async function handleUpload(e) {
         e.preventDefault();
 
-        const files = document.getElementById("fileInput").files;
-        if (files.length === 0) {
+        if (selectedUploadFiles.length === 0) {
             showModal('warning', '请选择文件', '请先选择要上传的视频文件');
             return;
         }
 
         // 前置验证所有文件
-        for (let i = 0; i < files.length; i++) {
-            const validation = validateFile(files[i]);
+        for (let i = 0; i < selectedUploadFiles.length; i++) {
+            const validation = validateFile(selectedUploadFiles[i]);
             if (!validation.valid) {
                 showModal('error', '文件验证失败', validation.error);
                 return;
@@ -647,32 +921,105 @@
         const visibility = document.getElementById("visibility").value;
         const tagString = tags.join(",");
 
-        const token = localStorage.getItem("access_token");
+        // 获取选中的分类 slug
+        const categorySelect = document.getElementById("category");
+        const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+        const categorySlug = selectedOption.dataset.slug;
 
-        let hasError = false;
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const statusSpan = document.getElementById(`status-${i}`);
-            const fillDiv = document.getElementById(`fill-${i}`);
-
-            const title = files.length > 1 ? `${baseTitle} (${i+1})` : baseTitle;
-
-            statusSpan.innerText = "初始化上传...";
-            statusSpan.style.color = "#00a1d6";
-            fillDiv.style.width = "0%";
-
-            try {
-                const success = await uploadFileWithChunk(file, title, description, category_id, visibility, tagString, token, i);
-                if (!success) hasError = true;
-            } catch (e) {
-                console.error('Upload failed:', e);
-                statusSpan.innerText = "失败: " + (e.message || "未知错误");
-                statusSpan.style.color = "red";
-                hasError = true;
+        // 如果是正剧分类，必须选择已有剧集系列
+        let series_id = null;
+        if (DRAMA_SLUGS.includes(categorySlug)) {
+            series_id = document.getElementById('series_select').value;
+            if (!series_id) {
+                showModal('warning', '请选择剧集系列', '上传正剧内容请先在「剧集管理」页面创建剧集系列');
+                btn.disabled = false;
+                btn.innerText = "立即投稿";
+                return;
             }
         }
 
+        const token = localStorage.getItem("access_token");
+
+        // 并发上传所有文件
+        const CONCURRENT_UPLOADS = 3; // 并发数
+        let hasError = false;
+
+        // 初始化所有文件状态
+        for (let i = 0; i < selectedUploadFiles.length; i++) {
+            const statusSpan = document.getElementById(`status-${i}`);
+            const fillDiv = document.getElementById(`fill-${i}`);
+            statusSpan.innerText = "等待上传...";
+            statusSpan.style.color = "#00a1d6";
+            fillDiv.style.width = "0%";
+        }
+
+        // 创建上传任务
+        const uploadTasks = [];
+        for (let i = 0; i < selectedUploadFiles.length; i++) {
+            const file = selectedUploadFiles[i];
+            const title = generateEpisodeTitle(baseTitle, i, selectedUploadFiles.length);
+
+            const task = (async () => {
+                const statusSpan = document.getElementById(`status-${i}`);
+                const fillDiv = document.getElementById(`fill-${i}`);
+
+                statusSpan.innerText = "初始化上传...";
+                try {
+                    const success = await uploadFileWithChunk(file, title, description, category_id, visibility, tagString, token, i);
+                    if (!success) hasError = true;
+                } catch (e) {
+                    console.error('Upload failed:', e);
+                    statusSpan.innerText = "失败: " + (e.message || "未知错误");
+                    statusSpan.style.color = "red";
+                    hasError = true;
+                }
+            })();
+            uploadTasks.push(task);
+        }
+
+        // 分批并发执行
+        for (let i = 0; i < uploadTasks.length; i += CONCURRENT_UPLOADS) {
+            const batch = uploadTasks.slice(i, i + CONCURRENT_UPLOADS);
+            await Promise.all(batch);
+        }
+
         if (!hasError) {
+            // 如果选择了剧集系列，需要把上传的视频添加到剧集
+            if (series_id) {
+                btn.innerText = "正在关联视频到剧集...";
+                try {
+                    // 等待一下让视频完全创建
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    // 获取刚上传的视频列表（按时间排序取最新的）
+                    const videosRes = await fetch(`/videos/my`, {
+                        headers: { "Authorization": "Bearer " + token }
+                    });
+                    if (videosRes.ok) {
+                        const videosData = await videosRes.json();
+                        const myVideos = videosData.videos || videosData;
+                        // 找到刚上传的视频（按时间排序，取第一个）
+                        if (myVideos.length > 0) {
+                            const latestVideo = myVideos[0];
+                            // 添加到剧集系列
+                            await fetch(`/admin/drama-series/${series_id}/videos`, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "Authorization": "Bearer " + token
+                                },
+                                body: JSON.stringify({
+                                    video_id: latestVideo.id,
+                                    episode_number: 1
+                                })
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to add video to series:', e);
+                }
+            }
+
             showModal('success', '上传成功', '视频已成功上传，稍后可在创作中心查看');
             setTimeout(() => location.href = "/static/dashboard.html", 2000);
         } else {
@@ -765,7 +1112,8 @@
                     description: description,
                     category_id: category_id || "",
                     visibility: visibility,
-                    tags: tags
+                    tags: tags,
+                    series_id: document.getElementById('series_select').value || ""
                 })
             });
 

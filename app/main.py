@@ -52,12 +52,17 @@ sio = socketio.AsyncServer(
 from routers import (
     auth_router,
     videos_router,
+    videos_admin_router,
     social_router,
     admin_router,
     collections_router,
     recommendations_router,
     cast_router,
     categories_router,
+    dramas_router,
+    drama_filters_router,
+    drama_series_router,
+    drama_series_admin_router,
 )
 
 
@@ -120,12 +125,17 @@ app.add_middleware(
 # 注册路由模块
 app.include_router(auth_router)
 app.include_router(videos_router)
+app.include_router(videos_admin_router)
 app.include_router(social_router)
 app.include_router(admin_router)
 app.include_router(collections_router)
 app.include_router(recommendations_router)
 app.include_router(cast_router)
 app.include_router(categories_router)
+app.include_router(dramas_router)
+app.include_router(drama_filters_router)
+app.include_router(drama_series_router)
+app.include_router(drama_series_admin_router)
 
 
 # ==================== SocketIO 应用（必须在 app 和路由注册后创建）====================

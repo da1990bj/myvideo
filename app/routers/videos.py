@@ -15,7 +15,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Query, status, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
-from sqlalchemy import and_
+from sqlalchemy import and_, asc, or_
 
 from database import get_session
 from data_models import (
@@ -24,12 +24,22 @@ from data_models import (
     TranscodeTask, UploadSession, UploadSessionRead, Notification,
     SubtitleRead, SubtitleGenerateRequest
 )
-from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags, can_bypass_upload_limit
+from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags, can_bypass_upload_limit, check_drama_upload_permission
 from tasks import transcode_video_task
 from config import settings, get_transcode_config, get_runtime_config
 import socketio_handler
 
 router = APIRouter(prefix="", tags=["视频"])
+admin_router = APIRouter(prefix="/admin", tags=["管理后台-上传管理"])
+
+# 支持的视频格式（模块级别常量）
+ALLOWED_VIDEO_TYPES = {
+    "video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo",
+    "video/x-ms-wmv", "video/webm", "video/x-matroska", "video/matroska",
+    "video/3gpp", "video/x-flv", "video/x-m4v", "video/ogg", "video/mp2t",
+    "application/octet-stream"
+}
+ALLOWED_EXTENSIONS = {".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv", ".ts"}
 
 
 @router.post("/videos/upload", response_model=VideoRead)
@@ -45,26 +55,17 @@ async def upload_video(
     """
     上传新视频
     """
-    # 支持的视频格式
-    ALLOWED_VIDEO_TYPES = {
-        "video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo",
-        "video/x-ms-wmv", "video/webm", "video/x-matroska", "video/matroska",
-        "video/3gpp", "video/x-flv", "video/x-m4v", "video/ogg",
-        "application/octet-stream"
-    }
-    ALLOWED_EXTENSIONS = {".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".wmv", ".webm", ".mkv", ".3gp", ".flv", ".m4v", ".ogv"}
-
     # 检查文件格式
     ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"不支持的视频格式: {ext}。支持的格式: MP4, MOV, AVI, WMV, WebM, MKV, MPEG, 3GP, FLV")
+        raise HTTPException(status_code=400, detail=f"不支持的视频格式: {ext}。支持的格式: MP4, MOV, AVI, WMV, WebM, MKV, MPEG, 3GP, FLV, TS")
 
     # 规范化 content_type（去除参数如charset）
     content_type = file.content_type.split(";")[0].strip().lower()
     # 如果扩展名合法，则更宽松地接受 content_type（某些浏览器对MKV等格式的MIME类型判断不准确）
-    if content_type not in ALLOWED_VIDEO_TYPES:
-        # 允许 video/* 或 application/octet-stream，只要扩展名合法
-        if not (content_type.startswith("video/") or content_type == "application/octet-stream") or ext not in ALLOWED_EXTENSIONS:
+    # 只要扩展名在允许列表中，就通过验证
+    if ext not in ALLOWED_EXTENSIONS:
+        if content_type not in ALLOWED_VIDEO_TYPES:
             raise HTTPException(status_code=400, detail=f"文件类型不被支持: {content_type}")
 
     # 检查上传大小限制
@@ -133,17 +134,19 @@ async def get_videos(
     size: int = Query(20, ge=1, le=100),
     category_id: Optional[int] = None,
     keyword: Optional[str] = None,
-    sort_by: str = Query("latest", enum=["latest", "popular"])
+    sort_by: str = Query("latest", enum=["latest", "popular"]),
 ):
     """
-    获取视频列表（公开）
+    获取视频列表（公开，非正剧）
+    正剧视频请通过 /dramas/{type} 获取
     """
     offset = (page - 1) * size
     statement = select(Video).where(
         Video.is_approved == "approved",
         Video.status == "completed",
         Video.visibility == "public",
-        Video.is_deleted == False
+        Video.is_deleted == False,
+        Video.series_id == None  # 排除正剧视频
     )
 
     if category_id:
@@ -178,6 +181,50 @@ async def get_videos(
         result.append(video_dict)
 
     return result
+
+
+@router.get("/videos/my")
+async def get_my_videos(
+    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100)
+):
+    """
+    获取当前用户的所有视频（支持关键词搜索）
+    用于后台管理添加视频到剧集系列
+    """
+    offset = (page - 1) * size
+    statement = select(Video).where(
+        Video.user_id == current_user.id,
+        Video.is_deleted == False
+    )
+
+    if keyword:
+        statement = statement.where(Video.title.contains(keyword))
+
+    statement = statement.order_by(Video.created_at.desc()).offset(offset).limit(size)
+    videos = session.exec(statement).all()
+
+    result = []
+    for v in videos:
+        video_dict = v.model_dump()
+        if v.owner:
+            video_dict["owner"] = {
+                "id": str(v.owner.id),
+                "username": v.owner.username,
+                "avatar_path": v.owner.avatar_path,
+            }
+        if v.category:
+            video_dict["category"] = {
+                "id": v.category.id,
+                "name": v.category.name,
+                "slug": v.category.slug,
+            }
+        result.append(video_dict)
+
+    return {"videos": result}
 
 
 @router.get("/videos/{video_id}")
@@ -536,13 +583,16 @@ async def update_video(
     # 处理临时封面路径
     temp_thumb = update_data.pop("temp_thumbnail_path", None)
     if temp_thumb:
-        # 删除旧封面
-        old_thumb = settings.fs_path(video.thumbnail_path) if video.thumbnail_path else None
-        if old_thumb and old_thumb.exists():
-            try:
-                old_thumb.unlink()
-            except:
-                pass
+        # 去除时间戳参数（防止浏览器缓存的 ?t=xxx 被保存到数据库）
+        temp_thumb = temp_thumb.split('?')[0]
+        # 只有当新旧路径不同时才删除旧封面（避免删除同一文件）
+        if temp_thumb != video.thumbnail_path:
+            old_thumb = settings.fs_path(video.thumbnail_path) if video.thumbnail_path else None
+            if old_thumb and old_thumb.exists():
+                try:
+                    old_thumb.unlink()
+                except:
+                    pass
         # 更新封面路径
         video.thumbnail_path = temp_thumb
 
@@ -1626,9 +1676,11 @@ async def regenerate_thumbnail(
                 pass
 
         # 生成新封面（不保存到数据库，只返回路径，等用户保存时再更新）
-        subprocess.run([
-            "ffmpeg", "-ss", timestamp, "-i", input_path, "-vframes", "1", thumb_abs_path, "-y"
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run([
+            "ffmpeg", "-ss", timestamp, "-i", input_path, "-vframes", "1", "-update", "1", thumb_abs_path, "-y"
+        ], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"生成封面失败: {result.stderr}")
 
         return {"url": thumb_rel_path, "timestamp": timestamp}
 
@@ -1672,7 +1724,7 @@ async def get_categories(session: Session = Depends(get_session)):
     """
     获取所有分类
     """
-    return session.exec(select(Category)).all()
+    return session.exec(select(Category).order_by(asc(Category.display_order))).all()
 
 
 @router.post("/videos/{video_id}/complete")
@@ -2032,15 +2084,38 @@ async def init_upload_session(
     file_size: int = Form(...),
     title: str = Form(...),
     description: str = Form(""),
-    category_id: int = Form(None),
+    category_id: Optional[str] = Form(None),
     visibility: str = Form("public"),
     tags: str = Form(""),
+    series_id: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
     初始化分片上传会话
     """
+    # 检查文件扩展名
+    ext = os.path.splitext(filename)[1].lower() if filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的视频格式: {ext}。支持的格式: MP4, MOV, AVI, WMV, WebM, MKV, MPEG, 3GP, FLV, TS"
+        )
+
+    # 转换 category_id 为 int（前端可能传字符串）
+    if category_id:
+        try:
+            category_id = int(category_id)
+        except (ValueError, TypeError):
+            category_id = None
+
+    # 转换 series_id 为 UUID（前端传字符串）
+    if series_id and not isinstance(series_id, UUID):
+        try:
+            series_id = UUID(series_id)
+        except (ValueError, TypeError):
+            series_id = None
+
     # 检查上传大小限制（管理员和运营人员除外）
     if not can_bypass_upload_limit(current_user, session):
         max_size_mb = get_runtime_config("MAX_UPLOAD_SIZE_MB", "2048")
@@ -2072,7 +2147,8 @@ async def init_upload_session(
         description=description,
         category_id=category_id,
         visibility=visibility,
-        tags=tags
+        tags=tags,
+        series_id=series_id if isinstance(series_id, UUID) else (UUID(series_id) if series_id else None)
     )
     session.add(upload_session)
     session.commit()
@@ -2198,7 +2274,8 @@ async def complete_upload_session(
         tags=upload_session.tags,
         original_file_path="",  # 临时空值
         status="pending",
-        progress=0
+        progress=0,
+        series_id=upload_session.series_id
     )
     session.add(video)
     session.commit()
@@ -2287,28 +2364,32 @@ async def cancel_upload_session(
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
 
-    # 更新状态为已取消
+    # 更新状态为已取消，保留记录用于统计
     upload_session.status = "cancelled"
+    upload_session.uploaded_chunks = []
     session.add(upload_session)
     session.commit()
 
-    return {"message": "Upload session cancelled"}
+    return {"message": "Upload session cancelled", "status": "cancelled"}
 
 
 @router.get("/upload-sessions")
 async def get_upload_sessions(
+    series_id: Optional[str] = Query(None, description="剧集系列ID过滤"),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     """
     获取用户正在进行的上传会话
     """
-    sessions = session.exec(
-        select(UploadSession).where(
-            UploadSession.user_id == current_user.id,
-            UploadSession.status == "uploading"
-        )
-    ).all()
+    query = select(UploadSession).where(
+        UploadSession.user_id == current_user.id,
+        UploadSession.status == "uploading"
+    )
+    if series_id:
+        query = query.where(UploadSession.series_id == UUID(series_id))
+
+    sessions = session.exec(query).all()
 
     result = []
     for s in sessions:
@@ -2317,10 +2398,12 @@ async def get_upload_sessions(
             "filename": s.filename,
             "file_size": s.file_size,
             "total_chunks": s.total_chunks,
-            "uploaded_chunks": len(s.uploaded_chunks),
+            "uploaded_chunks": len(s.uploaded_chunks) if s.uploaded_chunks else 0,
+            "uploaded_chunk_indexes": s.uploaded_chunks or [],
             "progress": len(s.uploaded_chunks) / s.total_chunks * 100 if s.total_chunks > 0 else 0,
             "title": s.title,
-            "created_at": s.created_at.isoformat()
+            "series_id": str(s.series_id) if s.series_id else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None
         })
     return result
 
@@ -2444,20 +2527,33 @@ async def get_subtitles(
         raise HTTPException(status_code=404, detail="Video not found")
 
     subtitles = []
-    if video.subtitle_languages:
-        subtitle_dir = settings.PROCESSED_DIR / str(video_id) / "subtitles"
-        for lang in video.subtitle_languages:
-            # 查找匹配语言的 VTT 文件（可能名为 {lang}.vtt 或 track{index}_{lang}.vtt）
-            vtt_files = list(subtitle_dir.glob(f"*{lang}*.vtt")) if subtitle_dir.exists() else []
-            if vtt_files:
-                vtt_file = vtt_files[0]
-                url = f"/static/videos/processed/{video_id}/subtitles/{vtt_file.name}"
-                is_auto = video.auto_subtitle and video.auto_subtitle_language == lang
-                subtitles.append(SubtitleRead(
-                    language=lang,
-                    url=url,
-                    is_auto_generated=is_auto
-                ))
+    subtitle_dir = settings.PROCESSED_DIR / str(video_id) / "subtitles"
+    if subtitle_dir.exists():
+        # 获取该视频的所有字幕文件
+        vtt_files = list(subtitle_dir.glob("*.vtt"))
+        for vtt_file in vtt_files:
+            # 提取语言代码（文件名去掉.vtt扩展名）
+            stem = vtt_file.stem  # 例如 "eng", "zh-Hans", "eng_english", "track6_unknown" 等
+            # 处理 track{N}_unknown 格式，提取真正的语言代码
+            if stem.startswith("track") and "_unknown" in stem:
+                lang = stem.split("_unknown")[0]  # "track6_unknown" -> "track6"
+            # 处理 track{N}_{lang} 格式，提取语言代码
+            elif stem.startswith("track") and "_" in stem:
+                parts = stem.split("_")
+                if len(parts) >= 2:
+                    lang = parts[1]  # "track18_heb" -> "heb"
+                else:
+                    lang = stem
+            else:
+                lang = stem
+            url = f"/static/videos/processed/{video_id}/subtitles/{vtt_file.name}"
+            # 检查是否自动生成（通过文件名匹配）
+            is_auto = video.auto_subtitle and video.auto_subtitle_language == lang
+            subtitles.append(SubtitleRead(
+                language=lang,
+                url=url,
+                is_auto_generated=is_auto
+            ))
     return subtitles
 
 
@@ -2574,3 +2670,159 @@ async def get_subtitle_task_status(
     else:
         # 任务进行中
         return {"status": "processing", "task_id": task_id}
+
+
+# ==================== 管理员上传会话管理 ====================
+
+@admin_router.get("/upload-sessions")
+async def admin_get_upload_sessions(
+    status: Optional[str] = Query(None, description="过滤状态: uploading, completed, cancelled"),
+    series_id: Optional[str] = Query(None, description="剧集系列ID"),
+    user_id: Optional[str] = Query(None, description="用户ID"),
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(PermissionChecker("admin:super")),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=200)
+):
+    """
+    获取所有上传会话（管理员）
+    """
+    query = select(UploadSession)
+
+    if status:
+        query = query.where(UploadSession.status == status)
+    if series_id:
+        query = query.where(UploadSession.series_id == UUID(series_id))
+    if user_id:
+        query = query.where(UploadSession.user_id == UUID(user_id))
+
+    # 获取总数
+    count_query = select(UploadSession)
+    if status:
+        count_query = count_query.where(UploadSession.status == status)
+    if series_id:
+        count_query = count_query.where(UploadSession.series_id == UUID(series_id))
+    if user_id:
+        count_query = count_query.where(UploadSession.user_id == UUID(user_id))
+    total = len(session.exec(count_query).all())
+
+    query = query.order_by(UploadSession.created_at.desc())
+    query = query.offset((page - 1) * size).limit(size)
+    sessions = session.exec(query).all()
+
+    result = []
+    for s in sessions:
+        # 获取用户名
+        user = session.get(User, s.user_id)
+        username = user.username if user else "未知"
+
+        # 获取剧集系列标题
+        series_title = None
+        if s.series_id:
+            from data_models import DramaSeries
+            series = session.get(DramaSeries, s.series_id)
+            if series:
+                series_title = series.title
+
+        result.append({
+            "session_id": str(s.id),
+            "user_id": str(s.user_id),
+            "username": username,
+            "filename": s.filename,
+            "file_size": s.file_size,
+            "total_chunks": s.total_chunks,
+            "uploaded_chunks": len(s.uploaded_chunks) if s.uploaded_chunks else 0,
+            "uploaded_chunk_indexes": s.uploaded_chunks or [],
+            "progress": len(s.uploaded_chunks) / s.total_chunks * 100 if s.total_chunks > 0 else 0,
+            "status": s.status,
+            "title": s.title,
+            "series_id": str(s.series_id) if s.series_id else None,
+            "series_title": series_title,
+            "video_id": str(s.video_id) if s.video_id else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None
+        })
+
+    return {"sessions": result, "total": total, "page": page, "size": size}
+
+
+@admin_router.delete("/upload-sessions/{session_id}")
+async def admin_cancel_upload_session(
+    session_id: str,
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(PermissionChecker("admin:super"))
+):
+    """
+    管理员取消上传会话
+    """
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    upload_session = session.exec(
+        select(UploadSession).where(UploadSession.id == session_uuid)
+    ).first()
+
+    if not upload_session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    # 删除临时目录
+    temp_dir = Path(upload_session.temp_dir)
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+
+    # 更新状态为已取消
+    upload_session.status = "cancelled"
+    session.add(upload_session)
+    session.commit()
+
+    return {"message": "Upload session cancelled"}
+
+
+# ==================== 管理员视频搜索 ====================
+
+@admin_router.get("/videos/search")
+async def admin_search_videos(
+    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    status: Optional[str] = Query(None, description="视频状态筛选"),
+    series_id: Optional[str] = Query(None, description="剧集系列ID筛选"),
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(PermissionChecker("admin:super")),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100)
+):
+    """
+    管理员搜索视频（用于添加视频到剧集系列）
+    """
+    offset = (page - 1) * size
+    statement = select(Video).where(Video.is_deleted == False)
+
+    if keyword:
+        statement = statement.where(Video.title.contains(keyword))
+    if status:
+        statement = statement.where(Video.status == status)
+    if series_id:
+        statement = statement.where(Video.series_id == UUID(series_id))
+
+    statement = statement.order_by(Video.created_at.desc()).offset(offset).limit(size)
+    videos = session.exec(statement).all()
+
+    result = []
+    for v in videos:
+        video_dict = v.model_dump()
+        if v.owner:
+            video_dict["owner"] = {
+                "id": str(v.owner.id),
+                "username": v.owner.username,
+                "avatar_path": v.owner.avatar_path,
+            }
+        if v.category:
+            video_dict["category"] = {
+                "id": v.category.id,
+                "name": v.category.name,
+                "slug": v.category.slug,
+            }
+        result.append(video_dict)
+
+    return {"videos": result}

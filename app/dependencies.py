@@ -150,6 +150,28 @@ def can_bypass_upload_limit(user: User, session: Session) -> bool:
     return False
 
 
+# 正剧上传权限角色列表（仅 Admin 和 Operations）
+DRAMA_UPLOAD_ROLE_NAMES = ["Operations"]
+
+
+def check_drama_upload_permission(user: User, session: Session) -> bool:
+    """
+    检查用户是否有权上传正剧内容（仅 Admin 和 Operations）
+    """
+    if user.is_admin:
+        return True
+
+    # 检查用户角色
+    user_roles = session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+    role_ids = [ur.role_id for ur in user_roles]
+    if role_ids:
+        roles = session.exec(select(Role).where(Role.id.in_(role_ids))).all()
+        for role in roles:
+            if role.name in DRAMA_UPLOAD_ROLE_NAMES:
+                return True
+    return False
+
+
 def process_tags(session: Session, video, tag_list: List[str]):
     """
     处理视频标签关联

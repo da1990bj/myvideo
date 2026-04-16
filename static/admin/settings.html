@@ -48,15 +48,16 @@
         .stat-card .value { font-size: 24px; font-weight: bold; color: #00a1d6; margin-top: 5px; }
 
         /* 表格 */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #fafafa; font-weight: 500; color: #555; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        th { background: #f5f7fa; font-weight: 600; color: #18191c; font-size: 14px; }
+        tr:hover td { background: #f5f7fa; }
 
         /* 消息 */
-        .message { padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; }
-        .message.success { background: #e8f5e9; color: #2f9e44; }
-        .message.error { background: #ffebee; color: #f04c49; }
-        .message.info { background: #e3f2fd; color: #00a1d6; }
+        .message { padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; font-weight: 500; }
+        .message.success { background: #e8f5e9; color: #2f9e44; border: 1px solid #2f9e44; }
+        .message.error { background: #ffebee; color: #f04c49; border: 1px solid #f04c49; }
+        .message.info { background: #e3f2fd; color: #00a1d6; border: 1px solid #00a1d6; }
 
         /* 浮动保存按钮 */
         #save-btn { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; background: #2f9e44 !important; color: #fff !important; border: 2px solid #1a6b2a !important; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; display: none; }
@@ -219,7 +220,7 @@
 
         <!-- 冷存储 -->
         <div id="tab-cold-storage" class="tab-content">
-            <div id="cold-message"></div>
+            <div id="cold-message" style="margin-bottom:15px;"></div>
 
             <h3>冷存储配置</h3>
             <div class="stats-grid" id="cold-stats-row">
@@ -976,7 +977,7 @@
                 // 渲染冷存储视频列表
                 const container = document.getElementById("cold-stats");
                 if (stats.cold_videos && stats.cold_videos.length > 0) {
-                    let html = `<table>
+                    let html = `<table class="table">
                         <tr>
                             <th>标题</th>
                             <th>作者</th>
@@ -1048,7 +1049,7 @@
 
             const container = document.getElementById("candidates-list");
             if (scannedCandidates.length > 0) {
-                let html = `<table>
+                let html = `<table class="table">
                     <tr>
                         <th>标题</th>
                         <th>作者</th>

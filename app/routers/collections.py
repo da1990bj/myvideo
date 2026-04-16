@@ -4,7 +4,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlmodel import Session, select
 
 from database import get_session
@@ -28,6 +28,7 @@ async def create_collection(
         description=collection_data.description,
         user_id=current_user.id,
         is_public=collection_data.is_public,
+        drama_type=collection_data.drama_type,
     )
     session.add(collection)
     session.commit()
@@ -57,12 +58,81 @@ async def update_collection(
         collection.title = update_data.title
     if update_data.description is not None:
         collection.description = update_data.description
+    if update_data.is_public is not None:
+        collection.is_public = update_data.is_public
+    if update_data.drama_type is not None:
+        collection.drama_type = update_data.drama_type
 
     session.add(collection)
     session.commit()
     session.refresh(collection)
 
     return collection
+
+
+@router.get("/collections/drama", response_model=List[CollectionRead])
+async def get_drama_collections(
+    session: Session = Depends(get_session),
+    drama_type: str = Query(..., description="正剧类型: tv, anime"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100)
+):
+    """
+    获取正剧合集列表（电视剧/动漫合集）
+
+    用于在首页以合集形式显示电视剧/动漫
+    """
+    offset = (page - 1) * size
+
+    collections = session.exec(
+        select(Collection)
+        .where(
+            Collection.drama_type == drama_type,
+            Collection.is_public == True
+        )
+        .order_by(Collection.created_at.desc())
+        .offset(offset)
+        .limit(size)
+    ).all()
+
+    # 动态计算 video_count 和 first_video_id
+    result = []
+    for coll in collections:
+        items = session.exec(
+            select(CollectionItem)
+            .where(CollectionItem.collection_id == coll.id)
+            .order_by(CollectionItem.order)
+        ).all()
+
+        coll_dict = coll.model_dump()
+        coll_dict["video_count"] = len(items)
+        coll_dict["first_video_id"] = items[0].video_id if items else None
+
+        # 添加 owner 信息
+        if coll.owner:
+            user_roles = session.exec(select(UserRole).where(UserRole.user_id == coll.owner.id)).all()
+            role_ids = [ur.role_id for ur in user_roles]
+            role_names = []
+            for rid in role_ids:
+                role = session.get(Role, rid)
+                if role:
+                    role_names.append(role.name)
+            coll_dict["owner"] = {
+                "id": str(coll.owner.id),
+                "username": coll.owner.username,
+                "email": coll.owner.email,
+                "is_active": coll.owner.is_active,
+                "is_admin": coll.owner.is_admin,
+                "role_ids": role_ids,
+                "role_names": role_names,
+                "created_at": coll.owner.created_at,
+                "avatar_path": coll.owner.avatar_path,
+                "bio": coll.owner.bio,
+            }
+
+        result.append(coll_dict)
+
+    return result
 
 
 @router.get("/collections", response_model=List[CollectionRead])

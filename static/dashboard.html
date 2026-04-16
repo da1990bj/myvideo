@@ -91,20 +91,21 @@
         <button onclick="loadData()" style="padding: 4px 10px; margin-left: 10px; background: #00a1d6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">刷新</button>
     </div>
     <div style="display:flex; gap:10px; margin-bottom: 20px;">
+        <a href="/static/upload.html" class="upload-btn" style="background:#fb7299;">投稿</a>
         <button id="tab-btn-videos" class="upload-btn" onclick="switchTab('videos')" style="background:#00a1d6;">我的视频</button>
         <button id="tab-btn-collections" class="upload-btn" onclick="switchTab('collections')" style="background:#fff; color:#666; border:1px solid #ddd;">我的合集</button>
-             <button id="tab-btn-uploads" class="upload-btn" onclick="switchTab('uploads')" style="background:#fff; color:#666; border:1px solid #ddd;">上传管理</button>
-             <button id="tab-btn-private" class="upload-btn" onclick="switchTab('private')" style="background:#fff; color:#666; border:1px solid #ddd;">🔒 私密视频</button>
-             <a href="/static/upload.html" class="upload-btn" style="background:#fb7299;">投稿</a>
-        </div>
-    </h1>
+        <button id="tab-btn-series" class="upload-btn" onclick="switchTab('series')" style="background:#fff; color:#666; border:1px solid #ddd;">剧集管理</button>
+        <button id="tab-btn-uploads" class="upload-btn" onclick="switchTab('uploads')" style="background:#fff; color:#666; border:1px solid #ddd;">上传管理</button>
+        <button id="tab-btn-private" class="upload-btn" onclick="switchTab('private')" style="background:#fff; color:#666; border:1px solid #ddd;">🔒 私密视频</button>
+    </div>
 
     <!-- Videos Tab -->
     <div id="tab-videos">
         <table>
             <thead>
                 <tr>
-                    <th width="40%">视频信息</th>
+                    <th width="30%">视频信息</th>
+                    <th>分类</th>
                     <th>数据 (播放/完播)</th>
                     <th>转码状态</th>
                     <th>审核状态</th>
@@ -141,6 +142,42 @@
             </thead>
             <tbody id="collection-list">
                 <tr><td colspan="4" style="text-align:center;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Series Tab -->
+    <div id="tab-series" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div></div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="openSeriesModal()" style="background:#00a1d6; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">+ 创建剧集系列</button>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:16px; margin-bottom:20px;">
+            <select id="series-filter-type" onchange="loadSeriesList()" style="padding:8px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px; min-width:150px;">
+                <option value="">全部类型</option>
+                <option value="movie">电影</option>
+                <option value="tv">电视剧</option>
+                <option value="anime">动画</option>
+            </select>
+            <input type="text" id="series-search" placeholder="搜索剧集系列..." oninput="loadSeriesList()" style="flex:1; padding:8px 16px; border:1px solid #e9ecef; border-radius:20px; outline:none; max-width:300px;">
+        </div>
+
+        <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <thead>
+                <tr style="background:#f5f7fa;">
+                    <th style="padding:14px 16px; text-align:left; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0;">封面</th>
+                    <th style="padding:14px 16px; text-align:left; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0;">剧集系列</th>
+                    <th style="padding:14px 16px; text-align:left; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; width:80px;">类型</th>
+                    <th style="padding:14px 16px; text-align:left; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; width:120px;">地区</th>
+                    <th style="padding:14px 16px; text-align:left; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; width:80px;">状态</th>
+                    <th style="padding:14px 16px; text-align:left; font-weight:600; color:#18191c; border-bottom:1px solid #f0f0f0; width:220px;">操作</th>
+                </tr>
+            </thead>
+            <tbody id="series-list">
+                <tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">加载中...</td></tr>
             </tbody>
         </table>
     </div>
@@ -188,6 +225,104 @@
     </div>
 </div>
 
+<!-- Series Modal -->
+<div id="series-modal" class="modal">
+    <div class="modal-content" style="max-width:600px; max-height:90vh; overflow-y:auto;">
+        <h2 id="series-modal-title" style="margin:0 0 20px; font-size:18px; color:#18191c;">创建剧集系列</h2>
+        <form id="series-form">
+            <input type="hidden" id="series-id">
+
+            <div class="form-group">
+                <label>封面图片</label>
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div id="cover-placeholder" style="width:160px; height:90px; border-radius:6px; background:#f5f5f5; display:flex; align-items:center; justify-content:center; color:#999; font-size:40px; border:1px dashed #ddd;">📺</div>
+                    <img id="cover-preview" style="width:160px; height:90px; border-radius:6px; object-fit:cover; border:1px solid #e9ecef; display:none;">
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <button type="button" onclick="document.getElementById('cover-input').click()" style="padding:8px 12px; background:#6c757d; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:14px;">上传封面</button>
+                        <button type="button" onclick="clearCover()" style="padding:8px 12px; background:#eee; color:#333; border:none; border-radius:6px; cursor:pointer; font-size:14px;">清除</button>
+                        <input type="file" id="cover-input" accept="image/*" style="display:none;" onchange="uploadCover(this)">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>标题 *</label>
+                <input type="text" id="series-title" required placeholder="如：进击的巨人 第1季" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px; box-sizing:border-box;">
+            </div>
+
+            <div class="form-group">
+                <label>简介</label>
+                <textarea id="series-description" rows="3" placeholder="剧集简介..." style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px; box-sizing:border-box; resize:vertical;"></textarea>
+            </div>
+
+            <div style="display:flex; gap:16px;">
+                <div class="form-group" style="flex:1;">
+                    <label>分类 *</label>
+                    <select id="series-drama_type" required onchange="onSeriesTypeChange()" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px;">
+                        <option value="movie">电影</option>
+                        <option value="tv">电视剧</option>
+                        <option value="anime" selected>动画</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>发行年份</label>
+                    <input type="number" id="series-drama_year" min="1900" max="2100" placeholder="如：2024" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>总集数</label>
+                    <input type="number" id="series-total_episodes" min="1" placeholder="如：12" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+            </div>
+
+            <div style="display:flex; gap:16px;">
+                <div class="form-group" style="flex:1;">
+                    <label>地区</label>
+                    <select id="series-drama_region" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px;">
+                        <option value="">选择...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>语言</label>
+                    <select id="series-drama_language" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px;">
+                        <option value="">选择...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>评分</label>
+                    <input type="number" id="series-rating" step="0.1" min="0" max="10" placeholder="0-10" style="width:100%; padding:10px 12px; border:1px solid #e9ecef; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+            </div>
+
+            <!-- 动态筛选字段 -->
+            <div id="series-dynamic-fields"></div>
+        </form>
+        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px; padding-top:20px; border-top:1px solid #f0f0f0;">
+            <button onclick="closeSeriesModal()" style="padding:10px 20px; background:#eee; color:#333; border:none; border-radius:6px; cursor:pointer; font-size:14px;">取消</button>
+            <button onclick="saveSeries()" style="padding:10px 20px; background:#2f9e44; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:14px;">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Video Modal for Series -->
+<div id="series-video-modal" class="modal">
+    <div class="modal-content" style="max-width:800px; max-height:90vh; overflow-y:auto;">
+        <h2 id="series-video-modal-title" style="margin:0 0 20px; font-size:18px; color:#18191c;">管理集数</h2>
+
+        <div style="margin-bottom:16px; padding:16px; background:#f8f9fa; border-radius:8px;">
+            <h4 style="margin:0 0 12px; font-size:14px;">添加视频</h4>
+            <input type="text" id="series-search-video" placeholder="搜索视频标题..." style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;" oninput="searchVideosForSeries(this.value)">
+            <div id="series-search-results" style="max-height:200px; overflow-y:auto; margin-top:8px; display:none;"></div>
+        </div>
+
+        <p style="color:#666; font-size:14px;">已添加的视频：</p>
+        <div id="series-video-list" style="border:1px solid #e9ecef; border-radius:6px; max-height:300px; overflow-y:auto;"></div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:20px; padding-top:20px; border-top:1px solid #f0f0f0;">
+            <button onclick="closeSeriesVideoModal()" style="padding:10px 20px; background:#eee; color:#333; border:none; border-radius:6px; cursor:pointer; font-size:14px;">关闭</button>
+        </div>
+    </div>
+</div>
+
 
 <!-- 编辑弹窗 -->
 <div id="editModal" class="modal">
@@ -223,7 +358,7 @@
                     </select>
                 </div>
             </div>
-            
+
             <div class="form-group">
                 <label>标签 (Tags)</label>
                 <div class="tags-container" onclick="document.getElementById('tagInput').focus()">
@@ -294,6 +429,7 @@
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
 
     let currentTab = 'videos';
+    let currentUser = null;  // 当前用户信息
     let socket;
     const videoStateMap = {};  // 缓存视频状态 {video_id: {progress, status}}
     const uploadStateMap = {};  // 缓存上传状态 {session_id: {progress, uploaded_chunks, total_chunks}}
@@ -682,6 +818,17 @@
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
 
+        // 获取当前用户信息（用于判断是否显示剧集管理tab）
+        try {
+            const userRes = await fetch("/users/me", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (userRes.ok) {
+                currentUser = await userRes.json();
+                updateSeriesTabVisibility();
+            }
+        } catch (e) { console.error(e); }
+
         // 初始化 WebSocket 连接
         initWebSocket();
 
@@ -690,6 +837,16 @@
         loadMyVideos(true);  // 初始加载，不显示轮询提示
         initTagInput();
     });
+
+    function updateSeriesTabVisibility() {
+        const seriesTabBtn = document.getElementById("tab-btn-series");
+        if (!seriesTabBtn) return;
+        const canSeeSeriesTab = currentUser && (
+            currentUser.is_admin ||
+            (currentUser.role_names && currentUser.role_names.includes('Operations'))
+        );
+        seriesTabBtn.style.display = canSeeSeriesTab ? '' : 'none';
+    }
 
     async function loadStats() {
         const token = localStorage.getItem("access_token");
@@ -710,16 +867,18 @@
         currentTab = tab;
         document.getElementById("tab-videos").style.display = tab === 'videos' ? 'block' : 'none';
         document.getElementById("tab-collections").style.display = tab === 'collections' ? 'block' : 'none';
+        document.getElementById("tab-series").style.display = tab === 'series' ? 'block' : 'none';
         document.getElementById("tab-uploads").style.display = tab === 'uploads' ? 'block' : 'none';
         document.getElementById("tab-private").style.display = tab === 'private' ? 'block' : 'none';
 
         const btnVideos = document.getElementById("tab-btn-videos");
         const btnCols = document.getElementById("tab-btn-collections");
+        const btnSeries = document.getElementById("tab-btn-series");
         const btnUploads = document.getElementById("tab-btn-uploads");
         const btnPrivate = document.getElementById("tab-btn-private");
 
         // 重置所有按钮样式
-        [btnVideos, btnCols, btnUploads, btnPrivate].forEach(btn => {
+        [btnVideos, btnCols, btnSeries, btnUploads, btnPrivate].forEach(btn => {
             btn.style.background = "#fff";
             btn.style.color = "#666";
             btn.style.border = "1px solid #ddd";
@@ -735,6 +894,11 @@
             btnCols.style.color = "#fff";
             btnCols.style.border = "none";
             loadMyCollections();
+        } else if (tab === 'series') {
+            btnSeries.style.background = "#00a1d6";
+            btnSeries.style.color = "#fff";
+            btnSeries.style.border = "none";
+            loadSeriesList();
         } else if (tab === 'uploads') {
             btnUploads.style.background = "#00a1d6";
             btnUploads.style.color = "#fff";
@@ -868,7 +1032,13 @@
                     const opt = document.createElement("option");
                     opt.value = cat.id;
                     opt.text = cat.name;
+                    opt.dataset.slug = cat.slug || "";
                     select.appendChild(opt);
+                });
+                // 保存 category id -> slug 映射
+                window.categorySlugMap = {};
+                categories.forEach(cat => {
+                    window.categorySlugMap[cat.id] = cat.slug || "";
                 });
             }
         } catch(e) {}
@@ -879,7 +1049,8 @@
         try {
             // 只在手动刷新或轮询时显示提示
             if (!skipPolling) {
-                document.getElementById("refresh-hint").classList.add("show");
+                const refreshHint = document.getElementById("refresh-hint");
+                if (refreshHint) refreshHint.classList.add("show");
             }
 
             const res = await fetch("/users/me/videos", {
@@ -887,7 +1058,8 @@
             });
 
             if (!skipPolling) {
-                setTimeout(() => document.getElementById("refresh-hint").classList.remove("show"), 500);
+                const refreshHint = document.getElementById("refresh-hint");
+                if (refreshHint) setTimeout(() => refreshHint.classList.remove("show"), 500);
             }
 
             if (res.ok) {
@@ -1013,6 +1185,7 @@
             "<h4><a href='/static/video.html?id=" + v.id + "' target='_blank'>" + v.title + "</a></h4>" +
             "<span style='font-size:12px; color:#999;'>🌍 公开</span>" +
             "</div></div></td>" +
+            "<td>" + (v.category ? v.category.name : '未分类') + "</td>" +
             "<td><div>" + v.views + " 播放 / " + v.complete_views + " 完播</div>" +
             "<div style='font-size:12px; color:#999;'>完播率: " + rate + "</div></td>" +
             "<td>" + transcodeHtml + "</td>" +
@@ -1134,7 +1307,8 @@
                             <table>
                                 <thead>
                                     <tr>
-                                        <th width="40%">视频信息</th>
+                                        <th width="30%">视频信息</th>
+                                        <th>分类</th>
                                         <th>转码状态</th>
                                         <th>审核状态</th>
                                         <th>时间</th>
@@ -1300,6 +1474,7 @@
             "<h4><a href='/static/video.html?id=" + v.id + "' target='_blank'>" + v.title + "</a></h4>" +
             "<span style='font-size:12px; color:#999;'>🔒 私密</span>" +
             "</div></div></td>" +
+            "<td>" + (v.category ? v.category.name : '未分类') + "</td>" +
             "<td>" + transcodeHtml + "</td>" +
             "<td>" + auditHtml + "</td>" +
             "<td>" + new Date(v.created_at).toLocaleDateString() + "</td>" +
@@ -1508,12 +1683,13 @@
         document.getElementById("editTitle").value = title;
         document.getElementById("editVisibility").value = visibility;
         if(categoryId) document.getElementById("editCategory").value = categoryId;
-        
+
         // 恢复标签 (稳健解析)
         currentTags = tagsStr ? tagsStr.split(",").filter(t => t) : [];
         renderTags();
-        
+
         document.getElementById("editThumbPreview").src = thumbPath || "/static/default_thumb.jpg";
+
         document.getElementById("editModal").style.display = "flex";
     }
 
@@ -1600,28 +1776,43 @@
         const token = localStorage.getItem("access_token");
 
         const currentThumbnailPath = document.getElementById("editThumbPreview").src;
-        const temp_thumbnail_path = currentThumbnailPath.startsWith(window.location.origin) ? currentThumbnailPath.substring(window.location.origin.length) : currentThumbnailPath;
+        // 提取路径并去除时间戳参数（随机生成时会添加 ?t=timestamp）
+        const getPathWithoutTimestamp = (url) => {
+            if (url.startsWith(window.location.origin)) {
+                return url.substring(window.location.origin.length).split('?')[0];
+            }
+            return url.split('?')[0];
+        };
+        const temp_thumbnail_path = getPathWithoutTimestamp(currentThumbnailPath);
+
+        // 构建请求数据
+        const updateData = {
+            title,
+            visibility,
+            category_id,
+            tags: currentTags,
+            temp_thumbnail_path
+        };
+        console.log('updateData:', JSON.stringify(updateData));
+
         try {
             const res = await fetch("/videos/" + id, {
                 method: "PUT",
-                headers: { 
+                headers: {
                     "Authorization": "Bearer " + token,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ 
-                    title, visibility, category_id, 
-                    tags: currentTags, // 提交数组
-                    temp_thumbnail_path // 添加正确的临时封面路径字段名
-                })
+                body: JSON.stringify(updateData)
             });
             if (res.ok) {
                 alert("修改成功");
                 closeModal();
                 loadMyVideos();
             } else {
-                alert("修改失败");
+                const err = await res.json().catch(() => ({}));
+                alert("修改失败: " + (err.detail || "未知错误"));
             }
-        } catch(e) { alert("网络错误"); }
+        } catch(e) { alert("网络错误: " + e.message); }
     }
 
     async function regenerateThumb() {
@@ -1807,6 +1998,440 @@
             }
         } catch (e) {
             alert('删除失败');
+        }
+    }
+
+    // ============ Series Management Functions ============
+    let currentSeriesData = null;
+    let seriesCurrentVideoId = null;
+    let selectedSeriesStyle = [];
+    let selectedSeriesStatus = null;
+    let selectedSeriesKind = null;
+
+    async function loadSeriesList() {
+        const tbody = document.getElementById("series-list");
+        const typeFilter = document.getElementById("series-filter-type").value;
+        const searchQuery = document.getElementById("series-search").value;
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">加载中...</td></tr>';
+
+        try {
+            let url = "/drama-series";
+            const params = [];
+            if (typeFilter) params.push("drama_type=" + typeFilter);
+            if (params.length > 0) url += "?" + params.join("&");
+
+            const res = await fetch(url);
+            if (res.ok) {
+                let data = await res.json();
+                // Filter by search query locally
+                if (searchQuery) {
+                    data = data.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+                }
+                renderSeriesList(data);
+            }
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">加载失败</td></tr>';
+        }
+    }
+
+    function renderSeriesList(seriesList) {
+        const tbody = document.getElementById("series-list");
+        if (seriesList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">暂无剧集系列</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = seriesList.map(s => {
+            const coverHtml = s.cover_image
+                ? `<img src="${s.cover_image}" style="width:80px; height:45px; border-radius:4px; object-fit:cover; background:#f0f0f0;">`
+                : `<div style="width:80px; height:45px; border-radius:4px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#999;">📺</div>`;
+            const typeText = s.drama_type === 'anime' ? '动画' : s.drama_type === 'tv' ? '电视剧' : '电影';
+            const statusText = s.drama_status === 'ongoing' || s.drama_status === '连载' ? '连载' : s.drama_status === 'finished' || s.drama_status === '完结' ? '完结' : '-';
+            const regionText = s.drama_region || '-';
+
+            return `<tr>
+                <td>${coverHtml}</td>
+                <td><div style="font-weight:600; color:#18191c;">${s.title}</div><div style="font-size:12px; color:#9499a0; margin-top:2px;">${s.drama_year || ''} · ${s.video_count || 0} 集</div></td>
+                <td><span style="padding:4px 10px; border-radius:4px; font-size:12px; font-weight:500; background:${s.drama_type === 'anime' ? '#e7f5ff' : s.drama_type === 'tv' ? '#fff0f5' : '#f0f9f0'}; color:${s.drama_type === 'anime' ? '#00a1d6' : s.drama_type === 'tv' ? '#e6507a' : '#2f9e44'};">${typeText}</span></td>
+                <td>${regionText}</td>
+                <td><span style="padding:4px 10px; border-radius:4px; font-size:12px; font-weight:500; background:${s.drama_status === 'ongoing' || s.drama_status === '连载' ? '#ff6b6b' : '#51cf66'}; color:#fff;">${statusText}</span></td>
+                <td>
+                    <button onclick="openSeriesModal('${s.id}')" style="padding:6px 12px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px; margin-right:8px;">编辑</button>
+                    <button onclick="openSeriesVideoModal('${s.id}')" style="padding:6px 12px; background:#6c757d; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px; margin-right:8px;">管理集数</button>
+                    <button onclick="deleteSeries('${s.id}')" style="padding:6px 12px; background:#f04c49; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">删除</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function openSeriesModal(id) {
+        currentSeriesData = null;
+        document.getElementById("series-form").reset();
+        document.getElementById("series-id").value = "";
+        document.getElementById("cover-preview").src = "";
+        document.getElementById("cover-preview").style.display = "none";
+        document.getElementById("cover-placeholder").style.display = "flex";
+        document.getElementById("series-modal-title").textContent = "创建剧集系列";
+        document.getElementById("series-rating").value = "";
+        selectedSeriesStyle = [];
+        selectedSeriesStatus = null;
+        selectedSeriesKind = null;
+        document.getElementById("series-dynamic-fields").innerHTML = "";
+
+        onSeriesTypeChange();
+
+        if (id) {
+            loadSeriesForEdit(id);
+        } else {
+            document.getElementById("series-modal").style.display = "flex";
+        }
+    }
+
+    async function loadSeriesForEdit(id) {
+        try {
+            const res = await fetch("/drama-series/" + id);
+            if (!res.ok) return;
+            const data = await res.json();
+            currentSeriesData = data;
+
+            document.getElementById("series-id").value = id;
+            document.getElementById("series-title").value = data.title || "";
+            document.getElementById("series-description").value = data.description || "";
+            document.getElementById("series-drama_type").value = data.drama_type || "anime";
+            document.getElementById("series-drama_year").value = data.drama_year || "";
+            document.getElementById("series-total_episodes").value = data.total_episodes || "";
+            document.getElementById("series-rating").value = data.rating || "";
+
+            selectedSeriesStyle = data.drama_style || [];
+            selectedSeriesStatus = data.drama_status || null;
+            selectedSeriesKind = data.drama_kind || null;
+
+            await onSeriesTypeChange();
+
+            // 设置地区/语言（在 onSeriesTypeChange 之后，因为 onSeriesTypeChange 会重置下拉选项）
+            document.getElementById("series-drama_region").value = data.drama_region || "";
+            document.getElementById("series-drama_language").value = data.drama_language || "";
+
+            if (data.cover_image) {
+                document.getElementById("cover-preview").src = data.cover_image;
+                document.getElementById("cover-preview").style.display = "block";
+                document.getElementById("cover-placeholder").style.display = "none";
+            }
+
+            document.getElementById("series-modal-title").textContent = "编辑剧集系列";
+            document.getElementById("series-modal").style.display = "flex";
+        } catch(e) {
+            alert("加载失败");
+        }
+    }
+
+    function closeSeriesModal() {
+        document.getElementById("series-modal").style.display = "none";
+    }
+
+    async function onSeriesTypeChange() {
+        const type = document.getElementById("series-drama_type").value;
+        const dynamicFields = document.getElementById("series-dynamic-fields");
+        dynamicFields.innerHTML = "";
+
+        try {
+            const res = await fetch("/dramas/filters/" + type);
+            if (!res.ok) return;
+            const filters = await res.json();
+            let html = "";
+
+            filters.tabs.forEach(tab => {
+                if (!tab.options || tab.options.length === 0) return;
+                if (tab.slug === "region") {
+                    const select = document.getElementById("series-drama_region");
+                    select.innerHTML = '<option value="">选择...</option>';
+                    tab.options.forEach(opt => {
+                        select.innerHTML += `<option value="${opt}">${opt}</option>`;
+                    });
+                } else if (tab.slug === "language") {
+                    const select = document.getElementById("series-drama_language");
+                    select.innerHTML = '<option value="">选择...</option>';
+                    tab.options.forEach(opt => {
+                        select.innerHTML += `<option value="${opt}">${opt}</option>`;
+                    });
+                } else if (tab.slug === "style") {
+                    const tags = tab.options.map(opt => {
+                        const isActive = selectedSeriesStyle.includes(opt);
+                        return `<label class="filter-tag ${isActive ? 'active' : ''}" onclick="toggleSeriesStyle('${opt.replace(/'/g, "\\'")}', this)" style="display:inline-flex; align-items:center; padding:6px 14px; border-radius:16px; background:${isActive ? '#00a1d6' : '#f4f5f7'}; color:${isActive ? '#fff' : '#666'}; font-size:13px; cursor:pointer; transition:0.2s; border:none;">${opt}</label>`;
+                    }).join('');
+                    html += `<div class="form-group"><label>风格/题材（多选）</label><div style="display:flex; flex-wrap:wrap; gap:8px;">${tags}</div></div>`;
+                } else if (tab.slug === "status") {
+                    const labelMap = { 'ongoing': '连载中', 'finished': '已完结', '连载': '连载中', '完结': '已完结' };
+                    const tags = tab.options.map(opt => {
+                        const label = labelMap[opt] || opt;
+                        const isActive = selectedSeriesStatus === opt;
+                        return `<label class="filter-tag ${isActive ? 'active' : ''}" onclick="toggleSeriesStatus('${opt}', this)" style="display:inline-flex; align-items:center; padding:6px 14px; border-radius:16px; background:${isActive ? '#00a1d6' : '#f4f5f7'}; color:${isActive ? '#fff' : '#666'}; font-size:13px; cursor:pointer; transition:0.2s; border:none;">${label}</label>`;
+                    }).join('');
+                    html += `<div class="form-group"><label>状态</label><div style="display:flex; flex-wrap:wrap; gap:8px;">${tags}</div></div>`;
+                } else if (tab.slug === "kind") {
+                    const tags = tab.options.map(opt => {
+                        const isActive = selectedSeriesKind === opt;
+                        return `<label class="filter-tag ${isActive ? 'active' : ''}" onclick="toggleSeriesKind('${opt.replace(/'/g, "\\'")}', this)" style="display:inline-flex; align-items:center; padding:6px 14px; border-radius:16px; background:${isActive ? '#00a1d6' : '#f4f5f7'}; color:${isActive ? '#fff' : '#666'}; font-size:13px; cursor:pointer; transition:0.2s; border:none;">${opt}</label>`;
+                    }).join('');
+                    html += `<div class="form-group"><label>类型</label><div style="display:flex; flex-wrap:wrap; gap:8px;">${tags}</div></div>`;
+                }
+            });
+
+            dynamicFields.innerHTML = html;
+
+            // Restore selections
+            if (selectedSeriesStyle.length > 0) {
+                dynamicFields.querySelectorAll("#style-filter-options .filter-tag").forEach(el => {
+                    if (selectedSeriesStyle.includes(el.textContent.trim())) el.classList.add("active");
+                });
+            }
+        } catch (e) {
+            console.error("加载筛选选项失败:", e);
+        }
+    }
+
+    function toggleSeriesStyle(value, el) {
+        const idx = selectedSeriesStyle.indexOf(value);
+        if (idx > -1) {
+            selectedSeriesStyle.splice(idx, 1);
+            el.style.background = "#f4f5f7";
+            el.style.color = "#666";
+        } else {
+            selectedSeriesStyle.push(value);
+            el.style.background = "#00a1d6";
+            el.style.color = "#fff";
+        }
+    }
+
+    function toggleSeriesStatus(value, el) {
+        selectedSeriesStatus = value;
+        const container = el.parentElement;
+        container.querySelectorAll(".filter-tag").forEach(t => {
+            t.style.background = "#f4f5f7";
+            t.style.color = "#666";
+        });
+        el.style.background = "#00a1d6";
+        el.style.color = "#fff";
+    }
+
+    function toggleSeriesKind(value, el) {
+        selectedSeriesKind = value;
+        const container = el.parentElement;
+        container.querySelectorAll(".filter-tag").forEach(t => {
+            t.style.background = "#f4f5f7";
+            t.style.color = "#666";
+        });
+        el.style.background = "#00a1d6";
+        el.style.color = "#fff";
+    }
+
+    async function saveSeries() {
+        const id = document.getElementById("series-id").value;
+        const data = {
+            title: document.getElementById("series-title").value,
+            description: document.getElementById("series-description").value,
+            drama_type: document.getElementById("series-drama_type").value,
+            drama_kind: selectedSeriesKind,
+            drama_year: document.getElementById("series-drama_year").value ? parseInt(document.getElementById("series-drama_year").value) : null,
+            total_episodes: document.getElementById("series-total_episodes").value ? parseInt(document.getElementById("series-total_episodes").value) : null,
+            rating: document.getElementById("series-rating").value ? parseFloat(document.getElementById("series-rating").value) : null,
+            cover_image: document.getElementById("cover-preview").src || null,
+            drama_region: document.getElementById("series-drama_region").value || null,
+            drama_language: document.getElementById("series-drama_language").value || null,
+            drama_style: selectedSeriesStyle.length > 0 ? selectedSeriesStyle : null,
+            drama_status: selectedSeriesStatus
+        };
+
+        const token = localStorage.getItem("access_token");
+        const url = id ? "/admin/drama-series/" + id : "/admin/drama-series";
+        const method = id ? "PUT" : "POST";
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                closeSeriesModal();
+                loadSeriesList();
+            } else {
+                alert("保存失败");
+            }
+        } catch(e) {
+            alert("网络错误");
+        }
+    }
+
+    async function deleteSeries(id) {
+        if (!confirm("确定删除此剧集系列吗？")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/admin/drama-series/" + id, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                loadSeriesList();
+            } else {
+                alert("删除失败");
+            }
+        } catch(e) {
+            alert("网络错误");
+        }
+    }
+
+    function clearCover() {
+        document.getElementById("cover-preview").src = "";
+        document.getElementById("cover-preview").style.display = "none";
+        document.getElementById("cover-placeholder").style.display = "flex";
+    }
+
+    async function uploadCover(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append("file", file);
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/upload/cover", {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: formData
+            });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("cover-preview").src = data.url;
+                document.getElementById("cover-preview").style.display = "block";
+                document.getElementById("cover-placeholder").style.display = "none";
+            }
+        } catch(e) {
+            alert("封面上传失败");
+        }
+    }
+
+    // Video Modal Functions
+    async function openSeriesVideoModal(id) {
+        seriesCurrentVideoId = id;
+        const res = await fetch("/drama-series/" + id);
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById("series-video-modal-title").textContent = data.title + " - 管理集数";
+        renderSeriesVideoList(data.videos || []);
+        document.getElementById("series-video-modal").style.display = "flex";
+    }
+
+    function closeSeriesVideoModal() {
+        document.getElementById("series-video-modal").style.display = "none";
+        document.getElementById("series-search-results").style.display = "none";
+        document.getElementById("series-search-video").value = "";
+    }
+
+    function renderSeriesVideoList(videos) {
+        const container = document.getElementById("series-video-list");
+        if (videos.length === 0) {
+            container.innerHTML = '<div style="padding:40px; text-align:center; color:#999;">暂无视频</div>';
+            return;
+        }
+        container.innerHTML = videos.map((v, idx) => {
+            const thumbHtml = v.thumbnail_path ? `<img src="${v.thumbnail_path}" style="width:80px; height:45px; object-fit:cover; border-radius:4px; background:#f0f0f0;">` : '<div style="width:80px; height:45px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; color:#999;">📺</div>';
+            const epNum = v.episode_number || idx + 1;
+            return `<div style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-bottom:1px solid #f0f0f0;">
+                <span style="color:#999; cursor:move;">☰</span>
+                <div style="width:80px; height:45px; border-radius:4px; overflow:hidden;">${thumbHtml}</div>
+                <div style="flex:1;">
+                    <div style="font-size:14px; color:#18191c;">${v.title}</div>
+                    <div style="font-size:12px; color:#9499a0;">第${epNum}集 · ${v.views || 0}次播放</div>
+                </div>
+                <button onclick="removeSeriesVideo('${v.id}')" style="padding:6px 12px; background:#f04c49; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">移除</button>
+            </div>`;
+        }).join('');
+    }
+
+    async function removeSeriesVideo(videoId) {
+        if (!confirm("确定从剧集中移除此视频吗？")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/admin/drama-series/" + seriesCurrentVideoId + "/videos/" + videoId, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (res.ok) {
+                openSeriesVideoModal(seriesCurrentVideoId);
+            } else {
+                alert("移除失败");
+            }
+        } catch(e) {
+            alert("网络错误");
+        }
+    }
+
+    async function searchVideosForSeries(query) {
+        if (query.length < 2) {
+            document.getElementById("series-search-results").style.display = 'none';
+            return;
+        }
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/admin/videos/search?keyword=" + encodeURIComponent(query), {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const videos = data.videos || [];
+            const resultsContainer = document.getElementById("series-search-results");
+
+            // Get existing video IDs
+            const seriesRes = await fetch("/drama-series/" + seriesCurrentVideoId);
+            const seriesData = await seriesRes.json();
+            const existingVideoIds = (seriesData.videos || []).map(v => v.id);
+
+            const filtered = videos.filter(v => !existingVideoIds.includes(v.id) && v.status === 'completed');
+            if (filtered.length === 0) {
+                resultsContainer.innerHTML = '<div style="padding:12px; color:#999;">未找到视频</div>';
+                resultsContainer.style.display = 'block';
+                return;
+            }
+
+            resultsContainer.innerHTML = filtered.slice(0, 10).map(v => `
+                <div style="display:flex; align-items:center; padding:8px; border-bottom:1px solid #eee; cursor:pointer;" onclick="addVideoToSeries('${v.id}')">
+                    <div style="width:60px; height:36px; background:#000; border-radius:4px; margin-right:12px; overflow:hidden;">
+                        ${v.thumbnail_path ? '<img src="' + v.thumbnail_path + '" style="width:100%;height:100%;object-fit:cover;">' : ''}
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:500; font-size:14px;">${v.title}</div>
+                        <div style="font-size:12px; color:#999;">${v.category ? v.category.name : '未分类'}</div>
+                    </div>
+                </div>
+            `).join('');
+            resultsContainer.style.display = 'block';
+        } catch(e) {
+            console.error('Search failed:', e);
+        }
+    }
+
+    async function addVideoToSeries(videoId) {
+        if (!confirm("确定将此视频添加到剧集吗？")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            const res = await fetch("/admin/drama-series/" + seriesCurrentVideoId + "/videos", {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ video_id: videoId })
+            });
+            if (res.ok) {
+                document.getElementById("series-search-results").style.display = 'none';
+                document.getElementById("series-search-video").value = '';
+                openSeriesVideoModal(seriesCurrentVideoId);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert("添加失败：" + (err.detail || "未知错误"));
+            }
+        } catch(e) {
+            alert("网络错误");
         }
     }
 </script>

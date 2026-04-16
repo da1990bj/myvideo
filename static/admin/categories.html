@@ -2,181 +2,803 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>后台管理 - 分类</title>
+    <title>后台管理 - 分类与筛选</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        .drag-handle { cursor: move; color: #999; padding: 0 8px; }
+        .drag-handle:hover { color: #333; }
+        .drag-ghost { opacity: 0.5; background: #e7f5ff; }
+        .sortable-chosen { background: #e7f5ff; }
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid #e9ecef; align-items: center; }
+        .tab { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab:hover { color: #00a1d6; }
+        .tab.active { color: #00a1d6; border-bottom-color: #00a1d6; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .video-count { color: #999; font-size: 13px; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; }
+        .checkbox-item { display: flex; align-items: center; gap: 5px; }
+        .btn-tab-management { padding: 6px 12px; font-size: 12px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; color: #666; margin-left: 10px; }
+        .btn-tab-management:hover { background: #e9ecef; }
+        .add-row { background: #f8f9fa; }
+        .add-row:hover { background: #e9ecef; }
+        .add-input { border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; font-size: 14px; width: 150px; }
+        .add-input:focus { outline: none; border-color: #00a1d6; }
+    </style>
 </head>
 <body>
     <script src="/static/admin/admin.js"></script>
 
     <div class="container">
-        <div class="header">
-            <h1>分类管理</h1>
-            <button class="btn btn-success" onclick="showAddModal()">添加分类</button>
+        <h1 style="margin:0 0 20px; font-size:24px; color:#333;">分类与筛选</h1>
+
+        <div class="tabs" id="tabs-container">
+            <!-- 动态生成 -->
         </div>
-        <div class="table-wrapper">
+
+        <!-- 分类管理 -->
+        <div id="category-content" class="tab-content active">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th style="width:50px;"></th>
                         <th>名称</th>
                         <th>Slug</th>
                         <th>视频数量</th>
-                        <th>操作</th>
+                        <th style="width:150px;">操作</th>
                     </tr>
                 </thead>
-                <tbody id="list"></tbody>
+                <tbody id="category-list"></tbody>
+                <tfoot>
+                    <tr class="add-row">
+                        <td></td>
+                        <td><input type="text" id="category-name-new" class="add-input" placeholder="名称"></td>
+                        <td><input type="text" id="category-slug-new" class="add-input" placeholder="Slug"></td>
+                        <td colspan="2"><button class="btn btn-success" onclick="addCategory()">添加</button></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- 筛选选项管理 -->
+        <div id="filter-content" class="tab-content">
+            <div class="tab-header">
+                <span id="current-tab-name" style="font-weight:500; color:#333;"></span>
+                <button class="btn-tab-management" onclick="showTabModal()">管理分类</button>
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:50px;"></th>
+                        <th>显示名称</th>
+                        <th>适用类型</th>
+                        <th>使用次数</th>
+                        <th>状态</th>
+                        <th style="width:120px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="filter-list"></tbody>
+                <tfoot>
+                    <tr class="add-row">
+                        <td></td>
+                        <td><input type="text" id="filter-name-new" class="add-input" placeholder="显示名称"></td>
+                        <td>
+                            <label style="white-space:nowrap;"><input type="checkbox" id="type-movie-new" value="movie"> 电影</label>
+                            <label style="white-space:nowrap;"><input type="checkbox" id="type-tv-new" value="tv"> 电视剧</label>
+                            <label style="white-space:nowrap;"><input type="checkbox" id="type-anime-new" value="anime"> 动漫</label>
+                        </td>
+                        <td>-</td>
+                        <td><input type="checkbox" id="filter-active-new" checked></td>
+                        <td><button class="btn btn-success" onclick="addFilter()">添加</button></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
 
-    <!-- 添加/编辑模态框 -->
-    <div id="category-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
-        <div style="background:#fff; width:420px; margin:80px auto; padding:25px; border-radius:8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);">
-            <h2 id="modal-title" style="margin-top:0; margin-bottom:20px; color:#333;">添加分类</h2>
-            <input type="hidden" id="edit-id">
+    <!-- Tab 管理模态框 -->
+    <div id="tab-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+        <div style="background:#fff; width:700px; max-height:85vh; overflow-y:auto; margin:60px auto; border-radius:12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+            <!-- 标题栏 -->
+            <div style="padding:20px 24px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; color:#18191c; font-size:18px; font-weight:600;">管理筛选选项分类</h3>
+                <button onclick="closeTabModal()" style="background:none; border:none; font-size:24px; color:#999; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <!-- 内容区 -->
+            <div style="padding:24px;">
+                <table class="table" style="margin-bottom:0;">
+                    <thead>
+                        <tr style="background:#f5f7fa;">
+                            <th style="width:50px; text-align:center;">拖动</th>
+                            <th>名称</th>
+                            <th>Slug</th>
+                            <th style="width:80px; text-align:center;">选项数</th>
+                            <th style="width:150px; text-align:center;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tab-list"></tbody>
+                    <tfoot>
+                        <tr class="add-row" style="background:#f0f9f0;">
+                            <td style="width:50px;"></td>
+                            <td><input type="text" id="tab-name-new" class="add-input" placeholder="名称" style="width:100%; padding:8px 12px; border:1px solid #c8e6c9; border-radius:6px; font-size:14px; box-sizing:border-box;"></td>
+                            <td><input type="text" id="tab-slug-new" class="add-input" placeholder="Slug" style="width:100%; padding:8px 12px; border:1px solid #c8e6c9; border-radius:6px; font-size:14px; box-sizing:border-box;"></td>
+                            <td style="width:80px; text-align:center;">-</td>
+                            <td style="width:150px; text-align:center;"><button class="btn btn-success" onclick="addTab()">添加</button></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <!-- 底部按钮 -->
+            <div style="padding:16px 24px; border-top:1px solid #eee; text-align:right;">
+                <button onclick="closeTabModal()" class="btn" style="padding:10px 24px;">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分类编辑模态框 -->
+    <div id="category-edit-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+        <div style="background:#fff; width:400px; margin:100px auto; padding:25px; border-radius:8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);">
+            <h2 style="margin-top:0; margin-bottom:20px; color:#333;">编辑分类</h2>
+            <input type="hidden" id="category-edit-id">
             <div style="margin-bottom:15px;">
                 <label style="display:block; margin-bottom:5px; font-weight:500;">名称</label>
-                <input type="text" id="input-name" placeholder="例如：科技" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
+                <input type="text" id="category-edit-name" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
             </div>
             <div style="margin-bottom:20px;">
                 <label style="display:block; margin-bottom:5px; font-weight:500;">Slug</label>
-                <input type="text" id="input-slug" placeholder="例如：tech" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
-                <div style="color:#888; font-size:12px; margin-top:4px;">URL友好标识，建议使用英文</div>
+                <input type="text" id="category-edit-slug" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
             </div>
             <div style="text-align:right;">
-                <button onclick="closeModal()" class="btn">取消</button>
+                <button onclick="closeCategoryEditModal()" class="btn">取消</button>
                 <button onclick="saveCategory()" class="btn btn-save">保存</button>
             </div>
         </div>
     </div>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", loadCategories);
+    <!-- 选项编辑模态框 -->
+    <div id="filter-edit-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+        <div style="background:#fff; width:400px; margin:100px auto; padding:25px; border-radius:8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);">
+            <h2 style="margin-top:0; margin-bottom:20px; color:#333;">编辑选项</h2>
+            <input type="hidden" id="filter-edit-id">
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:500;">显示名称</label>
+                <input type="text" id="filter-edit-name" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:500;">适用正剧类型</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-item"><input type="checkbox" id="edit-type-movie" value="movie"> 电影</label>
+                    <label class="checkbox-item"><input type="checkbox" id="edit-type-tv" value="tv"> 电视剧</label>
+                    <label class="checkbox-item"><input type="checkbox" id="edit-type-anime" value="anime"> 动漫</label>
+                </div>
+                <div style="color:#888; font-size:12px; margin-top:4px;">不选则表示适用于所有类型</div>
+            </div>
+            <div style="margin-bottom:20px;">
+                <label class="checkbox-item"><input type="checkbox" id="filter-edit-active"> 启用</label>
+            </div>
+            <div style="text-align:right;">
+                <button onclick="closeFilterEditModal()" class="btn">取消</button>
+                <button onclick="saveFilter()" class="btn btn-save">保存</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- Tab编辑模态框 -->
+    <div id="tab-edit-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1100;">
+        <div style="background:#fff; width:400px; margin:100px auto; padding:25px; border-radius:8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);">
+            <h2 style="margin-top:0; margin-bottom:20px; color:#333;">编辑分类</h2>
+            <input type="hidden" id="tab-edit-id">
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:500;">名称</label>
+                <input type="text" id="tab-edit-name" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="display:block; margin-bottom:5px; font-weight:500;">Slug</label>
+                <input type="text" id="tab-edit-slug" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:14px;">
+            </div>
+            <div style="text-align:right;">
+                <button onclick="closeTabEditModal()" class="btn">取消</button>
+                <button onclick="saveTab()" class="btn btn-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'category';
+        let currentTabSlug = null;
+        let categoriesData = [];
+        let filtersData = [];
+        let tabsData = [];
+        let categorySortable = null;
+        let filterSortable = null;
+        let tabSortable = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            loadTabs();
+            loadCategories();
+        });
+
+        // ========== Tab 渲染与管理 ==========
+        async function loadTabs() {
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch("/admin/filters/tabs", {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                if (res.ok) {
+                    tabsData = await res.json();
+                    renderTabs();
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('tabs-container');
+            let html = `<button class="tab active" onclick="switchTab('category')">分类</button>`;
+
+            tabsData.forEach(tab => {
+                html += `<button class="tab" onclick="switchTab('${tab.slug}')" data-slug="${tab.slug}">${tab.name}</button>`;
+            });
+
+            html += `<button class="btn-tab-management" onclick="showTabModal()">管理分类</button>`;
+
+            container.innerHTML = html;
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.textContent === (tab === 'category' ? '分类' : tabsData.find(x => x.slug === tab)?.name));
+            });
+
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'category') {
+                document.getElementById('category-content').classList.add('active');
+                if (categorySortable) categorySortable.destroy();
+                loadCategories();
+            } else {
+                document.getElementById('filter-content').classList.add('active');
+                currentTabSlug = tab;
+                document.getElementById('current-tab-name').textContent = tabsData.find(x => x.slug === tab)?.name || tab;
+                if (filterSortable) filterSortable.destroy();
+                loadFilters(tab);
+            }
+        }
+
+        function showTabModal() {
+            renderTabList();
+            document.getElementById('tab-modal').style.display = 'block';
+        }
+
+        function closeTabModal() {
+            document.getElementById('tab-modal').style.display = 'none';
+        }
+
+        function renderTabList() {
+            const tbody = document.getElementById('tab-list');
+            if (tabsData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#999;">暂无分类，点击下方添加</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            tabsData.forEach((tab) => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = tab.id;
+                tr.style.cssText = 'border-bottom:1px solid #f0f0f0;';
+                tr.innerHTML = `
+                    <td style="text-align:center; color:#999;">☰</td>
+                    <td style="font-weight:500; color:#333;">${tab.name}</td>
+                    <td><code style="background:#f5f5f5; padding:2px 8px; border-radius:4px; font-size:12px; color:#666;">${tab.slug}</code></td>
+                    <td style="text-align:center; color:#666;">${tab.option_count}</td>
+                    <td style="text-align:center; white-space:nowrap;">
+                        <button class="btn" style="padding:4px 10px; margin-right:4px;" onclick="showTabEdit(${tab.id})">编辑</button>
+                        <button class="btn btn-danger" style="padding:4px 10px;" onclick="deleteTab(${tab.id}, '${tab.name}', ${tab.option_count})">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            initTabSortable();
+        }
+
+        function initTabSortable() {
+            const tbody = document.getElementById('tab-list');
+            tabSortable = new Sortable(tbody, {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'drag-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: async function(evt) {
+                    const orders = [];
+                    tbody.querySelectorAll('tr').forEach((row, index) => {
+                        orders.push({ id: parseInt(row.dataset.id), display_order: index });
+                    });
+                    await saveTabOrder(orders);
+                }
+            });
+        }
+
+        async function saveTabOrder(orders) {
+            const token = localStorage.getItem("access_token");
+            try {
+                await fetch("/admin/filters/tabs/reorder", {
+                    method: "PUT",
+                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                    body: JSON.stringify({ orders })
+                });
+                await loadTabs();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function addTab() {
+            const name = document.getElementById('tab-name-new').value.trim();
+            const slug = document.getElementById('tab-slug-new').value.trim();
+
+            if (!name || !slug) {
+                alert('请填写名称和Slug');
+                return;
+            }
+
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch('/admin/filters/tabs', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, slug, display_order: tabsData.length })
+                });
+                if (res.ok) {
+                    document.getElementById('tab-name-new').value = '';
+                    document.getElementById('tab-slug-new').value = '';
+                    await loadTabs();
+                    renderTabList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('添加失败：' + (err.detail || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
+
+        function showTabEdit(id) {
+            const tab = tabsData.find(x => x.id === id);
+            if (!tab) return;
+            document.getElementById('tab-edit-id').value = id;
+            document.getElementById('tab-edit-name').value = tab.name;
+            document.getElementById('tab-edit-slug').value = tab.slug;
+            document.getElementById('tab-edit-modal').style.display = 'block';
+        }
+
+        function closeTabEditModal() {
+            document.getElementById('tab-edit-modal').style.display = 'none';
+        }
+
+        async function saveTab() {
+            const id = document.getElementById('tab-edit-id').value;
+            const name = document.getElementById('tab-edit-name').value.trim();
+            const slug = document.getElementById('tab-edit-slug').value.trim();
+
+            if (!name || !slug) {
+                alert('请填写名称和Slug');
+                return;
+            }
+
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/filters/tabs/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, slug })
+                });
+                if (res.ok) {
+                    closeTabEditModal();
+                    await loadTabs();
+                    renderTabList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('保存失败：' + (err.detail || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
+
+        async function deleteTab(id, name, optionCount) {
+            if (optionCount > 0) {
+                alert(`该分类下有 ${optionCount} 个选项，请先删除所有选项`);
+                return;
+            }
+            if (!confirm(`确定要删除分类"${name}"吗？`)) return;
+
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/filters/tabs/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (res.ok) {
+                    await loadTabs();
+                    renderTabList();
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
+
+        // ========== 分类管理 ==========
         async function loadCategories() {
             const token = localStorage.getItem("access_token");
-            const res = await fetch("/admin/categories", {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            if (res.ok) {
-                const categories = await res.json();
-                const tbody = document.getElementById("list");
-                tbody.innerHTML = "";
-                categories.forEach(c => {
-                    const tr = document.createElement("tr");
+            try {
+                const res = await fetch("/admin/categories", {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                if (res.ok) {
+                    categoriesData = await res.json();
+                    renderCategories();
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function renderCategories() {
+            const tbody = document.getElementById('category-list');
+            if (categoriesData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#999;">暂无分类，拖动可调整顺序</td></tr>';
+            } else {
+                tbody.innerHTML = '';
+                categoriesData.forEach((c) => {
+                    const tr = document.createElement('tr');
+                    tr.dataset.id = c.id;
                     tr.innerHTML = `
-                        <td>${c.id}</td>
+                        <td class="drag-handle">☰</td>
                         <td>${c.name}</td>
-                        <td><code style="background:#f4f4f4; padding:2px 6px; border-radius:3px; font-size:13px;">${c.slug}</code></td>
-                        <td><span class="video-count">${c.video_count} 个视频</span></td>
+                        <td><code>${c.slug}</code></td>
+                        <td><span class="video-count">${c.video_count || 0} 个视频</span></td>
                         <td>
-                            <button class="btn" onclick="showEditModal(${c.id}, '${c.name}', '${c.slug}')">编辑</button>
-                            <button class="btn btn-danger" onclick="deleteCategory(${c.id}, '${c.name}', ${c.video_count})">删除</button>
+                            <button class="btn" onclick="showCategoryEdit(${c.id})">编辑</button>
+                            <button class="btn btn-danger" onclick="deleteCategory(${c.id}, '${c.name}', ${c.video_count || 0})">删除</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
                 });
-            } else if (res.status === 401 || res.status === 403) {
-                alert("您没有权限访问此功能");
+            }
+            initCategorySortable();
+        }
+
+        function initCategorySortable() {
+            const tbody = document.getElementById('category-list');
+            categorySortable = new Sortable(tbody, {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'drag-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: async function(evt) {
+                    const orders = [];
+                    tbody.querySelectorAll('tr').forEach((row, index) => {
+                        orders.push({ id: parseInt(row.dataset.id), display_order: index });
+                    });
+                    await saveCategoryOrder(orders);
+                }
+            });
+        }
+
+        async function saveCategoryOrder(orders) {
+            const token = localStorage.getItem("access_token");
+            try {
+                await fetch("/admin/categories/reorder", {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+                    body: JSON.stringify(orders)
+                });
+            } catch(e) {
+                console.error(e);
             }
         }
 
-        function showAddModal() {
-            document.getElementById("modal-title").textContent = "添加分类";
-            document.getElementById("edit-id").value = "";
-            document.getElementById("input-name").value = "";
-            document.getElementById("input-slug").value = "";
-            document.getElementById("category-modal").style.display = "block";
-        }
+        async function addCategory() {
+            const name = document.getElementById('category-name-new').value.trim();
+            const slug = document.getElementById('category-slug-new').value.trim();
 
-        function showEditModal(id, name, slug) {
-            document.getElementById("modal-title").textContent = "编辑分类";
-            document.getElementById("edit-id").value = id;
-            document.getElementById("input-name").value = name;
-            document.getElementById("input-slug").value = slug;
-            document.getElementById("category-modal").style.display = "block";
-        }
-
-        function closeModal() {
-            document.getElementById("category-modal").style.display = "none";
-        }
-
-        async function saveCategory() {
-            const name = document.getElementById("input-name").value.trim();
-            const slug = document.getElementById("input-slug").value.trim();
-            const editId = document.getElementById("edit-id").value;
-
-            if (!name) {
-                alert("请输入分类名称");
-                return;
-            }
-            if (!slug) {
-                alert("请输入分类slug");
-                return;
-            }
-
-            // 简单的 slug 验证：只能包含字母、数字、连字符
-            if (!/^[a-z0-9-]+$/.test(slug)) {
-                alert("Slug 只能包含小写字母、数字和连字符");
+            if (!name || !slug) {
+                alert('请填写名称和Slug');
                 return;
             }
 
             const token = localStorage.getItem("access_token");
-            const url = editId ? `/admin/categories/${editId}` : "/admin/categories";
-            const method = editId ? "PUT" : "POST";
+            try {
+                const res = await fetch("/admin/categories", {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, slug, display_order: categoriesData.length })
+                });
+                if (res.ok) {
+                    document.getElementById('category-name-new').value = '';
+                    document.getElementById('category-slug-new').value = '';
+                    loadCategories();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('添加失败：' + (err.detail || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
 
-            const res = await fetch(url, {
-                method: method,
-                headers: {
-                    "Authorization": "Bearer " + token,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ name, slug })
-            });
+        function showCategoryEdit(id) {
+            const c = categoriesData.find(x => x.id === id);
+            if (!c) return;
+            document.getElementById('category-edit-id').value = id;
+            document.getElementById('category-edit-name').value = c.name;
+            document.getElementById('category-edit-slug').value = c.slug;
+            document.getElementById('category-edit-modal').style.display = 'block';
+        }
 
-            if (res.ok) {
-                closeModal();
-                loadCategories();
-            } else {
-                const err = await res.json().catch(() => ({}));
-                alert("保存失败：" + (err.detail || "未知错误"));
+        function closeCategoryEditModal() {
+            document.getElementById('category-edit-modal').style.display = 'none';
+        }
+
+        async function saveCategory() {
+            const id = document.getElementById('category-edit-id').value;
+            const name = document.getElementById('category-edit-name').value.trim();
+            const slug = document.getElementById('category-edit-slug').value.trim();
+
+            if (!name || !slug) {
+                alert('请填写名称和Slug');
+                return;
+            }
+
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/categories/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, slug })
+                });
+                if (res.ok) {
+                    closeCategoryEditModal();
+                    loadCategories();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('保存失败：' + (err.detail || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
             }
         }
 
         async function deleteCategory(id, name, videoCount) {
             if (videoCount > 0) {
-                alert(`该分类下有 ${videoCount} 个视频，无法删除。请先将这些视频移到其他分类。`);
+                alert(`该分类下有 ${videoCount} 个视频，无法删除`);
                 return;
             }
-            if (!confirm(`确定要删除分类"${name}"吗？`)) {
+            if (!confirm(`确定要删除分类"${name}"吗？`)) return;
+
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/categories/${id}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                if (res.ok) {
+                    loadCategories();
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
+
+        // ========== 筛选选项管理 ==========
+        async function loadFilters(tabSlug) {
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/filters/options?tab_slug=${tabSlug}`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                if (res.ok) {
+                    filtersData = await res.json();
+                    renderFilters();
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function renderFilters() {
+            const tbody = document.getElementById('filter-list');
+            if (filtersData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">暂无选项，拖动可调整顺序</td></tr>';
+            } else {
+                const dramaTypeLabels = { 'movie': '电影', 'tv': '电视剧', 'anime': '动漫' };
+                tbody.innerHTML = filtersData.map(opt => {
+                    const displayTypes = opt.drama_types ? opt.drama_types.map(t => dramaTypeLabels[t] || t).join(', ') : '全部';
+                    return `
+                        <tr data-id="${opt.id}">
+                            <td class="drag-handle">☰</td>
+                            <td>${opt.value}</td>
+                            <td>${displayTypes}</td>
+                            <td>${opt.usage_count}</td>
+                            <td>${opt.is_active ? '<span style="color:#28a745;">启用</span>' : '<span style="color:#999;">禁用</span>'}</td>
+                            <td>
+                                <button class="btn" onclick="showFilterEdit(${opt.id})">编辑</button>
+                                <button class="btn btn-danger" onclick="deleteFilter(${opt.id}, '${opt.value}')">删除</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+            initFilterSortable();
+        }
+
+        function initFilterSortable() {
+            const tbody = document.getElementById('filter-list');
+            filterSortable = new Sortable(tbody, {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'drag-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: async function(evt) {
+                    const orders = [];
+                    tbody.querySelectorAll('tr').forEach((row, index) => {
+                        orders.push({ id: parseInt(row.dataset.id), display_order: index });
+                    });
+                    await saveFilterOrder(orders);
+                }
+            });
+        }
+
+        async function saveFilterOrder(orders) {
+            const token = localStorage.getItem("access_token");
+            try {
+                await fetch('/admin/filters/options/reorder', {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orders })
+                });
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function addFilter() {
+            const displayName = document.getElementById('filter-name-new').value.trim();
+            const isActive = document.getElementById('filter-active-new').checked;
+
+            const dramaTypes = [];
+            if (document.getElementById('type-movie-new').checked) dramaTypes.push('movie');
+            if (document.getElementById('type-tv-new').checked) dramaTypes.push('tv');
+            if (document.getElementById('type-anime-new').checked) dramaTypes.push('anime');
+
+            if (!displayName) {
+                alert('请输入显示名称');
+                return;
+            }
+
+            if (!currentTabSlug) {
+                alert('请先选择一个分类');
                 return;
             }
 
             const token = localStorage.getItem("access_token");
-            const res = await fetch(`/admin/categories/${id}`, {
-                method: "DELETE",
-                headers: { "Authorization": "Bearer " + token }
-            });
+            try {
+                const res = await fetch('/admin/filters/options', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tab_slug: currentTabSlug,
+                        value: displayName,
+                        display_order: filtersData.length,
+                        is_active: isActive,
+                        drama_types: dramaTypes
+                    })
+                });
+                if (res.ok) {
+                    document.getElementById('filter-name-new').value = '';
+                    document.getElementById('type-movie-new').checked = false;
+                    document.getElementById('type-tv-new').checked = false;
+                    document.getElementById('type-anime-new').checked = false;
+                    loadFilters(currentTabSlug);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('添加失败：' + (err.detail || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
 
-            if (res.ok) {
-                loadCategories();
-            } else {
-                const err = await res.json().catch(() => ({}));
-                alert("删除失败：" + (err.detail || "未知错误"));
+        function showFilterEdit(id) {
+            const opt = filtersData.find(x => x.id === id);
+            if (!opt) return;
+            document.getElementById('filter-edit-id').value = id;
+            document.getElementById('filter-edit-name').value = opt.value;
+            document.getElementById('filter-edit-active').checked = opt.is_active;
+            document.getElementById('edit-type-movie').checked = opt.drama_types && opt.drama_types.includes('movie');
+            document.getElementById('edit-type-tv').checked = opt.drama_types && opt.drama_types.includes('tv');
+            document.getElementById('edit-type-anime').checked = opt.drama_types && opt.drama_types.includes('anime');
+            document.getElementById('filter-edit-modal').style.display = 'block';
+        }
+
+        function closeFilterEditModal() {
+            document.getElementById('filter-edit-modal').style.display = 'none';
+        }
+
+        async function saveFilter() {
+            const id = document.getElementById('filter-edit-id').value;
+            const displayName = document.getElementById('filter-edit-name').value.trim();
+            const isActive = document.getElementById('filter-edit-active').checked;
+
+            const dramaTypes = [];
+            if (document.getElementById('edit-type-movie').checked) dramaTypes.push('movie');
+            if (document.getElementById('edit-type-tv').checked) dramaTypes.push('tv');
+            if (document.getElementById('edit-type-anime').checked) dramaTypes.push('anime');
+
+            if (!displayName) {
+                alert('请输入显示名称');
+                return;
+            }
+
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/filters/options/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        value: displayName,
+                        is_active: isActive,
+                        drama_types: dramaTypes.length > 0 ? dramaTypes : null
+                    })
+                });
+                if (res.ok) {
+                    closeFilterEditModal();
+                    loadFilters(currentTabSlug);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('保存失败：' + (err.detail || '未知错误'));
+                }
+            } catch(e) {
+                alert('网络错误');
+            }
+        }
+
+        async function deleteFilter(id, name) {
+            if (!confirm(`确定要删除选项"${name}"吗？`)) return;
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch(`/admin/filters/options/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (res.ok) {
+                    loadFilters(currentTabSlug);
+                }
+            } catch(e) {
+                alert('网络错误');
             }
         }
 
         // 点击模态框外部关闭
-        document.addEventListener("click", (e) => {
-            const modal = document.getElementById("category-modal");
-            if (e.target === modal) {
-                closeModal();
-            }
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'category-edit-modal') closeCategoryEditModal();
+            if (e.target.id === 'filter-edit-modal') closeFilterEditModal();
+            if (e.target.id === 'tab-modal') closeTabModal();
+            if (e.target.id === 'tab-edit-modal') closeTabEditModal();
         });
 
-        // ESC 键关闭模态框
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
-                closeModal();
+        // ESC 键关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeCategoryEditModal();
+                closeFilterEditModal();
+                closeTabModal();
+                closeTabEditModal();
             }
         });
     </script>

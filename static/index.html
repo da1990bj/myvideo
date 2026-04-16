@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>MyVideo - 首页</title>
+    <title>首页 - MyVideo</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f5f7; color: #333; }
@@ -98,6 +98,45 @@
             .carousel-wrapper { height: 200px; }
             .carousel-title { font-size: 16px; }
         }
+
+        /* 正剧类型筛选 */
+        .drama-type-bar { display: flex; gap: 8px; margin-bottom: 12px; padding: 12px 16px; background: #fff; border-radius: 8px; }
+        .drama-type-item { padding: 6px 14px; border-radius: 16px; background: #f4f5f7; color: #666; font-size: 13px; cursor: pointer; transition: 0.2s; border: none; }
+        .drama-type-item:hover { background: #e5f4fa; color: #00a1d6; }
+        .drama-type-item.active { background: #00a1d6; color: #fff; }
+
+        /* 正剧筛选面板 */
+        .drama-filter-panel { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; display: none; }
+        .drama-filter-panel.show { display: block; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-label { font-size: 13px; color: #666; min-width: 50px; }
+        .filter-options { display: flex; flex-wrap: wrap; gap: 6px; }
+        .year-range-options { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e9ecef; }
+        .filter-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 12px; background: #f4f5f7; color: #666; font-size: 12px; cursor: pointer; transition: 0.2s; border: none; }
+        .filter-tag:hover { background: #e5f4fa; color: #00a1d6; }
+        .filter-tag.active { background: #00a1d6; color: #fff; }
+        .filter-clear { padding: 4px 12px; border-radius: 12px; background: #fff; color: #999; font-size: 12px; cursor: pointer; transition: 0.2s; border: 1px solid #ddd; }
+        .filter-clear:hover { background: #f5f5f5; color: #666; }
+
+        /* 合集卡片 */
+        .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .collection-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .collection-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .collection-thumb { position: relative; padding-top: 56.25%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); overflow: hidden; }
+        .collection-thumb img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .collection-thumb .collection-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; }
+        .collection-count { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+        .collection-type-badge { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .collection-type-badge.tv { background: #4facfe; color: #fff; }
+        .collection-type-badge.anime { background: #43e97b; color: #fff; }
+        .collection-status { position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .collection-status.ongoing { background: #ff6b6b; color: #fff; }
+        .collection-status.finished { background: #51cf66; color: #fff; }
+        .collection-info { padding: 12px; }
+        .collection-title { font-size: 15px; font-weight: 600; color: #18191c; margin: 0 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .collection-meta { font-size: 12px; color: #9499a0; }
     </style>
 </head>
 <body>
@@ -119,6 +158,26 @@
     <!-- 横向分类导航 -->
     <div class="category-bar" id="category-bar">
         <button class="category-item active" onclick="filterCategory(null, null, this)">全部</button>
+    </div>
+
+    <!-- 正剧类型筛选 -->
+    <div class="drama-type-bar" id="drama-type-bar" style="display:none;">
+        <button class="drama-type-item" data-type="movie" onclick="selectDramaType('movie', this)">电影</button>
+        <button class="drama-type-item" data-type="tv" onclick="selectDramaType('tv', this)">电视剧</button>
+        <button class="drama-type-item" data-type="anime" onclick="selectDramaType('anime', this)">动漫</button>
+    </div>
+
+    <!-- 正剧筛选面板 -->
+    <div class="drama-filter-panel" id="drama-filter-panel">
+        <!-- 动态生成的 tab 筛选选项 -->
+        <div id="dynamic-filters"></div>
+        <div class="filter-row" id="year-filter">
+            <span class="filter-label">年份:</span>
+            <div class="filter-options" id="year-options"></div>
+        </div>
+        <div class="filter-row">
+            <button class="filter-clear" onclick="clearDramaFilters()">清除筛选</button>
+        </div>
     </div>
 
     <!-- 内容区 -->
@@ -282,6 +341,15 @@
     }
 
     // ==================== 分类导航 ====================
+    const DRAMA_SLUGS = ['movie', 'tv', 'anime'];
+    let currentDramaType = null;
+    let currentDramaKind = null;    // 类型筛选：番剧、剧场版、电影
+    let currentDramaRegion = [];  // 多选数组
+    let currentDramaLanguage = [];  // 多选数组
+    let currentDramaStyle = [];  // 多选数组
+    let currentDramaYear = null;
+    let currentDramaStatus = null;
+
     async function loadCategories() {
         try {
             const res = await fetch("/categories");
@@ -292,15 +360,49 @@
                     const el = document.createElement("button");
                     el.className = "category-item";
                     el.innerText = cat.name;
-                    el.onclick = () => filterCategory(cat.id, cat.name, el);
+                    el.dataset.slug = cat.slug;  // 存储 slug 用于判断是否正剧
+                    el.onclick = () => filterCategory(cat.id, cat.name, el, cat.slug);
                     bar.appendChild(el);
                 });
             }
         } catch(e) { console.error(e); }
     }
 
-    function filterCategory(id, name, el) {
+    function filterCategory(id, name, el, slug) {
+        // 如果是正剧分类，切换到正剧筛选模式（只显示筛选面板，不显示类型按钮栏）
+        if (slug && DRAMA_SLUGS.includes(slug)) {
+            currentDramaType = slug;
+            currentCategory = null;
+
+            // 只显示筛选面板，不显示正剧类型按钮栏
+            document.getElementById("drama-filter-panel").classList.add('show');
+
+            // 更新分类按钮状态
+            document.querySelectorAll(".category-item").forEach(i => i.classList.remove("active"));
+            if (el) el.classList.add("active");
+
+            // 更新标题
+            const typeNames = { 'movie': '电影', 'tv': '电视剧', 'anime': '动漫' };
+            const titleEl = document.getElementById("main-title");
+            const subtitleEl = document.getElementById("main-subtitle");
+            titleEl.textContent = `${typeNames[slug]} 热门`;
+            subtitleEl.textContent = `${typeNames[slug]}分类下的热门内容`;
+
+            // 加载筛选选项
+            loadDramaFilters(slug);
+
+            // 加载内容
+            loadTrendingContent();
+            loadLatestContent();
+            return;
+        }
+
         currentCategory = id;
+        currentDramaType = null;
+
+        // 隐藏正剧筛选
+        document.getElementById("drama-type-bar").style.display = 'none';
+        document.getElementById("drama-filter-panel").classList.remove('show');
 
         // 更新分类按钮状态
         document.querySelectorAll(".category-item").forEach(i => i.classList.remove("active"));
@@ -320,6 +422,268 @@
         // 只刷新热门推荐和最近发布（都按分类过滤）
         loadTrendingContent();
         loadLatestContent();
+    }
+
+    // ==================== 正剧类型筛选 ====================
+    async function selectDramaType(type, el) {
+        currentDramaType = type;
+        currentCategory = null;
+
+        // 更新正剧类型按钮状态
+        document.querySelectorAll(".drama-type-item").forEach(i => i.classList.remove("active"));
+        if (el) {
+            el.classList.add("active");
+        } else {
+            const btn = document.querySelector(`.drama-type-item[data-type="${type}"]`);
+            if (btn) btn.classList.add("active");
+        }
+
+        // 显示正剧筛选面板和类型按钮栏
+        document.getElementById("drama-type-bar").style.display = 'flex';
+        document.getElementById("drama-filter-panel").classList.add('show');
+
+        // 更新主标题
+        const typeNames = { 'movie': '电影', 'tv': '电视剧', 'anime': '动漫' };
+        const titleEl = document.getElementById("main-title");
+        const subtitleEl = document.getElementById("main-subtitle");
+        titleEl.textContent = `${typeNames[type]} 热门`;
+        subtitleEl.textContent = `${typeNames[type]}分类下的热门内容`;
+
+        // 加载筛选选项
+        await loadDramaFilters(type);
+
+        // 加载内容
+        loadTrendingContent();
+        loadLatestContent();
+        loadCollections();
+    }
+
+    async function loadDramaFilters(dramaType) {
+        try {
+            const res = await fetch(`/dramas/filters/${dramaType}`);
+                        if (!res.ok) {
+                console.error('Failed to load drama filters, status:', res.status);
+                return;
+            }
+            const filters = await res.json();
+
+            // 动态渲染筛选 tab
+            const dynamicContainer = document.getElementById("dynamic-filters");
+            if (!dynamicContainer) {
+                console.error('dynamic-filters element not found');
+                return;
+            }
+            let dynamicHtml = '';
+
+            if (filters.tabs) {
+                filters.tabs.forEach(tab => {
+                    if (tab.options.length === 0) return;
+
+                    // 根据 filter_type 判断是单选还是多选
+                    const isSingle = tab.filter_type === 'single';
+
+                    // 状态 tab 特殊处理，显示中文标签
+                    const options = tab.slug === 'status'
+                        ? tab.options.map(o => ({ value: o, label: o === 'ongoing' ? '连载' : o === 'finished' ? '完结' : o }))
+                        : tab.options.map(o => ({ value: o, label: o }));
+
+                    const buttons = options.map(opt => {
+                        const currentValue = eval(`currentDrama${capitalize(tab.slug)}`);
+                        // 单选用 === 比较，多选用 includes
+                        const isActive = isSingle
+                            ? currentValue === opt.value
+                            : (currentValue && currentValue.includes ? currentValue.includes(opt.value) : false);
+                        return `<label class="filter-tag ${isActive ? 'active' : ''}"><input type="checkbox" value="${opt.value}" onchange="toggleDramaFilter('${tab.slug}', '${opt.value}', this, '${tab.filter_type}')" style="display:none;">${opt.label}</label>`;
+                    }).join('');
+
+                    dynamicHtml += `<div class="filter-row" id="filter-${tab.slug}">
+                        <span class="filter-label">${tab.name}:</span>
+                        <div class="filter-options">${buttons}</div>
+                    </div>`;
+                });
+            }
+
+            dynamicContainer.innerHTML = dynamicHtml;
+
+            // 渲染年份筛选（近10年一行，超过10年的范围换行显示）
+            const yearContainer = document.getElementById("year-options");
+            if (filters.years && filters.years.length > 0) {
+                // 分离近10年选项和范围选项
+                const recentYears = ['全部', '2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016'];
+                const rangeYears = filters.years.filter(y => !recentYears.includes(y));
+
+                const recentHtml = recentYears.filter(y => filters.years.includes(y)).map(y =>
+                    `<button class="filter-tag ${currentDramaYear === y ? 'active' : ''}" onclick="selectDramaFilter('year', '${y}', this)">${y}</button>`
+                ).join('');
+
+                const rangeHtml = rangeYears.length > 0 ? '<div class="year-range-options">' + rangeYears.map(y =>
+                    `<button class="filter-tag ${currentDramaYear === y ? 'active' : ''}" onclick="selectDramaFilter('year', '${y}', this)">${y}</button>`
+                ).join('') + '</div>' : '';
+
+                yearContainer.innerHTML = recentHtml + rangeHtml;
+                document.getElementById("year-filter").style.display = 'flex';
+            } else {
+                document.getElementById("year-filter").style.display = 'none';
+            }
+        } catch (e) {
+            console.error('Failed to load drama filters:', e);
+        }
+    }
+
+    // 首字母大写
+    function capitalize(str) {
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function selectDramaFilter(type, value, el) {
+        // 动态处理所有筛选类型
+        const stateVar = `currentDrama${capitalize(type)}`;
+        const currentValue = eval(stateVar);
+
+        if (currentValue === value) {
+            eval(`${stateVar} = null`);
+            el.classList.remove('active');
+        } else {
+            eval(`${stateVar} = '${value}'`);
+            el.classList.add('active');
+            // 取消同组其他选中
+            el.parentElement.querySelectorAll('.filter-tag').forEach(t => {
+                if (t !== el) t.classList.remove('active');
+            });
+        }
+        loadLatestContent();
+    }
+
+    // 单选筛选（如年份）
+    function selectDramaFilter(type, value, el) {
+        const stateVar = `currentDrama${capitalize(type)}`;
+        eval(`${stateVar} = '${value}'`);
+        el.parentElement.querySelectorAll('.filter-tag').forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        loadLatestContent();
+    }
+
+    function toggleDramaFilter(type, value, checkbox, filterType) {
+        const stateVar = `currentDrama${capitalize(type)}`;
+        let currentValue = eval(stateVar);
+
+        // 单选模式（filterType=multi）：选中一个后取消其他
+        if (filterType === 'single') {
+            if (checkbox.checked) {
+                // 取消同组其他选中
+                document.querySelectorAll(`#filter-${type} .filter-tag`).forEach(el => {
+                    el.classList.remove('active');
+                    el.querySelector('input').checked = false;
+                });
+                eval(`${stateVar} = '${value}'`);
+                checkbox.parentElement.classList.add('active');
+            } else {
+                eval(`${stateVar} = null`);
+                checkbox.parentElement.classList.remove('active');
+            }
+        } else {
+            // 多选模式
+            if (checkbox.checked) {
+                if (!currentValue.includes(value)) {
+                    currentValue.push(value);
+                }
+                checkbox.parentElement.classList.add('active');
+            } else {
+                const idx = currentValue.indexOf(value);
+                if (idx > -1) currentValue.splice(idx, 1);
+                checkbox.parentElement.classList.remove('active');
+            }
+        }
+        loadLatestContent();
+    }
+
+    function clearDramaFilters() {
+        currentDramaKind = null;
+        currentDramaRegion = [];
+        currentDramaLanguage = [];
+        currentDramaStyle = [];
+        currentDramaYear = null;
+        currentDramaStatus = null;
+        document.querySelectorAll(".filter-tag.active").forEach(t => t.classList.remove('active'));
+        document.querySelectorAll(".filter-tag input[type='checkbox']").forEach(c => c.checked = false);
+        loadLatestContent();
+    }
+
+    // ==================== 加载合集（电视剧/动漫） ====================
+    async function loadCollections() {
+        if (!currentDramaType || currentDramaType === 'movie') return;  // 电影不显示合集
+
+        const container = document.getElementById("latest-grid");
+        if (!container) return;
+
+        try {
+            const res = await fetch(`/drama-series?drama_type=${currentDramaType}`);
+            if (!res.ok) return;
+            const collections = await res.json();
+
+            if (collections.length > 0) {
+                // 在热门推荐后添加合集区域
+                let collectionSection = document.getElementById("collection-section");
+                if (!collectionSection) {
+                    collectionSection = document.createElement("div");
+                    collectionSection.id = "collection-section";
+                    collectionSection.style.marginTop = "24px";
+                    collectionSection.innerHTML = `
+                        <div class="section-header">
+                            <div class="section-title">
+                                <span class="icon">📺</span>
+                                <span>${currentDramaType === 'tv' ? '电视剧' : '动漫'}合集</span>
+                            </div>
+                        </div>
+                        <div class="collection-grid" id="collection-grid"></div>
+                    `;
+                    container.parentElement.insertBefore(collectionSection, container);
+                }
+                const grid = document.getElementById("collection-grid");
+                grid.innerHTML = collections.map(c => createCollectionCard(c)).join('');
+
+                // 隐藏单个视频区域，改为显示合集
+                document.getElementById("trending-section").style.display = 'none';
+                // 只有在非正剧筛选模式下才隐藏筛选面板（正剧筛选模式下用户需要用筛选功能）
+                if (!currentDramaType || currentDramaType === 'movie') {
+                    document.getElementById("drama-filter-panel").classList.remove('show');
+                }
+            } else {
+                // 无合集时显示普通视频
+                document.getElementById("trending-section").style.display = 'block';
+                document.getElementById("drama-filter-panel").classList.add('show');
+            }
+        } catch (e) {
+            console.error('Failed to load collections:', e);
+        }
+    }
+
+    function createCollectionCard(collection) {
+        const cover = collection.cover_image || '';
+        const typeBadgeClass = collection.drama_type === 'tv' ? 'tv' : 'anime';
+        const typeBadgeText = collection.drama_type === 'tv' ? '电视剧' : '动漫';
+        const uploadDate = collection.created_at ? new Date(collection.created_at).toLocaleDateString() : '';
+
+        // 合集状态：连载/完结
+        const statusText = collection.drama_status === 'ongoing' ? '连载中' : collection.drama_status === 'finished' ? '已完结' : '';
+        const statusBadge = statusText ? `<span class="collection-status ${collection.drama_status === 'ongoing' ? 'ongoing' : 'finished'}">${statusText}</span>` : '';
+
+        return `
+            <div class="collection-card" onclick="window.location.href='/static/series.html?id=${collection.id}'">
+                <div class="collection-thumb">
+                    ${cover ? `<img src="${cover}" alt="">` : '<div class="collection-placeholder">📺</div>'}
+                    <span class="collection-type-badge ${typeBadgeClass}">${typeBadgeText}</span>
+                    ${statusBadge}
+                    <span class="collection-count">${collection.video_count}集</span>
+                </div>
+                <div class="collection-info">
+                    <h3 class="collection-title">${collection.title}</h3>
+                    <div class="collection-meta">
+                        ${collection.owner ? collection.owner.username : '未知作者'} · ${uploadDate}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     // ==================== 热门推荐 ====================
@@ -365,10 +729,37 @@
         grid.innerHTML = "";
         loading.style.display = "block";
 
+        // 隐藏合集区域（会在选择电视剧/动漫时重新显示）
+        const collectionSection = document.getElementById("collection-section");
+        if (collectionSection) collectionSection.style.display = 'none';
+
         try {
             let url = `/videos?size=12&sort_by=latest`;
             if (currentCategory) {
                 url += `&category_id=${currentCategory}`;
+            }
+
+            // 正剧筛选参数（支持多选）
+            if (currentDramaType) {
+                url += `&drama_type=${currentDramaType}`;
+            }
+            if (currentDramaKind) {
+                url += `&drama_kind=${encodeURIComponent(currentDramaKind)}`;
+            }
+            if (currentDramaRegion && currentDramaRegion.length > 0) {
+                url += `&drama_region=${encodeURIComponent(currentDramaRegion.join(","))}`;
+            }
+            if (currentDramaLanguage && currentDramaLanguage.length > 0) {
+                url += `&drama_language=${encodeURIComponent(currentDramaLanguage.join(","))}`;
+            }
+            if (currentDramaStyle && currentDramaStyle.length > 0) {
+                url += `&drama_style=${encodeURIComponent(currentDramaStyle.join(","))}`;
+            }
+            if (currentDramaYear && currentDramaYear !== '全部' && !isNaN(currentDramaYear)) {
+                url += `&drama_year=${encodeURIComponent(currentDramaYear)}`;
+            }
+            if (currentDramaStatus) {
+                url += `&drama_status=${encodeURIComponent(currentDramaStatus)}`;
             }
 
             const res = await fetch(url);
@@ -385,6 +776,11 @@
                     const card = createVideoCard({ video: v });
                     grid.appendChild(card);
                 });
+
+                // 如果是电视剧/动漫，显示合集
+                if (currentDramaType && currentDramaType !== 'movie') {
+                    loadCollections();
+                }
             }
         } catch (e) {
             console.error(e);

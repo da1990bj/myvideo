@@ -20,7 +20,7 @@ from data_models import (
     VideoRecommendation, VideoRecommendationWithVideoRead,
     RecommendationSlot, RecommendationSlotRead, RecommendationLog, UserVideoScore,
     TranscodeTask, TranscodeTaskRead,
-    VideoLike, VideoFavorite, CollectionItem, VideoTag,
+    VideoLike, VideoFavorite, CollectionItem, Collection, CollectionRead, CollectionUpdate, VideoTag,
     UserVideoHistory, AnonymousViewHistory
 )
 from dependencies import get_current_user, PermissionChecker, log_admin_action
@@ -705,6 +705,24 @@ async def get_card_order(
         except:
             orders[conf.key.replace("card_order_", "")] = []
     return orders
+
+
+@router.get("/card-order/{page}")
+async def get_card_order_by_page(
+    page: str,
+    admin: User = Depends(PermissionChecker("*")),
+    session: Session = Depends(get_session)
+):
+    """获取指定页面的卡片顺序"""
+    import json
+    key = f"card_order_{page}"
+    conf = session.get(SystemConfig, key)
+    if conf:
+        try:
+            return json.loads(conf.value)
+        except:
+            return []
+    return []
 
 
 @router.put("/card-order/{page}")
@@ -2602,7 +2620,150 @@ async def recompute_all_recommendations(
         result = compute_all_recommendation_scores.delay()
         return {
             "message": "All user recommendations recompute task started",
-            "task_id": result.id
+"task_id": result.id
         }
     except Exception as e:
         return {"message": f"Error: {str(e)}", "status": "error"}
+
+
+# ==================== 合集管理 ====================
+
+@router.get("/collections", response_model=List[CollectionRead])
+async def admin_list_collections(
+    session: Session = Depends(get_session),
+    admin: User = Depends(PermissionChecker("video:audit")),
+    drama_type: Optional[str] = Query(None, description="筛选合集类型: tv, anime"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100)
+):
+    """
+    后台获取合集列表（支持按类型筛选）
+    """
+    offset = (page - 1) * size
+
+    statement = select(Collection).order_by(Collection.created_at.desc())
+
+    if drama_type:
+        statement = statement.where(Collection.drama_type == drama_type)
+
+    collections = session.exec(statement.offset(offset).limit(size)).all()
+
+    # 动态计算 video_count
+    result = []
+    for coll in collections:
+        items = session.exec(
+            select(CollectionItem)
+            .where(CollectionItem.collection_id == coll.id)
+        ).all()
+
+        coll_dict = coll.model_dump()
+        coll_dict["video_count"] = len(items)
+
+        # 添加 owner 信息
+        if coll.owner:
+            coll_dict["owner"] = {
+                "id": str(coll.owner.id),
+                "username": coll.owner.username,
+                "email": coll.owner.email,
+                "is_active": coll.owner.is_active,
+                "is_admin": coll.owner.is_admin,
+                "role_ids": [],
+                "role_names": [],
+                "created_at": coll.owner.created_at,
+                "avatar_path": coll.owner.avatar_path,
+                "bio": coll.owner.bio,
+            }
+
+        result.append(coll_dict)
+
+    return result
+
+
+@router.put("/collections/{collection_id}", response_model=CollectionRead)
+async def admin_update_collection(
+    collection_id: UUID,
+    update_data: CollectionUpdate,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    后台更新合集信息
+    """
+    collection = session.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    if update_data.title is not None:
+        collection.title = update_data.title
+    if update_data.description is not None:
+        collection.description = update_data.description
+    if update_data.is_public is not None:
+        collection.is_public = update_data.is_public
+    if update_data.drama_type is not None:
+        collection.drama_type = update_data.drama_type
+
+    session.add(collection)
+    session.commit()
+    session.refresh(collection)
+
+    return collection
+
+
+@router.delete("/collections/{collection_id}")
+async def admin_delete_collection(
+    collection_id: UUID,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    后台删除合集
+    """
+    collection = session.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    # 删除合集中的项目
+    items = session.exec(
+        select(CollectionItem).where(CollectionItem.collection_id == collection_id)
+    ).all()
+
+    for item in items:
+        session.delete(item)
+
+    session.delete(collection)
+    session.commit()
+
+    return {"message": "Collection deleted"}
+
+
+@router.get("/collections/{collection_id}/videos")
+async def admin_get_collection_videos(
+    collection_id: UUID,
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    后台获取合集中的视频列表
+    """
+    collection = session.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+
+    items = session.exec(
+        select(CollectionItem)
+        .where(CollectionItem.collection_id == collection_id)
+        .order_by(CollectionItem.order)
+    ).all()
+
+    video_ids = [item.video_id for item in items]
+    videos_dict = {}
+    if video_ids:
+        videos = session.exec(select(Video).where(Video.id.in_(video_ids), Video.is_deleted == False)).all()
+        videos_dict = {v.id: v for v in videos}
+
+    # 按 video_ids 顺序重建数组，保证合集视频顺序固定
+    collection_dict = collection.model_dump()
+    collection_dict["videos"] = [videos_dict[vid] for vid in video_ids if vid in videos_dict]
+
+    return collection_dict

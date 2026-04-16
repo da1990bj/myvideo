@@ -5,12 +5,6 @@ from data_models import Category, RecommendationSlot, SystemConfig
 def init_categories():
     """初始化默认分类"""
     with Session(engine) as session:
-        # 检查是否已有分类
-        existing = session.exec(select(Category)).first()
-        if existing:
-            print("Categories already initialized.")
-            return
-
         default_categories = [
             Category(name="科技", slug="tech"),
             Category(name="生活", slug="life"),
@@ -18,11 +12,22 @@ def init_categories():
             Category(name="影视", slug="movie"),
             Category(name="音乐", slug="music"),
             Category(name="动漫", slug="anime"),
+            Category(name="电视剧", slug="tv"),
         ]
 
-        session.add_all(default_categories)
+        # 检查并添加缺失的分类
+        added_count = 0
+        for cat in default_categories:
+            existing = session.exec(select(Category).where(Category.slug == cat.slug)).first()
+            if not existing:
+                session.add(cat)
+                added_count += 1
+
         session.commit()
-        print(f"Initialized {len(default_categories)} categories.")
+        if added_count > 0:
+            print(f"Added {added_count} new categories.")
+        else:
+            print("All categories already exist.")
 
 def init_recommendation_slots():
     """初始化默认推荐位"""

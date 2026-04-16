@@ -69,6 +69,7 @@ class Category(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     slug: str = Field(unique=True)
+    display_order: int = Field(default=0)  # 显示顺序
     videos: List["Video"] = Relationship(back_populates="category")
 
 # --- New Tag Architecture ---
@@ -136,6 +137,8 @@ class Video(SQLModel, table=True):
 
     category_id: Optional[int] = Field(default=None, foreign_key="categories.id")
     category: Optional[Category] = Relationship(back_populates="videos")
+
+    series_id: Optional[UUID] = Field(default=None, foreign_key="drama_series.id", index=True)  # 关联剧集系列，有值表示是正剧
 
     # 兼容性属性：VideoRead 期望 tags 是 List[str]
     @property
@@ -239,6 +242,30 @@ class VideoLike(SQLModel, table=True):
     like_type: str = Field(default="like") # "like" or "dislike"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+# 筛选选项 Tab（用于正剧筛选选项的分类管理）
+class FilterTab(SQLModel, table=True):
+    __tablename__ = "filter_tabs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    slug: str = Field(unique=True, index=True)      # URL 标识
+    name: str = Field(index=True)                    # 显示名称
+    filter_type: str = Field(default="multi")         # 筛选类型：single(单选) 或 multi(多选)
+    display_order: int = Field(default=0)            # 排序
+    is_active: bool = Field(default=True)            # 是否启用
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# 正剧筛选选项
+class DramaFilterOption(SQLModel, table=True):
+    __tablename__ = "drama_filter_options"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tab_slug: str = Field(index=True)  # 关联 FilterTab 的 slug
+    value: str = Field(index=True)  # 存储值
+    drama_types: Optional[str] = Field(default=None)  # JSON数组如 "[\"movie\", \"tv\"]"，null表示全部
+    display_order: int = Field(default=0)
+    is_active: bool = Field(default=True)
+    usage_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 # 通知系统
 class Notification(SQLModel, table=True):
     __tablename__ = "notifications"
@@ -264,6 +291,7 @@ class Collection(SQLModel, table=True):
     is_public: bool = Field(default=True)
     favorite_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    drama_type: Optional[str] = Field(default=None)  # 正剧类型: "movie", "tv", "anime"（用于电视剧/动漫合集筛选）
 
     user_id: UUID = Field(foreign_key="users.id")
     owner: User = Relationship(back_populates="collections")
@@ -280,6 +308,49 @@ class CollectionItem(SQLModel, table=True):
 
     collection: Collection = Relationship(back_populates="items")
     video: Video = Relationship()
+
+
+# ==================== 剧集系列（电视剧/动漫/电影）====================
+
+class DramaSeries(SQLModel, table=True):
+    """正剧系列（电视剧/动漫/电影）"""
+    __tablename__ = "drama_series"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    title: str = Field(index=True)                    # 系列标题
+    description: Optional[str] = None               # 简介
+    cover_image: Optional[str] = None               # 封面
+    drama_type: str = Field(index=True)             # 类型: "movie", "tv", "anime"
+    drama_kind: Optional[str] = Field(default=None)  # 类型子分类: 番剧, 剧场版, 电影
+    drama_region: Optional[str] = Field(default=None)    # 地区 - 单选
+    drama_language: Optional[str] = Field(default=None)  # 语言 - 单选
+    drama_style: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))    # 风格/题材 - 多选
+    drama_year: Optional[int] = Field(default=None)   # 发行年份
+    drama_status: Optional[str] = Field(default=None) # 状态: ongoing, finished
+    total_episodes: Optional[int] = Field(default=None) # 总集数
+    rating: Optional[float] = Field(default=None)   # 评分 0-10
+    is_public: bool = Field(default=True)
+    view_count: int = Field(default=0)               # 浏览数
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user_id: UUID = Field(foreign_key="users.id")    # 创建者
+    items: List["DramaSeriesItem"] = Relationship(back_populates="series")
+
+
+class DramaSeriesItem(SQLModel, table=True):
+    """剧集系列中的视频项"""
+    __tablename__ = "drama_series_items"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    series_id: UUID = Field(foreign_key="drama_series.id", index=True)
+    video_id: UUID = Field(foreign_key="videos.id")
+    order: int = Field(default=0)                    # 集数顺序
+    episode_number: Optional[int] = None             # 集号（如第1集）
+    added_at: datetime = Field(default_factory=datetime.utcnow)
+
+    series: DramaSeries = Relationship(back_populates="items")
+    video: Video = Relationship()
+
 
 # 视频收藏
 class VideoFavorite(SQLModel, table=True):
@@ -475,6 +546,16 @@ class VideoUpdate(SQLModel):
     visibility: Optional[str] = None
     tags: Optional[List[str]] = None
     temp_thumbnail_path: Optional[str] = None
+    # 正剧元数据
+    drama_type: Optional[str] = None  # "movie", "tv", "anime"
+    is_animated_movie: Optional[bool] = None  # 动画电影
+    drama_region: Optional[List[str]] = None
+    drama_language: Optional[List[str]] = None
+    drama_style: Optional[List[str]] = None
+    drama_year: Optional[int] = None  # 发行年份
+    drama_status: Optional[str] = None  # 状态: "ongoing"(连载), "finished"(完结)
+    total_episodes: Optional[int] = None
+    series_id: Optional[UUID] = None
 
 class VideoRead(SQLModel):
     id: UUID
@@ -503,6 +584,7 @@ class VideoRead(SQLModel):
     subtitle_languages: Optional[List[str]] = None
     auto_subtitle: bool = False
     auto_subtitle_language: Optional[str] = None
+    series_id: Optional[UUID] = None  # 关联剧集系列，有值表示是正剧
 
 
 class SubtitleRead(SQLModel):
@@ -520,11 +602,13 @@ class CollectionCreate(SQLModel):
     title: str
     description: Optional[str] = None
     is_public: bool = True
+    drama_type: Optional[str] = None  # "movie", "tv", "anime"
 
 class CollectionUpdate(SQLModel):
     title: Optional[str] = None
     description: Optional[str] = None
     is_public: Optional[bool] = None
+    drama_type: Optional[str] = None  # "movie", "tv", "anime"
 
 class CollectionRead(SQLModel):
     id: UUID
@@ -538,6 +622,7 @@ class CollectionRead(SQLModel):
     is_favorited: bool = False
     owner: Optional[UserRead] = None
     first_video_id: Optional[UUID] = None # Added for frontend navigation
+    drama_type: Optional[str] = None  # "movie", "tv", "anime"
 
 # RBAC Schemas
 class RoleBase(SQLModel):
@@ -776,6 +861,7 @@ class UploadSession(SQLModel, table=True):
     category_id: Optional[int] = None
     visibility: Optional[str] = None
     tags: Optional[str] = None
+    series_id: Optional[UUID] = Field(default=None, foreign_key="drama_series.id")  # 关联剧集系列
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

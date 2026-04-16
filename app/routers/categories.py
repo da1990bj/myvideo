@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
+from sqlalchemy import asc
 
 from database import get_session
 from data_models import Category, Video
@@ -17,17 +18,20 @@ router = APIRouter(prefix="/admin/categories", tags=["管理后台-分类"])
 class CategoryCreate(BaseModel):
     name: str
     slug: str
+    display_order: int = 0
 
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = None
     slug: Optional[str] = None
+    display_order: Optional[int] = None
 
 
 class CategoryResponse(BaseModel):
     id: int
     name: str
     slug: str
+    display_order: int = 0
     video_count: int = 0
 
     class Config:
@@ -39,6 +43,7 @@ def category_to_response(category: Category, video_count: int = 0) -> CategoryRe
         id=category.id,
         name=category.name,
         slug=category.slug,
+        display_order=category.display_order,
         video_count=video_count
     )
 
@@ -51,7 +56,7 @@ async def get_categories(
     """
     获取所有分类（含视频数量）
     """
-    categories = session.exec(select(Category)).all()
+    categories = session.exec(select(Category).order_by(asc(Category.display_order))).all()
 
     result = []
     for cat in categories:
@@ -80,7 +85,7 @@ async def create_category(
     if existing_slug:
         raise HTTPException(status_code=400, detail="分类slug已存在")
 
-    category = Category(name=category_data.name, slug=category_data.slug)
+    category = Category(name=category_data.name, slug=category_data.slug, display_order=category_data.display_order)
     session.add(category)
     session.commit()
     session.refresh(category)
@@ -118,6 +123,8 @@ async def update_category(
         category.name = category_data.name
     if category_data.slug is not None:
         category.slug = category_data.slug
+    if category_data.display_order is not None:
+        category.display_order = category_data.display_order
 
     session.add(category)
     session.commit()
@@ -127,6 +134,25 @@ async def update_category(
     count = len(session.exec(select(Video).where(Video.category_id == category.id, Video.is_deleted == False)).all())
 
     return category_to_response(category, count)
+
+
+@router.post("/reorder")
+async def reorder_categories(
+    orders: List[dict],  # [{"id": 1, "display_order": 0}, {"id": 2, "display_order": 1}, ...]
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(PermissionChecker("admin:super"))
+):
+    """
+    批量更新分类排序
+    """
+    for item in orders:
+        category = session.get(Category, item["id"])
+        if category:
+            category.display_order = item["display_order"]
+            session.add(category)
+
+    session.commit()
+    return {"message": "排序已更新"}
 
 
 @router.delete("/{category_id}")

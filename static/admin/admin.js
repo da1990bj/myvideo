@@ -192,20 +192,22 @@ function injectCommonStyles() {
         .audit-appealing { background: #fff8e1; color: #e65100; }
 
         /* 按钮 */
-        .btn { padding: 5px 12px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; background: #fff; font-size: 12px; transition: all 0.2s; text-decoration: none; display: inline-block; }
-        .btn:hover { background: #f5f5f5; }
-        .btn-danger { color: #f04c49; border-color: #f04c49; }
-        .btn-danger:hover { background: #ffebee; }
-        .btn-success { color: #00a1d6; border-color: #00a1d6; }
-        .btn-success:hover { background: #e3f2fd; }
+        .btn { padding: 5px 12px; border-radius: 4px; border: 1px solid #00a1d6; cursor: pointer; background: #00a1d6; color: #fff; font-size: 12px; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn:hover { background: #008dbd; }
+        .btn-danger { color: #fff; border-color: #f04c49; background: #f04c49; }
+        .btn-danger:hover { background: #d94342; }
+        .btn-success { color: #fff; border-color: #2f9e44; background: #2f9e44; }
+        .btn-success:hover { background: #268732; }
+        .btn-secondary { color: #666; border-color: #ddd; background: #fff; }
+        .btn-secondary:hover { background: #f5f5f5; }
         .btn-warning { color: #f08c00; border-color: #f08c00; }
         .btn-warning:hover { background: #fff3e0; }
         .btn-purple { color: #9c27b0; border-color: #9c27b0; }
         .btn-purple:hover { background: #f3e5f5; }
         .btn-small { padding: 3px 8px; font-size: 11px; }
         .btn-secondary { color: #666; border-color: #ddd; }
-        .btn-save { background: #2f9e44; color: #fff; border: 2px solid #1a6b2a; font-weight: bold; }
-        .btn-save:hover { background: #268732; }
+        .btn-save { padding: 12px 24px; background: #2f9e44 !important; color: #fff !important; border: 2px solid #1a6b2a !important; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .btn-save:hover { background: #268732 !important; border-color: #14521d !important; }
 
         /* 刷新提示 */
         .refresh-info { color: #999; font-size: 12px; margin-bottom: 15px; }
@@ -242,7 +244,7 @@ function renderSidebar(menu) {
     <div id="admin-sidebar">
         <div id="sidebar-inner" style="padding: 20px; height: 100%; box-sizing: border-box; overflow-y: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2 style="margin:0; color:#00a1d6;">${siteConfig.site_name}</h2>
+                <h2 style="margin:0;"><a href="/" target="_blank" style="color:#00a1d6; text-decoration:none;">${siteConfig.site_name}</a></h2>
                 <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:none; border:none; cursor:pointer; font-size:20px; color:#999; padding:4px;" title="收起菜单">&#9776;</button>
             </div>
             <div id="menu-container">

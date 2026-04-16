@@ -152,6 +152,35 @@
                 <tbody id="video-list"></tbody>
             </table>
         </div>
+
+        <!-- 上传管理区域 -->
+        <div style="margin-top: 40px;">
+            <h2 style="margin-bottom: 20px; color: #333;">上传管理</h2>
+
+            <!-- 状态Tab -->
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button class="tab-btn active" onclick="switchUploadTab('uploading')" style="padding:8px 16px; border:none; border-radius:4px; cursor:pointer; background:#00a1d6; color:#fff;">正在上传</button>
+                <button class="tab-btn" onclick="switchUploadTab('completed')" style="padding:8px 16px; border:none; border-radius:4px; cursor:pointer; background:#f0f0f0; color:#333;">已完成</button>
+                <button class="tab-btn" onclick="switchUploadTab('cancelled')" style="padding:8px 16px; border:none; border-radius:4px; cursor:pointer; background:#f0f0f0; color:#333;">已取消</button>
+            </div>
+
+            <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <thead>
+                    <tr style="background:#f5f7fa;">
+                        <th style="padding:14px 16px; text-align:left;">标题</th>
+                        <th style="padding:14px 16px; text-align:left;">文件</th>
+                        <th style="padding:14px 16px; text-align:left;">用户</th>
+                        <th style="padding:14px 16px; text-align:left; width:150px;">大小/进度</th>
+                        <th style="padding:14px 16px; text-align:left; width:140px;">状态</th>
+                        <th style="padding:14px 16px; text-align:left; width:160px;">时间</th>
+                        <th style="padding:14px 16px; text-align:left; width:100px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="upload-sessions-list">
+                    <tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -238,6 +267,7 @@
 
         async function loadData() {
             await Promise.all([loadStats(), loadVideos()]);
+            loadAdminUploadSessions();
             const now = new Date();
             document.getElementById("last-update-time").textContent =
                 now.getHours().toString().padStart(2, '0') + ':' +
@@ -436,9 +466,11 @@
                         // 有原始文件且有内置字幕才显示重新提取字幕按钮
                         const hasOriginal = v.original_file_path;
                         const hasEmbedded = v.has_embedded_subtitles;
+                        const subtitleBtnClass = hasEmbedded ? 'btn-info' : 'btn-disabled';
+                        const subtitleBtnStyle = hasEmbedded ? '' : 'background:#e9ecef; color:#999; text-decoration:line-through; cursor:not-allowed;';
                         transcodeOps = `
                             <button class="btn btn-warning btn-small" onclick="retryTranscode('${v.id}')">重新转码</button>
-                            <button class="btn ${hasEmbedded ? 'btn-info' : 'btn-disabled'} btn-small" onclick="${hasEmbedded ? `reextractSubtitles('${v.id}')` : ''}" ${!hasEmbedded ? 'disabled title="无内置字幕"' : ''}>重新字幕</button>
+                            <button class="btn ${subtitleBtnClass} btn-small" style="${subtitleBtnStyle}" onclick="${hasEmbedded ? `reextractSubtitles('${v.id}')` : ''}" ${!hasEmbedded ? 'disabled title="无内置字幕"' : ''}>重新字幕</button>
                         `;
                     }
 
@@ -638,6 +670,108 @@
             const div = document.createElement("div");
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ==================== 上传管理 ====================
+        let currentUploadTab = 'uploading';
+
+        function switchUploadTab(status) {
+            currentUploadTab = status;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.style.background = '#f0f0f0';
+                btn.style.color = '#333';
+            });
+            event.target.style.background = '#00a1d6';
+            event.target.style.color = '#fff';
+            loadAdminUploadSessions();
+        }
+
+        async function loadAdminUploadSessions() {
+            const tbody = document.getElementById("upload-sessions-list");
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">加载中...</td></tr>';
+
+            try {
+                const res = await fetch(`/admin/upload-sessions?status=${currentUploadTab}`, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    renderAdminUploadSessions(data.sessions || []);
+                } else if (res.status === 401) {
+                    location.href = "/static/login.html";
+                }
+            } catch(e) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">加载失败</td></tr>';
+            }
+        }
+
+        function renderAdminUploadSessions(sessions) {
+            const tbody = document.getElementById("upload-sessions-list");
+            if (!sessions || sessions.length === 0) {
+                const statusText = currentUploadTab === 'uploading' ? '正在上传' :
+                                  currentUploadTab === 'completed' ? '已完成' : '已取消';
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">暂无${statusText}的记录</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = sessions.map(s => {
+                const progress = Math.round(s.progress || 0);
+                const statusClass = s.status === 'uploading' ? 'style="color:#00a1d6;"' :
+                                   s.status === 'completed' ? 'style="color:#2f9e44;"' : 'style="color:#999;"';
+                const statusText = s.status === 'uploading' ? '上传中' :
+                                  s.status === 'completed' ? '已完成' : '已取消';
+                const fileSize = formatSize(s.file_size);
+
+                return `<tr>
+                    <td style="padding:12px 16px;">${s.title ? escapeHtml(s.title) : '-'}</td>
+                    <td style="padding:12px 16px;">
+                        <div style="font-weight:500;">${escapeHtml(s.filename)}</div>
+                        <div style="font-size:12px; color:#999;">${fileSize}</div>
+                    </td>
+                    <td style="padding:12px 16px;">${escapeHtml(s.username)}</td>
+                    <td style="padding:12px 16px;">
+                        ${s.status === 'uploading' ? `
+                            <div>${s.uploaded_chunks}/${s.total_chunks} 分片 (${progress}%)</div>
+                            <div style="width:100px; height:4px; background:#eee; border-radius:2px; margin-top:4px;">
+                                <div style="width:${progress}%; height:100%; background:#00a1d6; border-radius:2px;"></div>
+                            </div>
+                        ` : '-'}
+                    </td>
+                    <td style="padding:12px 16px;" ${statusClass}>${statusText}</td>
+                    <td style="padding:12px 16px; font-size:13px; color:#666;">${new Date(s.created_at).toLocaleString()}</td>
+                    <td style="padding:12px 16px;">
+                        ${s.status === 'uploading' ? `
+                            <button onclick="adminCancelUploadSession('${s.session_id}')" style="padding:4px 8px; background:#f04c49; color:#fff; border:none; border-radius:4px; cursor:pointer;">取消</button>
+                        ` : '-'}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function adminCancelUploadSession(sessionId) {
+            if (!confirm('确定要取消此上传会话吗？')) return;
+            try {
+                const res = await fetch(`/admin/upload-sessions/${sessionId}`, {
+                    method: 'DELETE',
+                    headers
+                });
+                if (res.ok) {
+                    loadAdminUploadSessions();
+                } else {
+                    alert('取消失败');
+                }
+            } catch(e) {
+                alert('取消失败');
+            }
+        }
+
+        function formatSize(bytes) {
+            if (!bytes) return '-';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) {
+                bytes /= 1024;
+                i++;
+            }
+            return bytes.toFixed(1) + ' ' + units[i];
         }
 
         // 初始化

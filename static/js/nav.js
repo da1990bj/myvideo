@@ -325,6 +325,11 @@ function updateMobileNavDrawer(user = null) {
 
     if (!user) {
         drawer.innerHTML = `
+            <a href="/static/index.html">首页</a>
+            <a href="/static/drama/movie.html">电影</a>
+            <a href="/static/drama/tv.html">电视剧</a>
+            <a href="/static/drama/anime.html">动漫</a>
+            <div class="nav-divider"></div>
             <a href="/static/login.html">登录</a>
             <a href="/static/register.html">注册</a>
         `;
@@ -343,6 +348,10 @@ function updateMobileNavDrawer(user = null) {
                 </div>
             </div>
             <a href="/static/index.html">首页</a>
+            <a href="/static/drama/movie.html">电影</a>
+            <a href="/static/drama/tv.html">电视剧</a>
+            <a href="/static/drama/anime.html">动漫</a>
+            <div class="nav-divider"></div>
             <a href="/static/dashboard.html">创作中心</a>
             <a href="/static/history.html">观看历史</a>
             <a href="/static/notifications.html">消息通知</a>
