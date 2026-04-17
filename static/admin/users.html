@@ -24,6 +24,7 @@
                 <tbody id="list"></tbody>
             </table>
         </div>
+        <div id="users-pagination" class="pagination"></div>
     </div>
 
     <!-- 角色分配模态框 -->
@@ -45,15 +46,22 @@
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", loadUsers);
+        document.addEventListener("DOMContentLoaded", async () => {
+            await loadSiteConfig();
+            loadUsers(1);
+        });
 
-        async function loadUsers() {
+        async function loadUsers(page = 1) {
             const token = localStorage.getItem("access_token");
-            const res = await fetch("/admin/users?size=50", {
+            const pageSize = window.DEFAULT_PAGE_SIZE || 20;
+            const res = await fetch(`/admin/users?page=${page}&size=${pageSize}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) {
-                const users = await res.json();
+                const data = await res.json();
+                const users = data.users || [];
+                const total = data.total || 0;
+                const totalPages = Math.ceil(total / pageSize);
                 const tbody = document.getElementById("list");
                 tbody.innerHTML = "";
                 users.forEach(u => {
@@ -78,6 +86,7 @@
                     `;
                     tbody.appendChild(tr);
                 });
+                renderPagination("users-pagination", page, totalPages, loadUsers);
             }
         }
 

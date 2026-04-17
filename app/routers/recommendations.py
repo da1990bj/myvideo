@@ -49,11 +49,11 @@ def _build_user_read(owner: User, session: Session) -> UserRead:
     )
 
 
-@router.get("/recommendations", response_model=RecommendationsListResponse)
+@router.get("/recommendations")
 async def get_recommendations(
     slot_name: str,
-    limit: int = Query(10, ge=1, le=50),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     exclude_video_ids: Optional[List[str]] = Query(None),
     category_id: Optional[str] = Query(None),
     current_user: Optional[User] = Depends(get_current_user_optional),
@@ -89,7 +89,7 @@ async def get_recommendations(
 
         if slot_name == "personalized" and user_id_str:
             # 个性化推荐从 Redis Sorted Set 读取
-            redis_recs = cache.zrange_user_recommendations(user_id_str, start=0, end=limit+99, withscores=True)
+            redis_recs = cache.zrange_user_recommendations(user_id_str, start=0, end=page_size+99, withscores=True)
             if redis_recs:
                 recommendations = [{"video_id": UUID(vid), "score": score, "source": "collaborative", "reason": "个性化推荐"} for vid, score in redis_recs]
             else:
@@ -97,7 +97,7 @@ async def get_recommendations(
                 engine = RecommendationEngine(session, current_user.id)
                 recommendations = await engine.get_recommendations_for_slot(
                     slot_name=slot_name,
-                    limit=limit,
+                    limit=page_size,
                     exclude_video_ids=exclude_ids,
                     category_id=cat_id
                 )
@@ -106,13 +106,13 @@ async def get_recommendations(
 
         elif slot_name == "trending" and cat_id:
             # 分类热门从 Redis 读取
-            redis_recs = cache.zrange_trending_category(cat_id, start=0, end=limit+99, withscores=True)
+            redis_recs = cache.zrange_trending_category(cat_id, start=0, end=page_size+99, withscores=True)
             if redis_recs:
                 recommendations = [{"video_id": UUID(vid), "score": score, "source": "trending", "reason": "热门推荐"} for vid, score in redis_recs]
 
         elif slot_name == "trending":
             # 全局热门从 Redis 读取
-            redis_recs = cache.zrange_trending(start=0, end=limit+99, withscores=True)
+            redis_recs = cache.zrange_trending(start=0, end=page_size+99, withscores=True)
             if redis_recs:
                 recommendations = [{"video_id": UUID(vid), "score": score, "source": "trending", "reason": "热门推荐"} for vid, score in redis_recs]
 
@@ -121,7 +121,7 @@ async def get_recommendations(
             cached_recs = cache.get(
                 slot_name,
                 user_id=None,
-                limit=limit,
+                limit=page_size,
                 category_id=cat_id
             )
             if cached_recs:
@@ -132,19 +132,22 @@ async def get_recommendations(
             engine = RecommendationEngine(session, current_user.id if current_user else None)
             recommendations = await engine.get_recommendations_for_slot(
                 slot_name=slot_name,
-                limit=limit,
+                limit=page_size,
                 exclude_video_ids=exclude_ids,
                 category_id=cat_id
             )
 
-        # 处理offset
-        recommendations = recommendations[offset:]
+        # 处理分页 - 使用 page 和 page_size 计算 offset
+        offset = (page - 1) * page_size
+        recommendations = recommendations[offset : offset + page_size]
 
         # 转换为响应格式
         result = []
+        public_video_ids = set()  # 用于去重
         for rec in recommendations:
             video = session.get(Video, rec["video_id"])
-            if video and video.visibility == "public":
+            if video and video.visibility == "public" and video.id not in public_video_ids:
+                public_video_ids.add(video.id)
                 # 检查用户是否点赞和收藏
                 is_liked = False
                 is_favorited = False
@@ -202,10 +205,14 @@ async def get_recommendations(
             "display_title": slot.display_title if slot else slot_name
         }
 
-        return RecommendationsListResponse(
-            recommendations=result,
-            slot_info=slot_info
-        )
+        # total 是实际返回的公开视频数量（用于前端分页计算）
+        return {
+            "recommendations": result,
+            "slot_info": slot_info,
+            "total": len(result),
+            "page": page,
+            "size": page_size
+        }
 
     except Exception as e:
         import logging

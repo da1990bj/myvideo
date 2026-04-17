@@ -101,6 +101,19 @@
 
     <!-- Videos Tab -->
     <div id="tab-videos">
+        <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
+            <select id="video-filter-category" onchange="loadMyVideos(0, true)" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:120px;">
+                <option value="">全部分类</option>
+            </select>
+            <select id="video-filter-status" onchange="loadMyVideos(0, true)" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:120px;">
+                <option value="">全部状态</option>
+                <option value="pending">等待转码</option>
+                <option value="processing">转码中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">转码失败</option>
+            </select>
+            <input type="text" id="video-filter-search" placeholder="搜索标题..." oninput="debounceSearch()" style="padding:6px 10px; border:1px solid #ddd; border-radius:4px; min-width:200px;">
+        </div>
         <table>
             <thead>
                 <tr>
@@ -114,9 +127,10 @@
                 </tr>
             </thead>
             <tbody id="video-list">
-                <tr><td colspan="6" style="text-align:center;">加载中...</td></tr>
+                <tr><td colspan="7" style="text-align:center;">加载中...</td></tr>
             </tbody>
         </table>
+        <div id="video-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
     </div>
 
     <!-- Private Videos Tab -->
@@ -184,7 +198,12 @@
 
     <!-- Uploads Tab -->
     <div id="tab-uploads" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0;">上传会话</h3>
+            <button onclick="batchResumeUploads()" style="padding:6px 16px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer;">批量恢复上传</button>
+        </div>
         <input type="file" id="resumeFileInput" accept="video/*" style="display:none;" onchange="handleResumeFileSelect(event)">
+        <input type="file" id="batchResumeFileInput" multiple accept="video/*" style="display:none;" onchange="handleBatchResumeFiles(event)">
         <input type="hidden" id="resumeSessionId">
         <table>
             <thead>
@@ -310,11 +329,23 @@
 
         <div style="margin-bottom:16px; padding:16px; background:#f8f9fa; border-radius:8px;">
             <h4 style="margin:0 0 12px; font-size:14px;">添加视频</h4>
-            <input type="text" id="series-search-video" placeholder="搜索视频标题..." style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;" oninput="searchVideosForSeries(this.value)">
+            <div style="display:flex; gap:8px; align-items:center;">
+                <input type="text" id="series-search-video" placeholder="搜索视频标题..." style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;" oninput="searchVideosForSeries(this.value)">
+                <button id="batch-add-btn" onclick="batchAddVideosToSeries()" style="display:none; padding:8px 16px; background:#00a1d6; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;">添加选中 (<span id="selected-count">0</span>)</button>
+            </div>
+            <div style="display:flex; align-items:center; margin-top:8px; padding:8px 0; border-top:1px solid #eee;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#666; font-size:14px;">
+                    <input type="checkbox" id="series-select-all" onchange="toggleSelectAllVideos()" style="width:16px; height:16px; cursor:pointer;">
+                    全选
+                </label>
+            </div>
             <div id="series-search-results" style="max-height:200px; overflow-y:auto; margin-top:8px; display:none;"></div>
         </div>
 
-        <p style="color:#666; font-size:14px;">已添加的视频：</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <p style="color:#666; font-size:14px; margin:0;">已添加的视频：</p>
+            <button type="button" onclick="sortSeriesVideosByTitle()" style="padding:6px 12px; background:#6c757d; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">按标题排序</button>
+        </div>
         <div id="series-video-list" style="border:1px solid #e9ecef; border-radius:6px; max-height:300px; overflow-y:auto;"></div>
 
         <div style="display:flex; justify-content:flex-end; margin-top:20px; padding-top:20px; border-top:1px solid #f0f0f0;">
@@ -423,7 +454,19 @@
 
 <script>
     let refreshTimer = null;
+    let searchTimer = null;
+    let currentVideoPage = 1;
+    let videoTotalPages = 1;
     let categories = [];
+
+    // 防抖搜索
+    function debounceSearch() {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            currentVideoPage = 1;  // 搜索时重置页码
+            loadMyVideos(0, true);
+        }, 500);
+    }
     let currentTags = []; 
     const colors = ['#e7f5ff', '#fff0f6', '#ebfbee', '#fff9db', '#f3f0ff'];
     const textColors = ['#00a1d6', '#c2255c', '#2f9e44', '#f08c00', '#7950f2'];
@@ -433,6 +476,21 @@
     let socket;
     const videoStateMap = {};  // 缓存视频状态 {video_id: {progress, status}}
     const uploadStateMap = {};  // 缓存上传状态 {session_id: {progress, uploaded_chunks, total_chunks}}
+    // 上传配置
+    let uploadConfig = { concurrency: 3, chunk_size: 5 * 1024 * 1024 };
+
+    // 加载上传配置
+    async function loadUploadConfig() {
+        try {
+            const res = await fetch('/upload-config');
+            if (res.ok) {
+                uploadConfig = await res.json();
+                console.log('[Dashboard] Upload config loaded:', uploadConfig);
+            }
+        } catch (e) {
+            console.warn('[Dashboard] Failed to load upload config:', e);
+        }
+    }
 
     /**
      * 初始化 WebSocket 连接
@@ -658,14 +716,17 @@
             const progress = state.progress || s.progress || 0;
             const uploaded = state.uploaded_chunks || s.uploaded_chunks || 0;
             const total = state.total_chunks || s.total_chunks || 0;
+            const isStale = s.is_stale || false;
+            const statusText = isStale ? '<span style="color:#f08c00;">已暂停</span>' : '<span style="color:#00a1d6;">上传中</span>';
+            const progressColor = isStale ? '#f08c00' : '#00a1d6';
 
             html += `<tr data-upload-session="${s.session_id}">` +
                 "<td><div style='font-weight:500;'>" + s.title + "</div>" +
                 "<div style='font-size:12px; color:#999;'>" + s.filename + " (" + formatSize(s.file_size) + ")</div></td>" +
                 "<td>" + uploaded + " / " + total + " 分片</td>" +
-                "<td><div style='font-size:12px; color:#00a1d6;'>上传中 " + Math.round(progress) + "%</div>" +
+                "<td><div style='font-size:12px;'>" + statusText + " " + Math.round(progress) + "%</div>" +
                 "<div style='width:120px; height:4px; background:#eee; border-radius:2px; margin-top:4px;'>" +
-                `<div id="resume-progress-${s.session_id}" style="width:` + progress + `%; height:100%; background:#00a1d6; border-radius:2px;"></div></div></td>` +
+                `<div id="resume-progress-${s.session_id}" style="width:` + progress + `%; height:100%; background:` + progressColor + `; border-radius:2px;"></div></div></td>` +
                 "<td>" + new Date(s.created_at).toLocaleString() + "</td>" +
                 "<td>" +
                 "<button class='action-btn' onclick='triggerResumeUpload(\"" + s.session_id + "\")' style='margin-right:5px;'>继续上传</button>" +
@@ -696,9 +757,9 @@
                 // 从列表移除
                 delete uploadStateMap[sessionId];
                 // 清理 localStorage
-                const pending = JSON.parse(localStorage.getItem('pendingUploadSessions') || '{}');
-                delete pending[sessionId];
-                localStorage.setItem('pendingUploadSessions', JSON.stringify(pending));
+                const sessions = JSON.parse(localStorage.getItem('uploadSessions') || '{}');
+                delete sessions[sessionId];
+                localStorage.setItem('uploadSessions', JSON.stringify(sessions));
                 loadUploadSessions();
             } else {
                 const err = await res.json();
@@ -708,6 +769,243 @@
             console.error('Cancel failed:', e);
             alert('取消失败，请重试');
         }
+    }
+
+    // 批量恢复上传 - 弹出文件选择
+    function batchResumeUploads() {
+        document.getElementById('batchResumeFileInput').click();
+    }
+
+    // 处理批量选择的文件
+    async function handleBatchResumeFiles(event) {
+        const files = Array.from(event.target.files);
+        if (files.length === 0) return;
+
+        const token = localStorage.getItem("access_token");
+        // 建立 filename+size -> file 的映射
+        const fileMap = {};
+        files.forEach(f => {
+            const key = `${f.name}_${f.size}`;
+            fileMap[key] = f;
+        });
+
+        try {
+            // 获取所有 uploading 状态的会话
+            const res = await fetch('/upload-sessions', {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (!res.ok) throw new Error('获取会话失败');
+
+            const sessions = await res.json();
+            let matchedCount = 0;
+            let failCount = 0;
+
+            // 匹配并恢复上传（并发控制）
+            const CONCURRENCY = uploadConfig.concurrency || 3;
+            const matchedSessions = sessions.filter(s => {
+                const key = `${s.filename}_${s.file_size}`;
+                return !!fileMap[key];
+            });
+
+            // 并发控制函数（正确实现）
+            const runWithConcurrency = async (tasks, limit) => {
+                let index = 0;
+                const running = [];
+
+                const runTask = async (task) => {
+                    const p = task().then(() => {
+                        running.splice(running.indexOf(p), 1);
+                        return null;
+                    }).catch(e => {
+                        running.splice(running.indexOf(p), 1);
+                        return e;
+                    });
+                    running.push(p);
+                    return p;
+                };
+
+                // 启动第一批
+                for (let i = 0; i < limit && i < tasks.length; i++) {
+                    runTask(tasks[index++]);
+                }
+
+                // 后续任务等前一个完成后再启动
+                while (index < tasks.length) {
+                    if (running.length < limit) {
+                        runTask(tasks[index++]);
+                    }
+                    await Promise.race(running);
+                }
+
+                return Promise.all(running);
+            };
+
+            await runWithConcurrency(matchedSessions.map(session => async () => {
+                const key = `${session.filename}_${session.file_size}`;
+                const file = fileMap[key];
+                // 实时更新进度
+                await resumeUploadSession(session.session_id, file, token, (completed, total) => {
+                    const pct = Math.round(completed / total * 100);
+                    const progressBar = document.getElementById(`resume-progress-${session.session_id}`);
+                    if (progressBar) progressBar.style.width = pct + '%';
+                    const statusText = document.getElementById(`resume-status-${session.session_id}`);
+                    if (statusText) statusText.innerText = `恢复中 ${pct}% (${completed}/${total} 分片)`;
+                    // 状态改为上传中
+                    const row = document.querySelector(`tr[data-upload-session="${session.session_id}"]`);
+                    if (row) {
+                        const statusCell = row.querySelector('td:nth-child(3)');
+                        if (statusText) statusText.style.color = '#00a1d6';
+                    }
+                });
+                matchedCount++;
+            }), CONCURRENCY);
+
+            if (matchedCount > 0) {
+                alert(`成功恢复 ${matchedCount} 个上传任务${failCount > 0 ? `，${failCount} 个失败` : ''}`);
+                loadUploadSessions();  // 刷新列表
+            } else {
+                alert('未找到匹配的上传会话\n请选择与中断前相同的原文件（可多选）');
+            }
+        } catch (e) {
+            alert('恢复失败: ' + e.message);
+        }
+
+        // 清空 file input
+        event.target.value = '';
+    }
+
+    // 恢复单个上传会话（并发上传）
+    async function resumeUploadSession(sessionId, file, token, onProgress) {
+        const CHUNK_SIZE = 5 * 1024 * 1024;  // 5MB
+        const CONCURRENCY = uploadConfig.concurrency || 3;  // 并发数
+
+        // 获取会话详情
+        const sessionRes = await fetch(`/upload-sessions/${sessionId}`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (!sessionRes.ok) throw new Error('获取会话失败');
+
+        const sessionData = await sessionRes.json();
+        const totalChunks = sessionData.total_chunks;
+        const uploadedChunks = new Set(sessionData.uploaded_chunk_indexes || []);
+        let completedCount = uploadedChunks.size;
+
+        // 检查会话状态
+        if (sessionData.status !== 'uploading') {
+            throw new Error(`会话状态不是上传中，无法恢复 (当前状态: ${sessionData.status})`);
+        }
+
+        // 检查是否所有分片都已上传（直接完成）
+        if (completedCount >= totalChunks) {
+            // 所有分片已上传，直接完成
+            if (onProgress) onProgress(totalChunks, totalChunks);
+            const completeRes = await fetch(`/upload-sessions/${sessionId}/complete`, {
+                method: 'POST',
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (!completeRes.ok) {
+                const err = await completeRes.json();
+                throw new Error('完成上传失败: ' + (err.detail || completeRes.statusText));
+            }
+            return;  // 完成上传
+        }
+
+        // 更新状态显示
+        const statusEl = document.getElementById(`resume-status-${sessionId}`);
+        const progressEl = document.getElementById(`resume-progress-${sessionId}`);
+
+        const updateProgress = (completed, total) => {
+            const pct = Math.round(completed / total * 100);
+            if (onProgress) {
+                onProgress(completed, total);
+            } else {
+                if (statusEl) statusEl.innerText = `恢复中 ${pct}% (${completed}/${total} 分片)`;
+                if (progressEl) progressEl.style.width = pct + '%';
+            }
+        };
+
+        // 上传单个分片
+        const uploadChunk = async (chunkIndex) => {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append('chunk', chunk);
+
+            const chunkRes = await fetch(
+                `/upload-sessions/${sessionId}/chunks/${chunkIndex}`,
+                { method: 'POST', body: formData, headers: { "Authorization": "Bearer " + token } }
+            );
+
+            if (!chunkRes.ok) {
+                throw new Error(`分片 ${chunkIndex} 上传失败`);
+            }
+
+            return chunkIndex;
+        };
+
+        // 构建所有需要上传的分片队列
+        const pendingChunks = [];
+        for (let i = 0; i < totalChunks; i++) {
+            if (!uploadedChunks.has(i)) {
+                pendingChunks.push(i);
+            }
+        }
+
+        // 正确的分片并发上传
+        const runChunkWithConcurrency = async (tasks, limit) => {
+            let index = 0;
+            const running = [];
+
+            const runTask = async (task) => {
+                const p = task().then(() => {
+                    running.splice(running.indexOf(p), 1);
+                    return null;
+                }).catch(e => {
+                    running.splice(running.indexOf(p), 1);
+                    return e;
+                });
+                running.push(p);
+                return p;
+            };
+
+            // 启动第一批
+            for (let i = 0; i < limit && i < tasks.length; i++) {
+                runTask(tasks[index++]);
+            }
+
+            // 后续任务等前一个完成后再启动
+            while (index < tasks.length) {
+                if (running.length < limit) {
+                    runTask(tasks[index++]);
+                }
+                await Promise.race(running);
+            }
+
+            return Promise.all(running);
+        };
+
+        await runChunkWithConcurrency(
+            pendingChunks.map(chunkIndex => async () => {
+                await uploadChunk(chunkIndex);
+                completedCount++;
+                updateProgress(completedCount, totalChunks);
+            }),
+            CONCURRENCY
+        );
+
+        // 完成上传
+        const completeRes = await fetch(`/upload-sessions/${sessionId}/complete`, {
+            method: 'POST',
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (!completeRes.ok) throw new Error('完成上传失败');
+
+        // 从 localStorage 清除
+        const sessions = JSON.parse(localStorage.getItem('uploadSessions') || '{}');
+        delete sessions[sessionId];
+        localStorage.setItem('uploadSessions', JSON.stringify(sessions));
     }
 
     // 处理恢复上传的文件选择
@@ -739,9 +1037,15 @@
 
             const sessionData = await sessionRes.json();
 
-            // 检查文件名是否匹配
-            if (sessionData.filename !== file.name) {
-                alert('请选择相同的文件: ' + sessionData.filename);
+            // 检查会话状态
+            if (sessionData.status === 'completed') {
+                alert('该上传已完成，无需恢复');
+                return;
+            }
+
+            // 检查文件名和大小是否匹配
+            if (sessionData.filename !== file.name || sessionData.file_size !== file.size) {
+                alert('请选择相同的文件: ' + sessionData.filename + ' (' + formatSize(sessionData.file_size) + ')');
                 return;
             }
 
@@ -764,27 +1068,14 @@
                     `<button class='action-btn' onclick='cancelUploadSession("${sessionId}")' style='color:#f04c49;'>取消</button>`;
             }
 
-            // 上传缺失的分片
-            for (let i = uploadedChunks.length; i < totalChunks; i++) {
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(start + CHUNK_SIZE, file.size);
-                const chunk = file.slice(start, end);
-
-                const formData = new FormData();
-                formData.append("chunk", chunk);
-
-                const chunkRes = await fetch(`/upload-sessions/${sessionId}/chunks/${i}`, {
-                    method: "POST",
-                    headers: { "Authorization": "Bearer " + token },
-                    body: formData
-                });
-
-                if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 上传失败`);
-
-                const chunkData = await chunkRes.json();
-                uploadedChunks = chunkData.uploaded_chunks; // 更新已上传分片数
-                updateProgress(uploadedChunks, totalChunks);
-            }
+            // 使用并发上传（复用 resumeUploadSession）
+            await resumeUploadSession(sessionId, file, token, (completed, total) => {
+                const pct = Math.round(completed / total * 100);
+                const progressBar = document.getElementById(`resume-progress-${sessionId}`);
+                if (progressBar) progressBar.style.width = pct + '%';
+                const statusText = document.getElementById(`resume-status-${sessionId}`);
+                if (statusText) statusText.innerText = `上传中 ${pct}% (${completed}/${total} 分片)`;
+            });
 
             // 完成上传
             const completeRes = await fetch(`/upload-sessions/${sessionId}/complete`, {
@@ -793,6 +1084,10 @@
             });
 
             if (completeRes.ok) {
+                // 从 localStorage 清除
+                const sessions = JSON.parse(localStorage.getItem('uploadSessions') || '{}');
+                delete sessions[sessionId];
+                localStorage.setItem('uploadSessions', JSON.stringify(sessions));
                 // 从列表移除（上传完成不再是进行中的会话）
                 loadUploadSessions();
             } else {
@@ -817,6 +1112,9 @@
     document.addEventListener("DOMContentLoaded", async () => {
         const token = localStorage.getItem("access_token");
         if (!token) location.href = "/static/login.html";
+
+        // 加载上传配置
+        await loadUploadConfig();
 
         // 获取当前用户信息（用于判断是否显示剧集管理tab）
         try {
@@ -1027,7 +1325,7 @@
             if (res.ok) {
                 categories = await res.json();
                 const select = document.getElementById("editCategory");
-                select.innerHTML = ""; 
+                select.innerHTML = "";
                 categories.forEach(cat => {
                     const opt = document.createElement("option");
                     opt.value = cat.id;
@@ -1040,12 +1338,25 @@
                 categories.forEach(cat => {
                     window.categorySlugMap[cat.id] = cat.slug || "";
                 });
+
+                // 填充视频筛选下拉框
+                const filterCategorySelect = document.getElementById("video-filter-category");
+                if (filterCategorySelect) {
+                    filterCategorySelect.innerHTML = '<option value="">全部分类</option>';
+                    categories.forEach(cat => {
+                        const opt = document.createElement("option");
+                        opt.value = cat.id;
+                        opt.text = cat.name;
+                        filterCategorySelect.appendChild(opt);
+                    });
+                }
             }
         } catch(e) {}
     }
 
-    async function loadMyVideos(skipPolling = false) {
+    async function loadMyVideos(skipPolling = false, useFilters = false) {
         const token = localStorage.getItem("access_token");
+        const pageSize = window.DEFAULT_PAGE_SIZE || 20;
         try {
             // 只在手动刷新或轮询时显示提示
             if (!skipPolling) {
@@ -1053,7 +1364,20 @@
                 if (refreshHint) refreshHint.classList.add("show");
             }
 
-            const res = await fetch("/users/me/videos", {
+            // 构建查询参数
+            const params = new URLSearchParams();
+            params.append("page", currentVideoPage.toString());
+            params.append("size", pageSize.toString());
+            if (useFilters) {
+                const category = document.getElementById("video-filter-category")?.value;
+                const status = document.getElementById("video-filter-status")?.value;
+                const search = document.getElementById("video-filter-search")?.value;
+                if (category) params.append("category", category);
+                if (status) params.append("status", status);
+                if (search) params.append("keyword", search);
+            }
+
+            const res = await fetch("/users/me/videos?" + params.toString(), {
                 headers: { "Authorization": "Bearer " + token }
             });
 
@@ -1063,7 +1387,11 @@
             }
 
             if (res.ok) {
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || [];
+                const total = data.total || 0;
+                videoTotalPages = Math.ceil(total / pageSize);
+
                 // 更新时间戳
                 const now = new Date();
                 document.getElementById("last-update-time").textContent =
@@ -1072,6 +1400,9 @@
                     now.getSeconds().toString().padStart(2, '0');
                 // 只传给 renderTable 非私密视频
                 renderTable(videos.filter(v => v.visibility !== "private"));
+
+                // 渲染分页
+                renderVideoPagination();
 
                 // 加载队列信息
                 videos.filter(v => v.visibility !== "private").forEach(v => {
@@ -1100,13 +1431,22 @@
         } catch (e) { console.error(e); }
     }
 
+    function renderVideoPagination() {
+        const container = document.getElementById("video-pagination");
+        if (!container) return;
+        renderPagination("video-pagination", currentVideoPage, videoTotalPages, (page) => {
+            currentVideoPage = page;
+            loadMyVideos(0, true);
+        });
+    }
+
     function renderTable(videos) {
         const tbody = document.getElementById("video-list");
         // 只显示非私密视频
         const publicVideos = videos.filter(v => v.visibility !== "private");
 
         if (publicVideos.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:40px;'>暂无稿件</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='7' style='text-align:center; padding:40px;'>暂无稿件</td></tr>";
         } else {
             let html = "";
             publicVideos.forEach(v => {
@@ -2366,11 +2706,15 @@
         }
     }
 
+    let seriesSelectedVideos = new Set();  // 存储选中的视频ID
+
     async function searchVideosForSeries(query) {
         if (query.length < 2) {
             document.getElementById("series-search-results").style.display = 'none';
             return;
         }
+        seriesSelectedVideos.clear();
+        updateBatchAddBtn();
         const token = localStorage.getItem("access_token");
         try {
             const res = await fetch("/admin/videos/search?keyword=" + encodeURIComponent(query), {
@@ -2393,8 +2737,13 @@
                 return;
             }
 
-            resultsContainer.innerHTML = filtered.slice(0, 10).map(v => `
-                <div style="display:flex; align-items:center; padding:8px; border-bottom:1px solid #eee; cursor:pointer;" onclick="addVideoToSeries('${v.id}')">
+            // 保存当前搜索结果供全选使用
+            window._seriesSearchResults = filtered;
+            document.getElementById('series-select-all').checked = false;
+
+            resultsContainer.innerHTML = filtered.map(v => `
+                <div style="display:flex; align-items:center; padding:8px; border-bottom:1px solid #eee; cursor:pointer;" onclick="toggleSeriesVideoSelect('${v.id}', event)">
+                    <input type="checkbox" id="series-chk-${v.id}" style="margin-right:12px; width:18px; height:18px; cursor:pointer;">
                     <div style="width:60px; height:36px; background:#000; border-radius:4px; margin-right:12px; overflow:hidden;">
                         ${v.thumbnail_path ? '<img src="' + v.thumbnail_path + '" style="width:100%;height:100%;object-fit:cover;">' : ''}
                     </div>
@@ -2407,6 +2756,127 @@
             resultsContainer.style.display = 'block';
         } catch(e) {
             console.error('Search failed:', e);
+        }
+    }
+
+    function toggleSeriesVideoSelect(videoId, event) {
+        event.stopPropagation();
+        const checkbox = document.getElementById('series-chk-' + videoId);
+        checkbox.checked = !checkbox.checked;
+        if (checkbox.checked) {
+            seriesSelectedVideos.add(videoId);
+        } else {
+            seriesSelectedVideos.delete(videoId);
+        }
+        updateBatchAddBtn();
+    }
+
+    function toggleSelectAllVideos() {
+        const selectAllCheckbox = document.getElementById('series-select-all');
+        const results = window._seriesSearchResults || [];
+        if (selectAllCheckbox.checked) {
+            results.forEach(v => {
+                seriesSelectedVideos.add(v.id);
+                const checkbox = document.getElementById('series-chk-' + v.id);
+                if (checkbox) checkbox.checked = true;
+            });
+        } else {
+            results.forEach(v => {
+                seriesSelectedVideos.delete(v.id);
+                const checkbox = document.getElementById('series-chk-' + v.id);
+                if (checkbox) checkbox.checked = false;
+            });
+        }
+        updateBatchAddBtn();
+    }
+
+    function updateBatchAddBtn() {
+        const btn = document.getElementById('batch-add-btn');
+        const count = document.getElementById('selected-count');
+        if (seriesSelectedVideos.size > 0) {
+            btn.style.display = 'block';
+            count.textContent = seriesSelectedVideos.size;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    async function batchAddVideosToSeries() {
+        if (seriesSelectedVideos.size === 0) return;
+        if (!confirm("确定将 " + seriesSelectedVideos.size + " 个视频添加到剧集吗？")) return;
+        const token = localStorage.getItem("access_token");
+        let successCount = 0;
+        let failCount = 0;
+        for (const videoId of seriesSelectedVideos) {
+            try {
+                const res = await fetch("/admin/drama-series/" + seriesCurrentVideoId + "/videos", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": "Bearer " + token,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ video_id: videoId })
+                });
+                if (res.ok) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } catch(e) {
+                failCount++;
+            }
+        }
+        alert("添加完成：成功 " + successCount + " 个" + (failCount > 0 ? "，失败 " + failCount + " 个" : ""));
+        seriesSelectedVideos.clear();
+        document.getElementById("series-search-results").style.display = 'none';
+        document.getElementById("series-search-video").value = '';
+        openSeriesVideoModal(seriesCurrentVideoId);
+    }
+
+    async function sortSeriesVideosByTitle() {
+        if (!confirm("确定按标题排序所有视频吗？")) return;
+        const token = localStorage.getItem("access_token");
+        try {
+            // 获取当前剧集信息
+            const seriesRes = await fetch("/drama-series/" + seriesCurrentVideoId);
+            if (!seriesRes.ok) throw new Error("获取剧集信息失败");
+            const seriesData = await seriesRes.json();
+            const videos = seriesData.videos || [];
+
+            if (videos.length === 0) {
+                alert("没有可排序的视频");
+                return;
+            }
+
+            // 按标题排序
+            const sorted = videos.sort((a, b) => a.title.localeCompare(b.title, 'zh'));
+
+            // 构建排序请求
+            const orders = sorted.map((v, idx) => ({
+                id: v.item_id,  // 使用 DramaSeriesItem 的 id
+                order: idx + 1
+            }));
+
+            // 调用排序接口
+            const res = await fetch("/admin/drama-series/" + seriesCurrentVideoId + "/reorder", {
+                method: "PUT",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ orders: orders })
+            });
+
+            if (res.ok) {
+                alert("排序完成！");
+                openSeriesVideoModal(seriesCurrentVideoId);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert("排序失败：" + (err.detail || "未知错误"));
+            }
+        } catch(e) {
+            console.error('Sort failed:', e);
+            alert("排序失败：" + e.message);
         }
     }
 

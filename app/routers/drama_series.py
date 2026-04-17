@@ -154,6 +154,7 @@ async def get_drama_series(
         if video:
             series_dict["videos"].append({
                 "id": str(video.id),
+                "item_id": item.id,  # DramaSeriesItem 的 ID，用于排序
                 "title": video.title,
                 "thumbnail_path": video.thumbnail_path,
                 "duration": video.duration,

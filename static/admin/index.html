@@ -58,6 +58,38 @@
             </div>
         </div>
 
+        <h3>上传状态</h3>
+        <div class="stats-row" id="upload-stats-row">
+            <div class="card stat-card" draggable="true" data-key="upload-uploading">
+                <div class="label">上传中</div>
+                <div class="num" id="upload-uploading-count" style="color: #00a1d6;">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="upload-completed">
+                <div class="label">上传完成</div>
+                <div class="num" id="upload-completed-count" style="color: #2f9e44;">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="upload-cancelled">
+                <div class="label">已取消</div>
+                <div class="num" id="upload-cancelled-count" style="color: #999;">-</div>
+            </div>
+        </div>
+
+        <h3>转码状态</h3>
+        <div class="stats-row" id="transcode-stats-row">
+            <div class="card stat-card" draggable="true" data-key="transcode-pending">
+                <div class="label">等待转码</div>
+                <div class="num" id="transcode-pending-count" style="color: #f08c00;">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="transcode-processing">
+                <div class="label">转码中</div>
+                <div class="num" id="transcode-processing-count" style="color: #00a1d6;">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="transcode-completed-today">
+                <div class="label">今日完成</div>
+                <div class="num" id="transcode-completed-count" style="color: #2f9e44;">-</div>
+            </div>
+        </div>
+
         <h2>服务器状态</h2>
         <div class="stats-row sortable" id="server-stats-row">
             <div class="card stat-card" draggable="true" data-key="cpu">
@@ -79,6 +111,14 @@
             <div class="card stat-card" draggable="true" data-key="net-recv">
                 <div class="label">网络已接收</div>
                 <div class="num" id="net-recv-stat">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="net-sent-speed">
+                <div class="label">上行网速</div>
+                <div class="num" id="net-sent-speed-stat">-</div>
+            </div>
+            <div class="card stat-card" draggable="true" data-key="net-recv-speed">
+                <div class="label">下行网速</div>
+                <div class="num" id="net-recv-speed-stat">-</div>
             </div>
             <div class="card stat-card" draggable="true" data-key="conn">
                 <div class="label">网络连接数</div>
@@ -106,6 +146,20 @@
                 document.getElementById("banned-videos-count").innerText = data.banned_videos_count;
                 document.getElementById("appealing-videos-count").innerText = data.appealing_videos_count;
                 document.getElementById("comment-count").innerText = data.comments;
+
+                // 上传状态
+                if (data.upload_uploading !== undefined) {
+                    document.getElementById("upload-uploading-count").innerText = data.upload_uploading;
+                    document.getElementById("upload-completed-count").innerText = data.upload_completed;
+                    document.getElementById("upload-cancelled-count").innerText = data.upload_cancelled;
+                }
+
+                // 转码状态
+                if (data.transcode_pending !== undefined) {
+                    document.getElementById("transcode-pending-count").innerText = data.transcode_pending;
+                    document.getElementById("transcode-processing-count").innerText = data.transcode_processing;
+                    document.getElementById("transcode-completed-count").innerText = data.transcode_completed_today;
+                }
             }
 
             // System Stats
@@ -120,6 +174,19 @@
                 document.getElementById("net-sent-stat").innerText = formatBytes(data.network.bytes_sent);
                 document.getElementById("net-recv-stat").innerText = formatBytes(data.network.bytes_recv);
                 document.getElementById("conn-count-stat").innerText = data.connections_count;
+
+                // 计算网速
+                const now = Date.now();
+                if (window._lastNetStats) {
+                    const timeDelta = (now - window._lastNetStats.time) / 1000; // 秒
+                    if (timeDelta > 0) {
+                        const sentSpeed = (data.network.bytes_sent - window._lastNetStats.bytes_sent) / timeDelta;
+                        const recvSpeed = (data.network.bytes_recv - window._lastNetStats.bytes_recv) / timeDelta;
+                        document.getElementById("net-sent-speed-stat").innerText = formatBytes(sentSpeed) + '/s';
+                        document.getElementById("net-recv-speed-stat").innerText = formatBytes(recvSpeed) + '/s';
+                    }
+                }
+                window._lastNetStats = { time: now, bytes_sent: data.network.bytes_sent, bytes_recv: data.network.bytes_recv };
             }
 
             // 更新最后刷新时间
@@ -178,6 +245,8 @@
             // 初始化卡片拖拽排序
             initCardDragSort('basic-stats-row', 'dashboard_basic');
             initCardDragSort('audit-stats-row', 'dashboard_audit');
+            initCardDragSort('upload-stats-row', 'dashboard_upload');
+            initCardDragSort('transcode-stats-row', 'dashboard_transcode');
             initCardDragSort('server-stats-row', 'dashboard_server');
         });
 

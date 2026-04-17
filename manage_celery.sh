@@ -33,6 +33,20 @@ get_transcode_concurrency() {
     echo "$concurrency"
 }
 
+# 从数据库读取 Celery 内存限制配置
+get_celery_memory_limit() {
+    local limit_mb=6144
+    # 尝试从数据库读取配置
+    if command -v docker &> /dev/null; then
+        limit_mb=$(docker exec shared_postgres psql -U admin -d myvideo_db -t -c "SELECT value FROM system_configs WHERE key = 'CELERY_MEMORY_LIMIT_MB' LIMIT 1;" 2>/dev/null | tr -d ' ' | tr -d '\n')
+        # 如果为空或无效，使用默认值
+        if [ -z "$limit_mb" ] || ! [[ "$limit_mb" =~ ^[0-9]+$ ]]; then
+            limit_mb=6144
+        fi
+    fi
+    echo "$limit_mb"
+}
+
 start() {
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
@@ -47,21 +61,24 @@ start() {
 
     # 获取并发数配置
     CONCURRENCY=$(get_transcode_concurrency)
-    echo "Starting Celery Worker (concurrency: $CONCURRENCY, memory limit: 6GB)..."
+    # 获取内存限制配置
+    MEMORY_LIMIT_MB=$(get_celery_memory_limit)
+    MEMORY_LIMIT_KB=$((MEMORY_LIMIT_MB * 1024))
+    echo "Starting Celery Worker (concurrency: $CONCURRENCY, memory limit: ${MEMORY_LIMIT_MB}MB)..."
 
     cd "$APP_DIR" || exit 1
 
-    # 限制最大内存占用 6GB (6291456 KB)
-    ulimit -m 6291456
-    ulimit -v 6291456
+    # 限制最大内存占用
+    ulimit -m $MEMORY_LIMIT_KB
+    ulimit -v $MEMORY_LIMIT_KB
 
     # Start Celery Worker with concurrency setting
     # -A tasks.celery_app points to the Celery instance in app/tasks.py
-    nohup "$CELERY_BIN" -A tasks.celery_app worker --loglevel=info --concurrency="$CONCURRENCY" > "$LOG_FILE" 2>&1 &
+    nohup "$CELERY_BIN" -A tasks.celery_app worker --loglevel=info --concurrency="$CONCURRENCY" --max-tasks-per-child=100 > "$LOG_FILE" 2>&1 &
 
     PID=$!
     echo "$PID" > "$PID_FILE"
-    echo "Celery Worker started with PID $PID (concurrency=$CONCURRENCY). Logs: $LOG_FILE"
+    echo "Celery Worker started with PID $PID (concurrency=$CONCURRENCY, memory_limit=${MEMORY_LIMIT_MB}MB). Logs: $LOG_FILE"
 }
 
 stop() {

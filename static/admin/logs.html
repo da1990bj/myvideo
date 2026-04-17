@@ -22,34 +22,43 @@
                 <tbody id="logs-body"></tbody>
             </table>
         </div>
+        <div id="logs-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
     </div>
 
     <script>
-        async function loadLogs() {
+        async function loadLogs(page = 1) {
             const token = localStorage.getItem("access_token");
-            const res = await fetch("/admin/logs", {
+            const pageSize = window.DEFAULT_PAGE_SIZE || 20;
+            const res = await fetch(`/admin/logs?page=${page}&size=${pageSize}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) {
-                const logs = await res.json();
+                const data = await res.json();
+                const logs = data.logs || data;
+                const total = data.total || logs.length;
+                const totalPages = Math.ceil(total / pageSize);
                 const tbody = document.getElementById("logs-body");
                 tbody.innerHTML = "";
                 logs.forEach(log => {
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
                         <td>${new Date(log.created_at).toLocaleString()}</td>
-                        <td>${log.admin_name}</td>
+                        <td>${log.admin ? log.admin.username : '-'}</td>
                         <td>${log.action}</td>
                         <td>${log.target_id || '-'}</td>
                         <td>${log.details || '-'}</td>
                     `;
                     tbody.appendChild(tr);
                 });
+                renderPagination("logs-pagination", page, totalPages, loadLogs);
             } else {
                 alert("加载失败");
             }
         }
-        document.addEventListener("DOMContentLoaded", loadLogs);
+        document.addEventListener("DOMContentLoaded", async () => {
+            await loadSiteConfig();
+            loadLogs(1);
+        });
     </script>
 </body>
 </html>

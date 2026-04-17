@@ -5,7 +5,7 @@ from typing import List, Annotated, Optional
 from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from database import get_session
 from data_models import User, UserCreate, UserRead, UserUpdate, UserLogin, Token, TokenResponse, RefreshRequest, Video, UserRole, Role
@@ -425,17 +425,38 @@ async def get_my_videos(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     page: int = 1,
-    size: int = 20
+    size: int = 20,
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    keyword: Optional[str] = None
 ):
     """
     获取当前用户的所有视频（包括创作中的）
     """
     offset = (page - 1) * size
+
+    # 构建查询
+    query = select(Video).where(Video.user_id == current_user.id).where(Video.is_deleted == False)
+
+    if category:
+        query = query.where(Video.category_id == int(category))
+    if status:
+        query = query.where(Video.status == status)
+    if keyword:
+        query = query.where(Video.title.ilike(f"%{keyword}%"))
+
+    # 查询总数
+    count_query = select(func.count(Video.id)).where(Video.user_id == current_user.id).where(Video.is_deleted == False)
+    if category:
+        count_query = count_query.where(Video.category_id == int(category))
+    if status:
+        count_query = count_query.where(Video.status == status)
+    if keyword:
+        count_query = count_query.where(Video.title.ilike(f"%{keyword}%"))
+    total = session.exec(count_query).one()
+
     videos = session.exec(
-        select(Video)
-        .where(Video.user_id == current_user.id)
-        .where(Video.is_deleted == False)
-        .order_by(Video.created_at.desc())
+        query.order_by(Video.created_at.desc())
         .offset(offset)
         .limit(size)
     ).all()
@@ -458,4 +479,4 @@ async def get_my_videos(
             }
         result.append(video_dict)
 
-    return result
+    return {"videos": result, "total": total, "page": page, "size": size}

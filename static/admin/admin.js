@@ -4,6 +4,7 @@
 const DEFAULT_MENU = [
     { id: 'index', href: '/static/admin/index.html', text: '仪表盘' },
     { id: 'videos', href: '/static/admin/videos.html', text: '视频管理' },
+    { id: 'uploads', href: '/static/admin/uploads.html', text: '上传管理' },
     { id: 'categories', href: '/static/admin/categories.html', text: '分类管理' },
     { id: 'recommendations', href: '/static/admin/recommendations.html', text: '推荐管理' },
     { id: 'users', href: '/static/admin/users.html', text: '用户管理' },
@@ -21,7 +22,7 @@ let apiMenuLoaded = false;
 let sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
 
 // 站点配置
-let siteConfig = { site_name: "MyVideo" }; // 默认值
+let siteConfig = { site_name: "MyVideo", DEFAULT_PAGE_SIZE: 20 }; // 默认值
 
 // 加载站点配置
 async function loadSiteConfig() {
@@ -31,6 +32,10 @@ async function loadSiteConfig() {
             const config = await res.json();
             if (config.site_name) {
                 siteConfig.site_name = config.site_name;
+            }
+            if (config.DEFAULT_PAGE_SIZE) {
+                siteConfig.DEFAULT_PAGE_SIZE = config.DEFAULT_PAGE_SIZE;
+                window.DEFAULT_PAGE_SIZE = config.DEFAULT_PAGE_SIZE;
             }
         }
     } catch(e) {
@@ -152,9 +157,10 @@ function injectCommonStyles() {
         /* 统计卡片 */
         .stats-row, .stats-grid, .stats { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
         .stat-card, .card {
-            background: #fff; padding: 20px 30px; border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; flex: 1;
-            min-width: var(--card-min-width, 120px); max-width: var(--card-max-width, 300px);
+            background: #fff; padding: 20px; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center;
+            min-width: var(--card-width, 160px); max-width: var(--card-width, 160px);
+            width: var(--card-width, 160px); flex: 0 0 auto;
         }
         .stat-card .label, .card .label { color: #888; font-size: 13px; margin-bottom: 8px; }
         .stat-card .num, .card .num { font-size: 28px; font-weight: bold; color: #00a1d6; }
@@ -254,8 +260,8 @@ function renderSidebar(menu) {
     </div>
     <div id="sidebar-resize-handle" style="position: fixed; left: ${parseInt(savedWidth)}px; top: 0; width: 8px; height: 100vh; cursor: ew-resize; z-index: 101; background: transparent;"></div>
     <div id="sidebar-float-btn" onclick="toggleSidebar()" style="display:none; position:fixed; left:10px; top:20px; z-index:99; background:#00a1d6; color:#fff; width:40px; height:40px; border-radius:50%; cursor:pointer; font-size:18px; text-align:center; line-height:40px; box-shadow:0 2px 10px rgba(0,0,0,0.2);" title="展开菜单">&#9776;</div>
-    <div id="admin-toolbar" style="position: fixed; top: 10px; right: 20px; z-index: 90; display: flex; gap: 15px; align-items: center;">
-        <div id="card-width-control" style="display:none; align-items: center; gap: 8px;">
+    <div id="admin-toolbar" style="position: fixed; top: 10px; left: 10px; z-index: 90; display: flex; gap: 15px; align-items: center;">
+        <div id="card-width-control" style="align-items: center; gap: 8px;">
             <span style="color: #666; font-size: 12px;">卡片宽度：</span>
             <input type="range" id="card-width-slider" min="100" max="300" value="160" style="width: 100px; vertical-align: middle;">
             <span id="card-width-label" style="color: #666; font-size: 12px;">160px</span>
@@ -277,9 +283,9 @@ function renderSidebar(menu) {
         .container, .content { padding: 20px; max-width: 100%; }
         #menu-container { min-height: 50px; }
         #sidebar-toggle-btn:hover { color: #00a1d6; }
-        .stats-row { --card-min-width: 160px; --card-max-width: 320px; }
-        .stats-grid { --card-min-width: 160px; --card-max-width: 320px; }
-        .stats { --card-min-width: 160px; --card-max-width: 320px; }
+        .stats-row { --card-width: 160px; }
+        .stats-grid { --card-width: 160px; }
+        .stats { --card-width: 160px; }
     </style>
     `;
 
@@ -355,11 +361,9 @@ function updateCardWidth(value) {
         grid.style.setProperty('--card-min-width', value + 'px');
         grid.style.setProperty('--card-max-width', (value * 2) + 'px');
     });
-    // index.html - set card width directly (cards use flex: 0 0 <width>)
-    document.querySelectorAll('.card').forEach(card => {
-        card.style.flex = `0 0 ${value}px`;
-        card.style.minWidth = value + 'px';
-        card.style.maxWidth = (value * 2) + 'px';
+    // 通过 CSS 变量设置卡片宽度
+    document.querySelectorAll('.stats-row, .stats-grid, .stats').forEach(row => {
+        row.style.setProperty('--card-width', value + 'px');
     });
     const label = document.getElementById('card-width-label');
     if (label) label.textContent = value + 'px';
@@ -367,22 +371,16 @@ function updateCardWidth(value) {
 }
 
 function initCardWidthControl() {
-    const control = document.getElementById('card-width-control');
     const slider = document.getElementById('card-width-slider');
-    if (!control || !slider) return;
+    if (!slider) return;
 
-    // 检查页面上是否有任何卡片容器
-    const hasCards = document.querySelector('.stats-row, .stats-grid, .stats, .card') !== null;
-    if (hasCards) {
-        control.style.display = 'flex';
-        // 恢复保存的宽度
-        const saved = localStorage.getItem('statCardWidth');
-        if (saved) {
-            slider.value = saved;
-            updateCardWidth(saved);
-        }
-        slider.addEventListener('input', (e) => updateCardWidth(e.target.value));
+    // 恢复保存的宽度
+    const saved = localStorage.getItem('statCardWidth');
+    if (saved) {
+        slider.value = saved;
+        updateCardWidth(saved);
     }
+    slider.addEventListener('input', (e) => updateCardWidth(e.target.value));
 }
 
 // 获取当前菜单顺序
@@ -477,10 +475,42 @@ function initDragAndDrop() {
                 container.insertBefore(draggedItem, item.nextSibling);
             }
         });
-    });
+});
 }
 
-// 通用卡片拖拽排序初始化
+// 通用分页组件
+// containerId: 分页容器元素ID
+// currentPage: 当前页码 (从1开始)
+// totalPages: 总页数
+// onPageChange: 页码变化回调函数，接受(newPage)参数
+function renderPagination(containerId, currentPage, totalPages, onPageChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+
+    // 上一页
+    html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="window.${containerId}_goPage(${currentPage - 1})">上一页</button>`;
+
+    // 页码显示
+    html += `<span style="margin: 0 10px;">第 ${currentPage} / ${totalPages} 页</span>`;
+
+    // 下一页
+    html += `<button ${currentPage >= totalPages ? 'disabled' : ''} onclick="window.${containerId}_goPage(${currentPage + 1})">下一页</button>`;
+
+    container.innerHTML = html;
+
+    // 设置全局函数供 onclick 调用
+    window[containerId + '_goPage'] = (page) => {
+        onPageChange(page);
+    };
+}
+
 // pageKey: 页面标识（如 'dashboard_basic'），用于存储到数据库
 function initCardDragSort(containerId, pageKey) {
     const container = document.getElementById(containerId);

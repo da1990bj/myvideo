@@ -21,7 +21,7 @@ from data_models import (
     RecommendationSlot, RecommendationSlotRead, RecommendationLog, UserVideoScore,
     TranscodeTask, TranscodeTaskRead,
     VideoLike, VideoFavorite, CollectionItem, Collection, CollectionRead, CollectionUpdate, VideoTag,
-    UserVideoHistory, AnonymousViewHistory
+    UserVideoHistory, AnonymousViewHistory, UploadSession
 )
 from dependencies import get_current_user, PermissionChecker, log_admin_action
 from tasks import transcode_video_task, migrate_storage_task, celery_app
@@ -147,6 +147,32 @@ async def get_admin_stats(
         select(Video).where(Video.status == "failed", Video.is_deleted == False).order_by(desc(Video.created_at)).limit(20)
     ).all()
 
+    # 转码任务统计（基于视频状态）
+    transcode_pending = session.exec(
+        select(func.count(Video.id)).where(
+            Video.status == "pending",
+            Video.is_deleted == False
+        )
+    ).first() or 0
+    transcode_processing = session.exec(
+        select(func.count(Video.id)).where(
+            Video.status == "processing",
+            Video.is_deleted == False
+        )
+    ).first() or 0
+    transcode_completed_today = session.exec(
+        select(func.count(Video.id)).where(
+            Video.status == "completed",
+            Video.is_deleted == False,
+            Video.created_at >= today
+        )
+    ).first() or 0
+
+    # 上传会话统计
+    upload_uploading = session.exec(select(func.count(UploadSession.id)).where(UploadSession.status == "uploading")).first() or 0
+    upload_completed = session.exec(select(func.count(UploadSession.id)).where(UploadSession.status == "completed")).first() or 0
+    upload_cancelled = session.exec(select(func.count(UploadSession.id)).where(UploadSession.status == "cancelled")).first() or 0
+
     return {
         "users": users,
         "total_videos": total_videos,
@@ -161,6 +187,12 @@ async def get_admin_stats(
         "processing_videos": processing,
         "today_completed": today_completed,
         "recently_failed": failed,
+        "transcode_pending": transcode_pending,
+        "transcode_processing": transcode_processing,
+        "transcode_completed_today": transcode_completed_today,
+        "upload_uploading": upload_uploading,
+        "upload_completed": upload_completed,
+        "upload_cancelled": upload_cancelled,
     }
 
 
@@ -339,6 +371,10 @@ async def get_env_config(
         "敏感词": {
             "SENSITIVE_WORDS_FILE": str(settings.SENSITIVE_WORDS_PATH) if settings.SENSITIVE_WORDS_FILE else "",
         },
+        "上传设置": {
+            "UPLOAD_CONCURRENCY": get_runtime_config("UPLOAD_CONCURRENCY", 3),
+            "DEFAULT_PAGE_SIZE": get_runtime_config("DEFAULT_PAGE_SIZE", 50),
+        },
         "冷存储": {
             "COLD_STORAGE_ENABLED": get_runtime_config("COLD_STORAGE_ENABLED", settings.COLD_STORAGE_ENABLED),
             "COLD_STORAGE_TRIGGER_DAYS": get_runtime_config("COLD_STORAGE_TRIGGER_DAYS", settings.COLD_STORAGE_TRIGGER_DAYS),
@@ -379,6 +415,18 @@ async def update_env_config(
         "COLD_STORAGE_TRIGGER_DAYS",
         "COLD_STORAGE_TRIGGER_VIEWS",
         "COLD_STORAGE_PATH_ROOT",
+        # 转码队列配置
+        "TRANSCODE_CONCURRENCY",
+        "TRANSCODE_AGING_RATE",
+        "TRANSCODE_MAX_PRIORITY",
+        "TRANSCODE_VIP_BASE_PRIORITY",
+        "TRANSCODE_PAID_BASE_PRIORITY",
+        "TRANSCODE_BUMP_COST",
+        "CELERY_MEMORY_LIMIT_MB",
+        # 上传配置
+        "UPLOAD_CONCURRENCY",
+        # 分页配置
+        "DEFAULT_PAGE_SIZE",
     ]
 
     for key in updates.keys():
@@ -1164,6 +1212,7 @@ async def get_admin_logs(
 ):
     """获取管理日志"""
     offset = (page - 1) * size
+    total = session.exec(select(func.count()).select_from(AdminLog)).one()
     logs = session.exec(
         select(AdminLog)
         .order_by(desc(AdminLog.created_at))
@@ -1182,7 +1231,7 @@ async def get_admin_logs(
         }
         result.append(log_dict)
 
-    return result
+    return {"logs": result, "total": total, "page": page, "size": size}
 
 
 # ==================== 转码队列 ====================
@@ -1905,6 +1954,71 @@ async def reextract_subtitles(
     return result
 
 
+@router.post("/transcode/cleanup")
+async def cleanup_transcode_tasks(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """
+    清理无效的转码任务：
+    1. 删除视频已删除的任务
+    2. 删除孤儿任务（视频不存在）
+    3. 更新状态与视频不一致的任务
+    """
+    result = {
+        "deleted_orphan_tasks": 0,
+        "updated_stale_tasks": 0,
+        "deleted_duplicate_tasks": 0,
+    }
+
+    # 1. 删除孤儿任务（视频不存在）
+    all_tasks = session.exec(select(TranscodeTask)).all()
+    for task in all_tasks:
+        video = session.get(Video, task.video_id)
+        if not video or video.is_deleted:
+            session.delete(task)
+            result["deleted_orphan_tasks"] += 1
+
+    # 2. 更新状态不一致的任务
+    all_tasks = session.exec(select(TranscodeTask)).all()
+    for task in all_tasks:
+        video = session.get(Video, task.video_id)
+        if video and task.status in ("pending", "processing"):
+            # 如果视频已完成/失败，但任务仍是 pending/processing，更新任务状态
+            if video.status in ("completed", "failed") and task.status != video.status:
+                task.status = video.status
+                task.completed_at = datetime.utcnow()
+                session.add(task)
+                result["updated_stale_tasks"] += 1
+
+    # 3. 删除重复的 processing 任务（同一视频有多个 processing 任务）
+    tasks_by_video = {}
+    for task in all_tasks:
+        if task.status == "processing":
+            if task.video_id not in tasks_by_video:
+                tasks_by_video[task.video_id] = []
+            tasks_by_video[task.video_id].append(task)
+
+    for video_id, task_list in tasks_by_video.items():
+        if len(task_list) > 1:
+            # 只保留一个，其他的标记为 cancelled
+            for task in task_list[1:]:
+                task.status = "cancelled"
+                task.completed_at = datetime.utcnow()
+                session.add(task)
+                result["deleted_duplicate_tasks"] += 1
+
+    session.commit()
+
+    log_admin_action(
+        session, admin.id, "transcode_cleanup",
+        None,
+        f"Deleted {result['deleted_orphan_tasks']} orphan tasks, updated {result['updated_stale_tasks']} stale tasks, cancelled {result['deleted_duplicate_tasks']} duplicate tasks"
+    )
+
+    return result
+
+
 # ==================== 冷存储 ====================
 
 @router.get("/cold-storage/stats")
@@ -2114,15 +2228,19 @@ async def migrate_all_to_cold(
 
 # ==================== 用户管理 ====================
 
-@router.get("/users", response_model=List[UserRead])
+@router.get("/users")
 async def get_all_users(
     admin: User = Depends(PermissionChecker("user:ban")),
     session: Session = Depends(get_session),
     page: int = 1,
-    size: int = 50
+    size: int = 20
 ):
     """获取所有用户"""
     offset = (page - 1) * size
+
+    # 获取总数
+    total = session.exec(select(func.count()).select_from(User)).one()
+
     users = session.exec(
         select(User).order_by(desc(User.created_at)).offset(offset).limit(size)
     ).all()
@@ -2149,7 +2267,7 @@ async def get_all_users(
             avatar_path=user.avatar_path,
             bio=user.bio
         ))
-    return result
+    return {"users": result, "total": total, "page": page, "size": size}
 
 
 @router.post("/users/{user_id}/status")
@@ -2275,6 +2393,8 @@ async def get_all_videos(
 ):
     """获取所有视频（管理视图）"""
     offset = (page - 1) * size
+    # 获取总数
+    total = session.exec(select(func.count()).select_from(Video).where(Video.is_deleted == False)).one()
     videos = session.exec(
         select(Video).where(Video.is_deleted == False).order_by(desc(Video.created_at)).offset(offset).limit(size)
     ).all()
@@ -2310,7 +2430,7 @@ async def get_all_videos(
             video_dict["task"] = None
         result.append(video_dict)
 
-    return result
+    return {"videos": result, "total": total, "page": page, "size": size}
 
 
 @router.post("/videos/{video_id}/ban")
@@ -2501,8 +2621,9 @@ async def get_all_comments(
 ):
     """获取所有评论"""
     offset = (page - 1) * size
+    total = session.exec(select(func.count()).select_from(Comment).where(Comment.is_deleted == False)).one()
     comments = session.exec(
-        select(Comment).order_by(desc(Comment.created_at)).offset(offset).limit(size)
+        select(Comment).where(Comment.is_deleted == False).order_by(desc(Comment.created_at)).offset(offset).limit(size)
     ).all()
 
     result = []
@@ -2516,7 +2637,7 @@ async def get_all_comments(
         }
         result.append(comment_dict)
 
-    return result
+    return {"comments": result, "total": total, "page": page, "size": size}
 
 
 @router.delete("/comments/{comment_id}")
@@ -2767,3 +2888,98 @@ async def admin_get_collection_videos(
     collection_dict["videos"] = [videos_dict[vid] for vid in video_ids if vid in videos_dict]
 
     return collection_dict
+
+
+@router.get("/upload-sessions/stats")
+async def admin_get_upload_sessions_stats(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session)
+):
+    """后台获取上传会话统计"""
+    from sqlalchemy import func
+
+    # 统计各状态的数量
+    uploading_count = session.exec(
+        select(func.count(UploadSession.id)).where(UploadSession.status == "uploading")
+    ).first() or 0
+
+    completed_count = session.exec(
+        select(func.count(UploadSession.id)).where(UploadSession.status == "completed")
+    ).first() or 0
+
+    cancelled_count = session.exec(
+        select(func.count(UploadSession.id)).where(UploadSession.status == "cancelled")
+    ).first() or 0
+
+    return {
+        "uploading": uploading_count,
+        "completed": completed_count,
+        "cancelled": cancelled_count,
+        "total": uploading_count + completed_count + cancelled_count
+    }
+
+
+@router.get("/upload-sessions")
+async def admin_get_upload_sessions(
+    admin: User = Depends(PermissionChecker("video:audit")),
+    session: Session = Depends(get_session),
+    status: Optional[str] = None,
+    user_id: Optional[UUID] = None,
+    series_id: Optional[UUID] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """后台获取上传会话列表"""
+    query = select(UploadSession)
+
+    if status:
+        query = query.where(UploadSession.status == status)
+    if user_id:
+        query = query.where(UploadSession.user_id == user_id)
+    if series_id:
+        query = query.where(UploadSession.series_id == series_id)
+
+    count_query = select(func.count(UploadSession.id))
+    if status:
+        count_query = count_query.where(UploadSession.status == status)
+    if user_id:
+        count_query = count_query.where(UploadSession.user_id == user_id)
+    if series_id:
+        count_query = count_query.where(UploadSession.series_id == series_id)
+
+    total = session.exec(count_query).scalar() or 0
+
+    sessions = session.exec(
+        query.order_by(UploadSession.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+
+    # 获取用户名
+    user_ids = list(set(s.user_id for s in sessions))
+    users_dict = {}
+    if user_ids:
+        users = session.exec(select(User).where(User.id.in_(user_ids))).all()
+        users_dict = {u.id: u.username for u in users}
+
+    result = []
+    for s in sessions:
+        session_dict = {
+            "id": str(s.id),
+            "user_id": str(s.user_id),
+            "username": users_dict.get(s.user_id, "未知"),
+            "filename": s.filename,
+            "file_size": s.file_size,
+            "total_chunks": s.total_chunks,
+            "uploaded_chunks": len(s.uploaded_chunks) if s.uploaded_chunks else 0,
+            "progress": round(len(s.uploaded_chunks) / s.total_chunks * 100, 1) if s.total_chunks > 0 else 0,
+            "status": s.status,
+            "title": s.title,
+            "visibility": s.visibility,
+            "category_id": s.category_id,
+            "series_id": str(s.series_id) if s.series_id else None,
+            "video_id": str(s.video_id) if s.video_id else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+        }
+        result.append(session_dict)
+
+    return {"sessions": result, "total": total}

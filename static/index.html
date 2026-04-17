@@ -137,6 +137,10 @@
         .collection-info { padding: 12px; }
         .collection-title { font-size: 15px; font-weight: 600; color: #18191c; margin: 0 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .collection-meta { font-size: 12px; color: #9499a0; }
+        .pagination { display: flex; gap: 10px; align-items: center; margin-top: 20px; justify-content: center; }
+        .pagination button { padding: 6px 12px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
+        .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pagination span { color: #666; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -194,6 +198,7 @@
                     <div class="section-subtitle" id="main-subtitle">根据热度为你推荐</div>
                 </div>
                 <div class="video-grid" id="trending-grid"></div>
+                <div id="trending-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
             </div>
 
             <!-- 最近发布 -->
@@ -205,6 +210,7 @@
                     </div>
                 </div>
                 <div class="video-grid" id="latest-grid"></div>
+                <div id="latest-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
                 <div id="loading" class="loading">正在加载...</div>
             </div>
         </div>
@@ -232,6 +238,9 @@
     let carouselItems = [];
 
     document.addEventListener("DOMContentLoaded", async () => {
+        // 先加载系统配置，确保 DEFAULT_PAGE_SIZE 已设置
+        await loadSiteConfig();
+
         loadCategories();
         loadCarousel();
         loadSidebarTrending();
@@ -687,12 +696,16 @@
     }
 
     // ==================== 热门推荐 ====================
-    async function loadTrendingContent() {
+    let trendingPage = 1;
+
+    async function loadTrendingContent(page = 1) {
         const grid = document.getElementById("trending-grid");
         grid.innerHTML = "";
+        trendingPage = page;
 
         try {
-            let url = `/recommendations?slot_name=trending&limit=12`;
+            const pageSize = window.DEFAULT_PAGE_SIZE || 12;
+            let url = `/recommendations?slot_name=trending&page=${page}&page_size=${pageSize}`;
             if (currentCategory) {
                 url += `&category_id=${currentCategory}`;
             }
@@ -703,7 +716,9 @@
             const res = await fetch(url, { headers });
             if (res.ok) {
                 const data = await res.json();
-                const videos = data.recommendations;
+                const videos = data.recommendations || [];
+                const total = data.total || 0;
+                const totalPages = Math.ceil(total / pageSize);
 
                 if (videos.length === 0) {
                     grid.innerHTML = `<div class="empty">暂无热门内容</div>`;
@@ -715,6 +730,8 @@
                     const card = createVideoCard(rec, "trending");
                     grid.appendChild(card);
                 });
+
+                renderPagination("trending-pagination", page, totalPages, loadTrendingContent);
             }
         } catch (e) {
             console.error(e);
@@ -722,19 +739,23 @@
     }
 
     // ==================== 最近发布 ====================
-    async function loadLatestContent() {
+    let latestPage = 1;
+
+    async function loadLatestContent(page = 1) {
         const grid = document.getElementById("latest-grid");
         const loading = document.getElementById("loading");
 
         grid.innerHTML = "";
         loading.style.display = "block";
+        latestPage = page;
 
         // 隐藏合集区域（会在选择电视剧/动漫时重新显示）
         const collectionSection = document.getElementById("collection-section");
         if (collectionSection) collectionSection.style.display = 'none';
 
         try {
-            let url = `/videos?size=12&sort_by=latest`;
+            const pageSize = window.DEFAULT_PAGE_SIZE || 12;
+            let url = `/videos?page=${page}&size=${pageSize}&sort_by=latest`;
             if (currentCategory) {
                 url += `&category_id=${currentCategory}`;
             }
@@ -764,7 +785,10 @@
 
             const res = await fetch(url);
             if (res.ok) {
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || data;
+                const total = data.total || videos.length;
+                const totalPages = Math.ceil(total / pageSize);
                 loading.style.display = "none";
 
                 if (videos.length === 0) {
@@ -776,6 +800,8 @@
                     const card = createVideoCard({ video: v });
                     grid.appendChild(card);
                 });
+
+                renderPagination("latest-pagination", page, totalPages, loadLatestContent);
 
                 // 如果是电视剧/动漫，显示合集
                 if (currentDramaType && currentDramaType !== 'movie') {

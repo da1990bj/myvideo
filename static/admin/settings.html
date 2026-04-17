@@ -210,6 +210,11 @@
                     <input type="number" class="input" id="transcode-bump-cost" min="0" style="max-width: 200px;">
                     <span style="color: #888; font-size: 12px; margin-left: 10px;">每次付费插队消耗的积分数量</span>
                 </div>
+                <div class="form-group">
+                    <label class="label">Celery 内存限制 (MB)</label>
+                    <input type="number" class="input" id="celery-memory-limit" min="1024" max="32768" style="max-width: 200px;">
+                    <span style="color: #888; font-size: 12px; margin-left: 10px;">超过此限制的任务将被杀死并重试（默认 6144）</span>
+                </div>
             </div>
 
             <div style="margin-top: 20px;">
@@ -335,6 +340,8 @@
             "COLD_STORAGE_PATH_ROOT": "冷存储根目录",
             "STORAGE_MIGRATION_DELAY": "迁移间隔时间(秒)",
             "MAX_UPLOAD_SIZE_MB": "上传文件大小限制(MB)",
+            "UPLOAD_CONCURRENCY": "分片上传并发数",
+            "DEFAULT_PAGE_SIZE": "默认分页数",
             "SHARE_BASE_URL": "分享链接公开地址",
         };
 
@@ -433,6 +440,19 @@
                             <select class="input" id="env-${key}" data-original="${currentLevel}" style="max-width: 150px;">
                                 ${levels.map(l => `<option value="${l}" ${l === currentLevel ? 'selected' : ''}>${l}</option>`).join('')}
                             </select>
+                        `;
+                    } else if (key === 'UPLOAD_CONCURRENCY') {
+                        // UPLOAD_CONCURRENCY 使用数字输入
+                        group.innerHTML = `
+                            <label class="label" title="${key}">${displayName}</label>
+                            <input type="number"
+                                   class="input"
+                                   id="env-${key}"
+                                   value="${escapeHtml(value)}"
+                                   data-original="${escapeHtml(value)}"
+                                   min="1"
+                                   max="10"
+                                   style="max-width: 100px;">
                         `;
                     } else {
                         group.innerHTML = `
@@ -1180,6 +1200,7 @@
                 document.getElementById("transcode-vip-priority").value = config.vip_base_priority || 10;
                 document.getElementById("transcode-paid-priority").value = config.paid_base_priority || 30;
                 document.getElementById("transcode-bump-cost").value = config.bump_cost || 5;
+                document.getElementById("celery-memory-limit").value = config.celery_memory_limit_mb || 6144;
             }
         }
 
@@ -1191,6 +1212,7 @@
                 "TRANSCODE_VIP_BASE_PRIORITY": document.getElementById("transcode-vip-priority").value,
                 "TRANSCODE_PAID_BASE_PRIORITY": document.getElementById("transcode-paid-priority").value,
                 "TRANSCODE_BUMP_COST": document.getElementById("transcode-bump-cost").value,
+                "CELERY_MEMORY_LIMIT_MB": document.getElementById("celery-memory-limit").value,
             };
 
             try {

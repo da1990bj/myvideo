@@ -29,6 +29,7 @@
         .delete-btn { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: none; align-items: center; justify-content: center; font-size: 16px; z-index: 10; }
         .video-card-wrapper:hover .delete-btn { display: flex; }
         .delete-btn:hover { background: #dc3545; }
+        .pagination { margin-top: 20px; text-align: center; }
     </style>
 </head>
 <body>
@@ -44,6 +45,7 @@
     </div>
 
     <div class="video-grid" id="video-grid"></div>
+    <div id="history-pagination" class="pagination"></div>
     <div id="loading" class="loading">正在加载历史记录...</div>
 </div>
 
@@ -58,21 +60,25 @@
             return;
         }
         historyToken = token;
-        loadHistory(token);
+        loadHistory(token, 1);
     });
 
-    async function loadHistory(token) {
+    async function loadHistory(token, page = 1) {
         const grid = document.getElementById("video-grid");
         const loading = document.getElementById("loading");
         const clearAllBtn = document.getElementById("clear-all-btn");
 
         try {
-            const res = await fetch("/users/me/history?size=50", {
+            const pageSize = window.DEFAULT_PAGE_SIZE || 20;
+            const res = await fetch(`/users/me/history?page=${page}&size=${pageSize}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
 
             if (res.ok) {
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || [];
+                const total = data.total || 0;
+                const totalPages = Math.ceil(total / pageSize);
                 historyData = videos;
                 loading.style.display = "none";
 
@@ -83,6 +89,7 @@
                 }
 
                 clearAllBtn.style.display = "block";
+                grid.innerHTML = "";
 
                 videos.forEach(v => {
                     const wrapper = document.createElement("div");
@@ -124,6 +131,7 @@
                     wrapper.appendChild(deleteBtn);
                     grid.appendChild(wrapper);
                 });
+                renderPagination("history-pagination", page, totalPages, (p) => loadHistory(token, p));
             } else {
                 loading.innerText = "加载失败，可能需要重新登录";
             }

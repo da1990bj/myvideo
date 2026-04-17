@@ -22,25 +22,33 @@
                 <tbody id="list"></tbody>
             </table>
         </div>
+        <div id="comments-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", loadComments);
+        document.addEventListener("DOMContentLoaded", async () => {
+            await loadSiteConfig();
+            loadComments(1);
+        });
 
-        async function loadComments() {
+        async function loadComments(page = 1) {
             const token = localStorage.getItem("access_token");
-            const res = await fetch("/admin/comments?size=50", {
+            const pageSize = window.DEFAULT_PAGE_SIZE || 20;
+            const res = await fetch(`/admin/comments?page=${page}&size=${pageSize}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) {
-                const comments = await res.json();
+                const data = await res.json();
+                const comments = data.comments || [];
+                const total = data.total || 0;
+                const totalPages = Math.ceil(total / pageSize);
                 const tbody = document.getElementById("list");
                 tbody.innerHTML = "";
                 comments.forEach(c => {
                     const tr = document.createElement("tr");
                     const isDeleted = c.is_deleted;
                     tr.innerHTML = `
-                        <td>${c.user.username}</td>
+                        <td>${c.user ? c.user.username : '-'}</td>
                         <td style="max-width:400px;">${c.content}</td>
                         <td>${new Date(c.created_at).toLocaleString()}</td>
                         <td>
@@ -53,6 +61,7 @@
                     `;
                     tbody.appendChild(tr);
                 });
+                renderPagination("comments-pagination", page, totalPages, loadComments);
             }
         }
 

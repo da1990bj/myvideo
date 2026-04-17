@@ -130,6 +130,7 @@
                 <option value="paused">已暂停</option>
             </select>
             <button onclick="clearFilters()" style="padding:6px 12px; background:#eee; border:1px solid #ddd; border-radius:4px; cursor:pointer;">清除筛选</button>
+            <button onclick="cleanupTranscodeTasks()" style="padding:6px 12px; background:#9c27b0; color:#fff; border:none; border-radius:4px; cursor:pointer; margin-left:auto;">清理无效任务</button>
         </div>
 
         <!-- 视频列表 -->
@@ -152,35 +153,7 @@
                 <tbody id="video-list"></tbody>
             </table>
         </div>
-
-        <!-- 上传管理区域 -->
-        <div style="margin-top: 40px;">
-            <h2 style="margin-bottom: 20px; color: #333;">上传管理</h2>
-
-            <!-- 状态Tab -->
-            <div style="display:flex; gap:10px; margin-bottom:20px;">
-                <button class="tab-btn active" onclick="switchUploadTab('uploading')" style="padding:8px 16px; border:none; border-radius:4px; cursor:pointer; background:#00a1d6; color:#fff;">正在上传</button>
-                <button class="tab-btn" onclick="switchUploadTab('completed')" style="padding:8px 16px; border:none; border-radius:4px; cursor:pointer; background:#f0f0f0; color:#333;">已完成</button>
-                <button class="tab-btn" onclick="switchUploadTab('cancelled')" style="padding:8px 16px; border:none; border-radius:4px; cursor:pointer; background:#f0f0f0; color:#333;">已取消</button>
-            </div>
-
-            <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-                <thead>
-                    <tr style="background:#f5f7fa;">
-                        <th style="padding:14px 16px; text-align:left;">标题</th>
-                        <th style="padding:14px 16px; text-align:left;">文件</th>
-                        <th style="padding:14px 16px; text-align:left;">用户</th>
-                        <th style="padding:14px 16px; text-align:left; width:150px;">大小/进度</th>
-                        <th style="padding:14px 16px; text-align:left; width:140px;">状态</th>
-                        <th style="padding:14px 16px; text-align:left; width:160px;">时间</th>
-                        <th style="padding:14px 16px; text-align:left; width:100px;">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="upload-sessions-list">
-                    <tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">加载中...</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <div id="videos-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
     </div>
 
     <script>
@@ -274,6 +247,7 @@
                 now.getMinutes().toString().padStart(2, '0') + ':' +
                 now.getSeconds().toString().padStart(2, '0');
         }
+        window.loadData = loadData;
 
         async function loadStats() {
             try {
@@ -342,14 +316,18 @@
         // 缓存视频数据用于排序
         window._cachedVideos = [];
 
-        async function loadVideos() {
+        async function loadVideos(page = 1) {
             try {
-                const res = await fetch("/admin/videos?size=100", { headers });
+                const pageSize = window.DEFAULT_PAGE_SIZE || 20;
+                const res = await fetch(`/admin/videos?page=${page}&size=${pageSize}`, { headers });
                 if (!res.ok) {
                     if (res.status === 401) location.href = "/static/login.html";
                     return;
                 }
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || data;
+                const total = data.total || videos.length;
+                const totalPages = Math.ceil(total / pageSize);
                 // 缓存并排序
                 window._cachedVideos = videos;
                 if (sortField) {
@@ -358,12 +336,12 @@
                 // 加载分类列表
                 loadCategories(videos);
                 applyFilters();
+                renderPagination("videos-pagination", page, totalPages, loadVideos);
             } catch (err) {
                 console.error("Failed to load videos:", err);
             }
         }
 
-        // 加载分类筛选选项
         function loadCategories(videos) {
             const catSelect = document.getElementById('filter-category');
             const cats = new Set();
@@ -528,7 +506,8 @@
                 // 获取该视频的任务ID
                 const res = await fetch("/admin/videos?size=100", { headers });
                 if (!res.ok) return;
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || data;
                 const video = videos.find(v => v.id === videoId);
                 if (!video || !video.task) return alert("找不到转码任务");
 
@@ -550,7 +529,8 @@
             try {
                 const res = await fetch("/admin/videos?size=100", { headers });
                 if (!res.ok) return;
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || data;
                 const video = videos.find(v => v.id === videoId);
                 if (!video || !video.task) return alert("找不到转码任务");
 
@@ -573,7 +553,8 @@
             try {
                 const res = await fetch("/admin/videos?size=100", { headers });
                 if (!res.ok) return;
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || data;
                 const video = videos.find(v => v.id === videoId);
                 if (!video) return alert("找不到视频");
 
@@ -603,7 +584,8 @@
             try {
                 const res = await fetch("/admin/videos?size=100", { headers });
                 if (!res.ok) return;
-                const videos = await res.json();
+                const data = await res.json();
+                const videos = data.videos || data;
                 const video = videos.find(v => v.id === videoId);
                 if (!video) return alert("找不到视频");
 
@@ -665,6 +647,23 @@
             }
         }
 
+        async function cleanupTranscodeTasks() {
+            if (!confirm("确定要清理无效的转码任务吗？\n\n这将删除孤儿任务并同步任务状态。")) return;
+            try {
+                const res = await fetch(`/admin/transcode/cleanup`, { method: "POST", headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`清理完成：\n删除孤儿任务: ${data.deleted_orphan_tasks}\n更新状态不一致: ${data.updated_stale_tasks}\n取消重复任务: ${data.deleted_duplicate_tasks}`);
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("清理失败: " + (err.detail || "未知错误"));
+                }
+            } catch (err) {
+                alert("清理失败: " + err.message);
+            }
+        }
+
         function escapeHtml(text) {
             if (!text) return "";
             const div = document.createElement("div");
@@ -688,6 +687,7 @@
 
         async function loadAdminUploadSessions() {
             const tbody = document.getElementById("upload-sessions-list");
+            if (!tbody) return;
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">加载中...</td></tr>';
 
             try {

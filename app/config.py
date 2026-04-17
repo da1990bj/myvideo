@@ -145,6 +145,8 @@ class MyVideoSettings(BaseSettings):
     TRANSCODE_PAID_BASE_PRIORITY: int = 30
     # 插队消耗积分
     TRANSCODE_BUMP_COST: int = 5
+    # Celery Worker 内存限制（MB），超过此限制的任务将被杀死并重试
+    CELERY_MEMORY_LIMIT_MB: int = 6144
 
     # ==================== 存储迁移 ====================
     # 迁移间隔时间（秒），控制迁移速度，避免 CPU/磁盘 占用过高
@@ -551,7 +553,7 @@ def get_transcode_config() -> dict:
     从数据库获取转码队列配置，支持运行时覆盖
 
     Returns:
-        dict with keys: concurrency, aging_rate, max_priority, vip_base_priority, paid_base_priority, bump_cost
+        dict with keys: concurrency, aging_rate, max_priority, vip_base_priority, paid_base_priority, bump_cost, celery_memory_limit_mb
     """
     return {
         "concurrency": _get_config_override("TRANSCODE_CONCURRENCY", settings.TRANSCODE_CONCURRENCY),
@@ -560,4 +562,5 @@ def get_transcode_config() -> dict:
         "vip_base_priority": _get_config_override("TRANSCODE_VIP_BASE_PRIORITY", settings.TRANSCODE_VIP_BASE_PRIORITY),
         "paid_base_priority": _get_config_override("TRANSCODE_PAID_BASE_PRIORITY", settings.TRANSCODE_PAID_BASE_PRIORITY),
         "bump_cost": _get_config_override("TRANSCODE_BUMP_COST", settings.TRANSCODE_BUMP_COST),
+        "celery_memory_limit_mb": _get_config_override("CELERY_MEMORY_LIMIT_MB", settings.CELERY_MEMORY_LIMIT_MB),
     }

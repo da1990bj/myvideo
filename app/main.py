@@ -170,6 +170,10 @@ async def get_public_system_config():
     elif "site_name" not in result:
         result["site_name"] = settings.SITE_NAME
 
+    # 默认分页数
+    if "DEFAULT_PAGE_SIZE" not in result:
+        result["DEFAULT_PAGE_SIZE"] = 20
+
     return result
 
 

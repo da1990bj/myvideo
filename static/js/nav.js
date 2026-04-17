@@ -116,6 +116,10 @@ async function loadSiteConfig() {
             if (config.SITE_NAME) {
                 siteConfig.site_name = config.SITE_NAME;
             }
+            if (config.DEFAULT_PAGE_SIZE) {
+                siteConfig.DEFAULT_PAGE_SIZE = config.DEFAULT_PAGE_SIZE;
+                window.DEFAULT_PAGE_SIZE = config.DEFAULT_PAGE_SIZE;
+            }
             // 应用站点名到页面标题和logo
             applySiteName();
         }
@@ -136,6 +140,32 @@ function applySiteName() {
     document.querySelectorAll('.logo').forEach(el => {
         el.textContent = siteConfig.site_name;
     });
+}
+
+// 通用分页组件
+// containerId: 分页容器ID
+// currentPage: 当前页码
+// totalPages: 总页数
+// onPageChange: 页码变化回调，接受(newPage)参数
+function renderPagination(containerId, currentPage, totalPages, onPageChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="window['${containerId}_goPage'](${currentPage - 1})">上一页</button>`;
+    html += `<span style="margin: 0 10px;">第 ${currentPage} / ${totalPages} 页</span>`;
+    html += `<button ${currentPage >= totalPages ? 'disabled' : ''} onclick="window['${containerId}_goPage'](${currentPage + 1})">下一页</button>`;
+
+    container.innerHTML = html;
+
+    window[containerId + '_goPage'] = (page) => {
+        onPageChange(page);
+    };
 }
 
 async function checkNavUser() {
@@ -392,7 +422,8 @@ async function loadNavHistory(container) {
              headers: { "Authorization": "Bearer " + token }
         });
         if (res.ok) {
-            const videos = await res.json();
+            const data = await res.json();
+            const videos = data.videos || [];
             if (videos.length === 0) {
                  container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暂无历史记录</div>';
                  return;

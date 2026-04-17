@@ -14,7 +14,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Query, status, Request
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from sqlalchemy import and_, asc, or_
 
 from database import get_session
@@ -22,7 +22,7 @@ from data_models import (
     Video, VideoRead, VideoUpdate, VideoLike, VideoFavorite,
     Comment, CommentLike, Category, User, Role, UserRole, VideoAuditLog, CollectionItem,
     TranscodeTask, UploadSession, UploadSessionRead, Notification,
-    SubtitleRead, SubtitleGenerateRequest
+    SubtitleRead, SubtitleGenerateRequest, DramaSeriesItem
 )
 from dependencies import get_current_user, get_current_user_optional, PermissionChecker, process_tags, can_bypass_upload_limit, check_drama_upload_permission
 from tasks import transcode_video_task
@@ -155,6 +155,20 @@ async def get_videos(
     if keyword:
         statement = statement.where(Video.title.contains(keyword))
 
+    # 获取总数
+    count_statement = select(func.count()).select_from(Video).where(
+        Video.is_approved == "approved",
+        Video.status == "completed",
+        Video.visibility == "public",
+        Video.is_deleted == False,
+        Video.series_id == None
+    )
+    if category_id:
+        count_statement = count_statement.where(Video.category_id == category_id)
+    if keyword:
+        count_statement = count_statement.where(Video.title.contains(keyword))
+    total = session.exec(count_statement).one()
+
     if sort_by == "latest":
         statement = statement.order_by(Video.created_at.desc())
     else:
@@ -180,7 +194,7 @@ async def get_videos(
             }
         result.append(video_dict)
 
-    return result
+    return {"videos": result, "total": total, "page": page, "size": size}
 
 
 @router.get("/videos/my")
@@ -1133,7 +1147,7 @@ async def get_progress(
     }
 
 
-@router.get("/users/me/history", response_model=List[Video])
+@router.get("/users/me/history")
 async def get_watch_history(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -1146,6 +1160,9 @@ async def get_watch_history(
     from data_models import UserVideoHistory
 
     offset = (page - 1) * size
+    total = session.exec(
+        select(func.count()).select_from(UserVideoHistory).where(UserVideoHistory.user_id == current_user.id)
+    ).one()
     history_ids = session.exec(
         select(UserVideoHistory.video_id)
         .where(UserVideoHistory.user_id == current_user.id)
@@ -1155,11 +1172,11 @@ async def get_watch_history(
     ).all()
 
     if not history_ids:
-        return []
+        return {"videos": [], "total": 0, "page": page, "size": size}
 
     videos = session.exec(select(Video).where(Video.id.in_(history_ids))).all()
 
-    return videos
+    return {"videos": videos, "total": total, "page": page, "size": size}
 
 
 @router.delete("/users/me/history/{video_id}", status_code=204)
@@ -2078,6 +2095,18 @@ async def get_audit_logs(
 CHUNK_SIZE = 5 * 1024 * 1024  # 5MB per chunk
 
 
+@router.get("/upload-config")
+async def get_upload_config():
+    """
+    获取上传相关配置（公开接口）
+    """
+    return {
+        "chunk_size": CHUNK_SIZE,
+        "concurrency": get_runtime_config("UPLOAD_CONCURRENCY", 3),
+        "max_upload_size_mb": get_runtime_config("MAX_UPLOAD_SIZE_MB", 2048),
+    }
+
+
 @router.post("/upload-sessions/init")
 async def init_upload_session(
     filename: str = Form(...),
@@ -2255,7 +2284,7 @@ async def complete_upload_session(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     if upload_session.status != "uploading":
-        raise HTTPException(status_code=400, detail="Upload session is not active")
+        raise HTTPException(status_code=400, detail=f"Upload session is not active: status={upload_session.status}")
 
     # 检查分片是否全部上传
     if len(upload_session.uploaded_chunks) != upload_session.total_chunks:
@@ -2297,6 +2326,22 @@ async def complete_upload_session(
     # 更新 original_file_path
     video.original_file_path = f"/static/videos/uploads/{video.id}.mp4"
     session.add(video)
+
+    # 如果上传时指定了剧集系列，同时创建 DramaSeriesItem 条目
+    if upload_session.series_id:
+        # 获取当前最大 order
+        max_order = session.exec(
+            select(DramaSeriesItem.order).where(DramaSeriesItem.series_id == upload_session.series_id)
+            .order_by(DramaSeriesItem.order.desc())
+        ).first()
+        next_order = (max_order or 0) + 1
+
+        series_item = DramaSeriesItem(
+            series_id=upload_session.series_id,
+            video_id=video.id,
+            order=next_order
+        )
+        session.add(series_item)
 
     # 更新上传会话状态
     upload_session.status = "completed"
@@ -2393,6 +2438,14 @@ async def get_upload_sessions(
 
     result = []
     for s in sessions:
+        # 判断是否超时中断（上传中但5分钟无更新）
+        is_stale = False
+        if s.status == "uploading" and s.updated_at:
+            from datetime import datetime, timedelta
+            stale_threshold = datetime.utcnow() - timedelta(minutes=5)
+            if s.updated_at < stale_threshold:
+                is_stale = True
+
         result.append({
             "session_id": str(s.id),
             "filename": s.filename,
@@ -2403,7 +2456,8 @@ async def get_upload_sessions(
             "progress": len(s.uploaded_chunks) / s.total_chunks * 100 if s.total_chunks > 0 else 0,
             "title": s.title,
             "series_id": str(s.series_id) if s.series_id else None,
-            "created_at": s.created_at.isoformat() if s.created_at else None
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "is_stale": is_stale
         })
     return result
 
@@ -2724,6 +2778,21 @@ async def admin_get_upload_sessions(
             if series:
                 series_title = series.title
 
+        # 获取分类名称
+        category_name = None
+        if s.category_id:
+            category = session.get(Category, s.category_id)
+            if category:
+                category_name = category.name
+
+        # 判断是否超时中断（上传中但5分钟无更新）
+        is_stale = False
+        if s.status == "uploading" and s.updated_at:
+            from datetime import datetime, timedelta
+            stale_threshold = datetime.utcnow() - timedelta(minutes=5)
+            if s.updated_at < stale_threshold:
+                is_stale = True
+
         result.append({
             "session_id": str(s.id),
             "user_id": str(s.user_id),
@@ -2736,11 +2805,14 @@ async def admin_get_upload_sessions(
             "progress": len(s.uploaded_chunks) / s.total_chunks * 100 if s.total_chunks > 0 else 0,
             "status": s.status,
             "title": s.title,
+            "category_id": s.category_id,
+            "category_name": category_name,
             "series_id": str(s.series_id) if s.series_id else None,
             "series_title": series_title,
             "video_id": str(s.video_id) if s.video_id else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,
-            "updated_at": s.updated_at.isoformat() if s.updated_at else None
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            "is_stale": is_stale
         })
 
     return {"sessions": result, "total": total, "page": page, "size": size}
@@ -2805,6 +2877,16 @@ async def admin_search_videos(
     if series_id:
         statement = statement.where(Video.series_id == UUID(series_id))
 
+    # 获取总数
+    count_statement = select(func.count()).select_from(Video).where(Video.is_deleted == False)
+    if keyword:
+        count_statement = count_statement.where(Video.title.contains(keyword))
+    if status:
+        count_statement = count_statement.where(Video.status == status)
+    if series_id:
+        count_statement = count_statement.where(Video.series_id == UUID(series_id))
+    total = session.exec(count_statement).one()
+
     statement = statement.order_by(Video.created_at.desc()).offset(offset).limit(size)
     videos = session.exec(statement).all()
 
@@ -2825,4 +2907,4 @@ async def admin_search_videos(
             }
         result.append(video_dict)
 
-    return {"videos": result}
+    return {"videos": result, "total": total, "page": page, "size": size}

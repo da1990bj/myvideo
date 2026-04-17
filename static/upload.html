@@ -175,6 +175,21 @@
     // 已选择的文件（因为 input.files 是只读的）
     let selectedUploadFiles = [];
     let modalCallback = null;  // 弹窗确认回调
+    // 上传配置
+    let uploadConfig = { concurrency: 3, chunk_size: 5 * 1024 * 1024, max_upload_size_mb: 2048 };
+
+    // 加载上传配置
+    async function loadUploadConfig() {
+        try {
+            const res = await fetch('/upload-config');
+            if (res.ok) {
+                uploadConfig = await res.json();
+                console.log('[Upload] Config loaded:', uploadConfig);
+            }
+        } catch (e) {
+            console.warn('[Upload] Failed to load upload config, using defaults:', e);
+        }
+    }
 
     // 检查用户是否可跳过上传大小限制（管理员或运营人员）
     function canBypassUploadLimit() {
@@ -449,6 +464,9 @@
             setTimeout(() => location.href = "/static/login.html", 2000);
             return;
         }
+
+        // 加载上传配置
+        await loadUploadConfig();
 
         // 获取当前用户信息（用于判断是否可跳过上传限制）
         try {
@@ -790,18 +808,20 @@
             return;
         }
 
-        // 检查是否有待恢复的上传
-        const pendingStr = localStorage.getItem('pendingUploadSessions');
-        const pendingMap = pendingStr ? JSON.parse(pendingStr) : {};
-        // 转换为 filename->session 映射
-        const pendingByName = {};
-        Object.values(pendingMap).forEach(s => {
-            pendingByName[s.filename] = s;
+        // 检查是否有待恢复的上传（通过 filename + fileSize 精确匹配）
+        const sessionsStr = localStorage.getItem('uploadSessions');
+        const sessionsMap = sessionsStr ? JSON.parse(sessionsStr) : {};
+        // 转换为 filename+size -> session 映射
+        const pendingByKey = {};
+        Object.values(sessionsMap).forEach(s => {
+            const key = `${s.filename}_${s.fileSize}`;
+            pendingByKey[key] = s;
         });
 
         selectedUploadFiles.forEach((file, index) => {
             const validation = validateFile(file);
-            const pending = pendingByName[file.name];
+            const key = `${file.name}_${file.size}`;
+            const pending = pendingByKey[key];
             const item = document.createElement("div");
             item.style.marginBottom = "10px";
 
@@ -965,7 +985,7 @@
 
                 statusSpan.innerText = "初始化上传...";
                 try {
-                    const success = await uploadFileWithChunk(file, title, description, category_id, visibility, tagString, token, i);
+                    const success = await uploadFileWithChunk(file, title, description, category_id, visibility, tagString, token, i, series_id);
                     if (!success) hasError = true;
                 } catch (e) {
                     console.error('Upload failed:', e);
@@ -1029,14 +1049,14 @@
     }
 
     // 分片上传单个文件
-    async function uploadFileWithChunk(file, title, description, category_id, visibility, tags, token, fileIndex) {
+    async function uploadFileWithChunk(file, title, description, category_id, visibility, tags, token, fileIndex, series_id) {
         const statusSpan = document.getElementById(`status-${fileIndex}`);
         const fillDiv = document.getElementById(`fill-${fileIndex}`);
 
-        // 检查是否有待恢复的会话
-        const pendingStr = localStorage.getItem('pendingUploadSessions');
-        const pendingMap = pendingStr ? JSON.parse(pendingStr) : {};
-        const pendingSession = Object.values(pendingMap).find(s => s.filename === file.name);
+        // 检查是否有待恢复的会话（通过 filename + fileSize 精确匹配）
+        const sessionsStr = localStorage.getItem('uploadSessions');
+        const sessionsMap = sessionsStr ? JSON.parse(sessionsStr) : {};
+        const pendingSession = Object.values(sessionsMap).find(s => s.filename === file.name && s.fileSize === file.size);
 
         let sessionId, totalChunks, uploadedChunks;
 
@@ -1049,43 +1069,52 @@
                 });
                 if (sessionRes.ok) {
                     const sessionData = await sessionRes.json();
-                    sessionId = sessionData.session_id;
-                    totalChunks = sessionData.total_chunks;
-                    uploadedChunks = sessionData.uploaded_chunk_indexes || [];
 
-                    // 恢复表单字段
-                    if (sessionData.title && !title) {
-                        document.getElementById('title').value = sessionData.title;
-                        title = sessionData.title;
-                    }
-                    if (sessionData.description !== undefined && !description) {
-                        document.getElementById('description').value = sessionData.description || '';
-                        description = sessionData.description || '';
-                    }
-                    if (sessionData.category_id && !category_id) {
-                        document.getElementById('category').value = sessionData.category_id;
-                        category_id = sessionData.category_id;
-                    }
-                    if (sessionData.visibility && !visibility) {
-                        document.getElementById('visibility').value = sessionData.visibility;
-                        visibility = sessionData.visibility;
-                    }
-                    if (sessionData.tags && !tags) {
-                        // 恢复标签
-                        const tagArray = sessionData.tags.split(',').filter(t => t.trim());
-                        tagArray.forEach(tag => {
-                            if (!tags.includes(tag)) tags.push(tag);
-                        });
-                        renderTags();
-                        tags = sessionData.tags;
-                    }
+                    // 如果会话已完成，删除并创建新会话
+                    if (sessionData.status === 'completed') {
+                        const newSessions = { ...sessionsMap };
+                        delete newSessions[pendingSession.session_id];
+                        localStorage.setItem('uploadSessions', JSON.stringify(newSessions));
+                        pendingSession.session_id = null;
+                    } else {
+                        sessionId = sessionData.session_id;
+                        totalChunks = sessionData.total_chunks;
+                        uploadedChunks = sessionData.uploaded_chunk_indexes || [];
 
-                    statusSpan.innerText = `恢复上传 (已传 ${uploadedChunks.length}/${totalChunks})`;
+                        // 恢复表单字段
+                        if (sessionData.title && !title) {
+                            document.getElementById('title').value = sessionData.title;
+                            title = sessionData.title;
+                        }
+                        if (sessionData.description !== undefined && !description) {
+                            document.getElementById('description').value = sessionData.description || '';
+                            description = sessionData.description || '';
+                        }
+                        if (sessionData.category_id && !category_id) {
+                            document.getElementById('category').value = sessionData.category_id;
+                            category_id = sessionData.category_id;
+                        }
+                        if (sessionData.visibility && !visibility) {
+                            document.getElementById('visibility').value = sessionData.visibility;
+                            visibility = sessionData.visibility;
+                        }
+                        if (sessionData.tags && !tags) {
+                            // 恢复标签
+                            const tagArray = sessionData.tags.split(',').filter(t => t.trim());
+                            tagArray.forEach(tag => {
+                                if (!tags.includes(tag)) tags.push(tag);
+                            });
+                            renderTags();
+                            tags = sessionData.tags;
+                        }
 
-                    // 从待恢复列表中移除
-                    const newPending = { ...pendingMap };
-                    delete newPending[pendingSession.session_id];
-                    localStorage.setItem('pendingUploadSessions', JSON.stringify(newPending));
+                        statusSpan.innerText = `恢复上传 (已传 ${uploadedChunks.length}/${totalChunks})`;
+
+                        // 从本地存储中移除该会话
+                        const newSessions = { ...sessionsMap };
+                        delete newSessions[pendingSession.session_id];
+                        localStorage.setItem('uploadSessions', JSON.stringify(newSessions));
+                    }
                 } else {
                     // 会话已失效，创建新的
                     throw new Error('session_expired');
@@ -1113,7 +1142,7 @@
                     category_id: category_id || "",
                     visibility: visibility,
                     tags: tags,
-                    series_id: document.getElementById('series_select').value || ""
+                    series_id: series_id || ""
                 })
             });
 
@@ -1133,33 +1162,72 @@
         // 保存到 localStorage 以便刷新后恢复
         saveUploadSession(sessionId, file, title);
 
-        // 2. 上传缺失的分片
-        const startChunk = uploadedChunks.length;
-        for (let i = startChunk; i < totalChunks; i++) {
-            statusSpan.innerText = `上传分片 ${i + 1}/${totalChunks}...`;
+        // 2. 并发上传缺失的分片
+        const CONCURRENCY = uploadConfig.concurrency || 3;  // 并发数
+        const pendingChunks = [];
+        let completedCount = uploadedChunks.length;
 
-            const start = i * CHUNK_SIZE;
+        // 更新进度显示
+        const updateProgress = (completed, total) => {
+            const progress = Math.round((completed / total) * 100);
+            fillDiv.style.width = progress + "%";
+            statusSpan.innerText = `上传中... ${progress}% (${completed}/${total})`;
+        };
+
+        // 上传单个分片
+        const uploadChunk = async (chunkIndex) => {
+            const start = chunkIndex * CHUNK_SIZE;
             const end = Math.min(start + CHUNK_SIZE, file.size);
             const chunk = file.slice(start, end);
 
             const formData = new FormData();
             formData.append("chunk", chunk);
 
-            const chunkRes = await fetchWithAuth(`/upload-sessions/${sessionId}/chunks/${i}`, {
+            const chunkRes = await fetchWithAuth(`/upload-sessions/${sessionId}/chunks/${chunkIndex}`, {
                 method: "POST",
                 body: formData
             });
 
             if (!chunkRes.ok) {
                 const err = await chunkRes.json();
-                throw new Error(err.detail || `分片 ${i + 1} 上传失败`);
+                throw new Error(err.detail || `分片 ${chunkIndex + 1} 上传失败`);
             }
 
-            const chunkData = await chunkRes.json();
-            const progress = Math.round((chunkData.uploaded_chunks / totalChunks) * 100);
-            fillDiv.style.width = progress + "%";
-            statusSpan.innerText = `上传中... ${progress}% (${chunkData.uploaded_chunks}/${totalChunks})`;
+            return chunkIndex;
+        };
+
+        // 并发控制：正确的分片并发上传
+        let chunkIndex = uploadedChunks.length;
+        const running = [];
+
+        const uploadNextChunk = async () => {
+            if (chunkIndex >= totalChunks) return;
+            const idx = chunkIndex++;
+            const p = uploadChunk(idx).then(() => {
+                completedCount++;
+                updateProgress(completedCount, totalChunks);
+                running.splice(running.indexOf(p), 1);
+            }).catch(e => {
+                running.splice(running.indexOf(p), 1);
+                throw e;
+            });
+            running.push(p);
+            return p;
+        };
+
+        // 启动第一批
+        for (let i = 0; i < CONCURRENCY && chunkIndex < totalChunks; i++) {
+            uploadNextChunk();
         }
+
+        // 后续分片等前一个完成后再启动
+        while (chunkIndex < totalChunks) {
+            await Promise.race(running);
+            await uploadNextChunk();
+        }
+
+        // 等待所有剩余的分片完成
+        await Promise.all(running);
 
         // 3. 完成上传
         statusSpan.innerText = "正在合并文件...";

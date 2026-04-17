@@ -471,16 +471,23 @@ async def get_liked_videos(
 @router.get("/notifications")
 async def get_notifications(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    page: int = 1,
+    size: int = 20
 ):
     """
     获取通知列表
     """
+    offset = (page - 1) * size
+    total = session.exec(
+        select(func.count()).select_from(Notification).where(Notification.recipient_id == str(current_user.id))
+    ).one()
     notifications = session.exec(
         select(Notification)
         .where(Notification.recipient_id == str(current_user.id))
         .order_by(Notification.created_at.desc())
-        .limit(50)
+        .offset(offset)
+        .limit(size)
     ).all()
 
     result = []
@@ -495,7 +502,7 @@ async def get_notifications(
         } if sender else None
         result.append(notif_dict)
 
-    return result
+    return {"notifications": result, "total": total, "page": page, "size": size}
 
 
 @router.get("/notifications/unread-count")

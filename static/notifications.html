@@ -33,6 +33,7 @@
         <a class="read-all-btn" onclick="markAllRead()">一键已读</a>
     </div>
     <div id="notif-list"></div>
+    <div id="notif-pagination" class="pagination" style="margin-top:20px; text-align:center;"></div>
     <div id="loading" class="loading">加载中...</div>
 </div>
 
@@ -49,16 +50,20 @@
     document.addEventListener("DOMContentLoaded", async () => {
         const token = localStorage.getItem("access_token");
         if (!token) return location.href = "/static/login.html";
-        await loadNotifications(token);
+        await loadNotifications(token, 1);
     });
 
-    async function loadNotifications(token) {
+    async function loadNotifications(token, page = 1) {
         try {
-            const res = await fetch("/notifications?size=50", {
+            const pageSize = window.DEFAULT_PAGE_SIZE || 20;
+            const res = await fetch(`/notifications?page=${page}&size=${pageSize}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             if (res.ok) {
-                const list = await res.json();
+                const data = await res.json();
+                const list = data.notifications || [];
+                const total = data.total || 0;
+                const totalPages = Math.ceil(total / pageSize);
                 document.getElementById("loading").style.display = "none";
                 const container = document.getElementById("notif-list");
 
@@ -86,6 +91,7 @@
                     `;
                     container.appendChild(div);
                 });
+                renderPagination("notif-pagination", page, totalPages, (p) => loadNotifications(token, p));
             }
         } catch(e) { console.error(e); }
     }
